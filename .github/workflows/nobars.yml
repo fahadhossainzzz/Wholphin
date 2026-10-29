@@ -1,0 +1,105 @@
+name: NoBars build
+
+# Builds "Wholphin NoBars" (official Wholphin + the Remove bars zoom) and publishes the APK
+# as the GitHub release "nobars-latest" in this fork.
+#
+# One-time setup: add a repository secret NOBARS_SIGNING_KEY (base64 of the signing keystore).
+# Keep the same keystore forever, otherwise the TV refuses to update the installed app.
+
+on:
+  push:
+    branches:
+      - nobars
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx12g -XX:MaxMetaspaceSize=1024m'"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch official release tags (used for the version number)
+        run: |
+          git fetch --force --no-recurse-submodules https://github.com/damontecres/Wholphin.git 'refs/tags/v*:refs/tags/v*'
+          echo "Latest official tag: $(git describe --tags --match 'v*' --abbrev=0)"
+
+      - name: Check signing key
+        env:
+          NOBARS_SIGNING_KEY: "${{ secrets.NOBARS_SIGNING_KEY }}"
+        run: |
+          if [[ -z "$NOBARS_SIGNING_KEY" ]]; then
+            echo "::error::Repository secret NOBARS_SIGNING_KEY is missing. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Build (trying the official MPV / ffmpeg / AV1 extensions first)
+        env:
+          SIGNING_KEY: "${{ secrets.NOBARS_SIGNING_KEY }}"
+          KEY_ALIAS: "nobars"
+          KEY_PASSWORD: "3EoZozJAGSJZmDvGuLiKLlPKtRF2jCaw"
+          KEY_STORE_PASSWORD: "3EoZozJAGSJZmDvGuLiKLlPKtRF2jCaw"
+          EXT_USER: "${{ github.actor }}"
+          EXT_PASS: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          if ./gradlew assembleAppstoreRelease \
+              -PWholphinExtensionsUsername="$EXT_USER" -PWholphinExtensionsPassword="$EXT_PASS"; then
+            echo "EXTENSIONS=included (MPV, ffmpeg audio, AV1)" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Official extensions could not be downloaded; building without them"
+            ./gradlew clean assembleAppstoreRelease
+            echo "EXTENSIONS=NOT included (ExoPlayer only, no MPV / ffmpeg audio / AV1)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify signatures and collect APKs
+        run: |
+          mkdir -p out
+          find app/build/outputs/apk -name '*.apk' -print0 | while IFS= read -r -d '' apk; do
+            "$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify --print-certs "$apk" | grep -i "SHA-256" | head -1
+            case "$apk" in
+              *universal*) cp "$apk" out/Wholphin-NoBars-universal.apk ;;
+              *arm64-v8a*) cp "$apk" out/Wholphin-NoBars-arm64-v8a.apk ;;
+              *armeabi-v7a*) cp "$apk" out/Wholphin-NoBars-armeabi-v7a.apk ;;
+            esac
+          done
+          ls -la out
+          sha256sum out/*.apk | tee out/SHA256SUMS.txt
+
+      - name: Publish release nobars-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION_NAME=$(git describe --tags --match 'v*' --long)
+          {
+            echo "Wholphin NoBars build from \`${GITHUB_SHA::8}\` (based on official $VERSION_NAME)."
+            echo
+            echo "Extensions: $EXTENSIONS"
+            echo
+            echo "Install the arm64-v8a APK on Google TV (or universal if unsure)."
+            echo
+            echo '```'
+            cat out/SHA256SUMS.txt
+            echo '```'
+          } > notes.md
+          gh release delete nobars-latest --cleanup-tag -y || true
+          gh release create nobars-latest --prerelease --title "Wholphin NoBars $VERSION_NAME" \
+            --target "$GITHUB_SHA" -F notes.md out/*.apk out/SHA256SUMS.txt

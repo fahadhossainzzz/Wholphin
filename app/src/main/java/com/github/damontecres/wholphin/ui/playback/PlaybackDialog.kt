@@ -77,6 +77,8 @@ data class PlaybackSettings(
     val hasSubtitleDownloadPermission: Boolean,
     val playbackSpeedEnabled: Boolean,
     val maxBitrate: Long,
+    /** Remove-bars zoom read from the item's Jellyfin "bars:" tag, if any */
+    val autoRemoveBars: RemoveBarsContentScale? = null,
 )
 
 /**
@@ -152,8 +154,9 @@ fun PlaybackDialog(
                                 data = PlaybackDialogType.VIDEO_SCALE,
                                 headline = stringResource(R.string.video_scale),
                                 supporting =
-                                    playbackScaleOptions[settings.contentScale]
-                                        ?.let { stringResource(it) },
+                                    (settings.contentScale as? RemoveBarsContentScale)?.label
+                                        ?: playbackScaleOptions[settings.contentScale]
+                                            ?.let { stringResource(it) },
                             ),
                         )
                     }
@@ -235,14 +238,25 @@ fun PlaybackDialog(
         }
 
         PlaybackDialogType.VIDEO_SCALE -> {
-            val choices =
+            val standardChoices =
                 playbackScaleOptions.map { (scale, name) ->
-                    BottomDialogItem(
+                    BottomDialogItem<ContentScale>(
                         data = scale,
                         headline = stringResource(name),
                         supporting = null,
                     )
                 }
+            val removeBarsScales =
+                (listOfNotNull(settings.autoRemoveBars) + RemoveBarsContentScale.presets).distinct()
+            val choices =
+                standardChoices +
+                    removeBarsScales.map { scale ->
+                        BottomDialogItem<ContentScale>(
+                            data = scale,
+                            headline = scale.label,
+                            supporting = if (scale == settings.autoRemoveBars) "From library tag" else null,
+                        )
+                    }
             BottomDialog(
                 choices = choices,
                 currentChoice = choices.firstOrNull { it.data == settings.contentScale },

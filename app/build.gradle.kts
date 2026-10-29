@@ -73,6 +73,8 @@ configure<ApplicationExtension> {
 
     defaultConfig {
         applicationId = "com.github.damontecres.wholphin"
+        // NoBars fork: separate app ID so it installs next to the official Wholphin
+        applicationIdSuffix = ".nobars"
         minSdk = libs.versions.minSdk.getInt()
         targetSdk = libs.versions.targetSdk.getInt()
         versionCode = gitTags.trim().lines().size

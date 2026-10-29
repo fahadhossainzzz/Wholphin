@@ -22,6 +22,7 @@ enum PrefContentScale{
   FILL = 3;
   Fill_WIDTH = 4;
   FILL_HEIGHT = 5;
+  FULL_SCREEN_AUTO = 6;
 }
 
 enum MediaExtensionStatus{

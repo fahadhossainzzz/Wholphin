@@ -28,6 +28,7 @@ val PrefContentScale.scale: ContentScale
             PrefContentScale.FILL -> ContentScale.FillBounds
             PrefContentScale.Fill_WIDTH -> ContentScale.FillWidth
             PrefContentScale.FILL_HEIGHT -> ContentScale.FillHeight
+            PrefContentScale.FULL_SCREEN_AUTO -> FullScreenContentScale()
             PrefContentScale.UNRECOGNIZED -> ContentScale.Fit
         }
 

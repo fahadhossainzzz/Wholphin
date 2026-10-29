@@ -748,7 +748,7 @@ sealed interface AppPreference<Pref, T> {
                 setter = { prefs, value ->
                     prefs.updatePlaybackPreferences { globalContentScale = value }
                 },
-                displayValues = R.array.content_scale,
+                displayValues = R.array.playback_content_scale,
                 indexToValue = { PrefContentScale.forNumber(it) },
                 valueToIndex = { if (it != PrefContentScale.UNRECOGNIZED) it.number else 0 },
             )

@@ -476,7 +476,7 @@ class PlaybackViewModel
                 }
                 this@PlaybackViewModel.currentItem = playlistItem
                 this@PlaybackViewModel.itemId = item.id
-                updateAutoRemoveBars(item)
+                updateBarsAspect(item)
 
                 val isLiveTv = item.type == BaseItemKind.TV_CHANNEL
                 val base = item.data
@@ -1158,17 +1158,17 @@ class PlaybackViewModel
         private val outroShownSegments = mutableSetOf<UUID>()
 
         /**
-         * Reads the item's Jellyfin "bars:" tag (see [RemoveBarsContentScale]) so playback can zoom past
+         * Reads the item's Jellyfin "bars:" tag (see [FullScreenContentScale]) so playback can zoom past
          * baked-in black bars. Items from some lists don't include tags, so they are fetched if missing.
          */
-        private fun updateAutoRemoveBars(item: BaseItem) {
-            _state.update { it.copy(autoRemoveBars = RemoveBarsContentScale.fromTags(item.data.tags)) }
+        private fun updateBarsAspect(item: BaseItem) {
+            _state.update { it.copy(barsAspect = FullScreenContentScale.aspectFromTags(item.data.tags)) }
             if (item.data.tags == null) {
                 viewModelScope.launchIO {
                     try {
                         val tags = api.userLibraryApi.getItem(item.id).content.tags
                         if (this@PlaybackViewModel.itemId == item.id) {
-                            _state.update { it.copy(autoRemoveBars = RemoveBarsContentScale.fromTags(tags)) }
+                            _state.update { it.copy(barsAspect = FullScreenContentScale.aspectFromTags(tags)) }
                         }
                     } catch (ex: Exception) {
                         Timber.w(ex, "Could not fetch tags for ${item.id}")

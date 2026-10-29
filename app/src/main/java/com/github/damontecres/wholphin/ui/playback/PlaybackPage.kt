@@ -182,15 +182,10 @@ fun PlaybackPageContent(
             },
         )
     }
-    // When the item has a Jellyfin "bars:" tag, zoom past its baked-in black bars automatically (ExoPlayer only)
-    LaunchedEffect(state.autoRemoveBars, playerBackend) {
-        val autoRemoveBars = state.autoRemoveBars
-        if (playerBackend != PlayerBackend.MPV) {
-            if (autoRemoveBars != null) {
-                contentScale = autoRemoveBars
-            } else if (contentScale is RemoveBarsContentScale) {
-                contentScale = prefs.globalContentScale.scale
-            }
+    // Full screen (auto) follows the current item's Jellyfin "bars:" tag
+    LaunchedEffect(state.barsAspect, contentScale is FullScreenContentScale) {
+        if (contentScale is FullScreenContentScale) {
+            contentScale = FullScreenContentScale(state.barsAspect)
         }
     }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
@@ -768,7 +763,7 @@ fun PlaybackPageContent(
                     // See https://github.com/damontecres/Wholphin/issues/164
                     playbackSpeedEnabled = playerBackend == PlayerBackend.MPV || state.currentPlayback?.audioDecoder != null,
                     maxBitrate = state.maxBitrate,
-                    autoRemoveBars = state.autoRemoveBars,
+                    barsAspect = state.barsAspect,
                 ),
             onDismissRequest = {
                 playbackDialog =

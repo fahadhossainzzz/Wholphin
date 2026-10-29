@@ -77,8 +77,8 @@ data class PlaybackSettings(
     val hasSubtitleDownloadPermission: Boolean,
     val playbackSpeedEnabled: Boolean,
     val maxBitrate: Long,
-    /** Remove-bars zoom read from the item's Jellyfin "bars:" tag, if any */
-    val autoRemoveBars: RemoveBarsContentScale? = null,
+    /** Picture aspect ratio from the item's Jellyfin "bars:" tag, if any */
+    val barsAspect: Float? = null,
 )
 
 /**
@@ -154,9 +154,12 @@ fun PlaybackDialog(
                                 data = PlaybackDialogType.VIDEO_SCALE,
                                 headline = stringResource(R.string.video_scale),
                                 supporting =
-                                    (settings.contentScale as? RemoveBarsContentScale)?.label
-                                        ?: playbackScaleOptions[settings.contentScale]
-                                            ?.let { stringResource(it) },
+                                    if (settings.contentScale is FullScreenContentScale) {
+                                        stringResource(R.string.content_scale_full_screen_auto)
+                                    } else {
+                                        playbackScaleOptions[settings.contentScale]
+                                            ?.let { stringResource(it) }
+                                    },
                             ),
                         )
                     }
@@ -246,17 +249,16 @@ fun PlaybackDialog(
                         supporting = null,
                     )
                 }
-            val removeBarsScales =
-                (listOfNotNull(settings.autoRemoveBars) + RemoveBarsContentScale.presets).distinct()
             val choices =
                 standardChoices +
-                    removeBarsScales.map { scale ->
-                        BottomDialogItem<ContentScale>(
-                            data = scale,
-                            headline = scale.label,
-                            supporting = if (scale == settings.autoRemoveBars) "From library tag" else null,
-                        )
-                    }
+                    BottomDialogItem<ContentScale>(
+                        data = FullScreenContentScale(settings.barsAspect),
+                        headline = stringResource(R.string.content_scale_full_screen_auto),
+                        supporting =
+                            settings.barsAspect?.let {
+                                String.format(java.util.Locale.US, "Removing black bars (%.2f:1)", it)
+                            },
+                    )
             BottomDialog(
                 choices = choices,
                 currentChoice = choices.firstOrNull { it.data == settings.contentScale },

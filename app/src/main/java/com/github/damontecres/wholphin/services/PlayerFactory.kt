@@ -7,6 +7,11 @@ import android.os.Build
 import android.os.Handler
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
+import java.util.concurrent.TimeUnit
+import androidx.media3.exoplayer.upstream.DefaultAllocator
+import androidx.media3.exoplayer.LoadControl
+import androidx.media3.exoplayer.DefaultLoadControl
+import android.app.ActivityManager
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
@@ -68,6 +73,40 @@ class PlayerFactory
         var currentPlayer: Player? = null
             private set
 
+        /** NoBars: HTTP client for video streams: longer timeouts, retries on dropped connections */
+        private val videoHttpClient: OkHttpClient by lazy {
+            authOkHttpClient
+                .newBuilder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
+                .build()
+        }
+
+        /**
+         * NoBars: read ahead by time (2-3 minutes) instead of stopping at ExoPlayer's ~128 MB default,
+         * capped by a share of the app's memory allowance so low-RAM TVs stay stable. After a stall,
+         * playback resumes only once 10 s are buffered so it doesn't stutter repeatedly.
+         */
+        private fun createVideoLoadControl(): LoadControl {
+            val heapBytes = Runtime.getRuntime().maxMemory()
+            val lowRam = context.getSystemService(ActivityManager::class.java)?.isLowRamDevice == true
+            val share = if (lowRam) 0.25 else 0.40
+            val budgetBytes =
+                (heapBytes * share)
+                    .toLong()
+                    .coerceIn(64L * 1024 * 1024, 320L * 1024 * 1024)
+                    .toInt()
+            Timber.i("Video buffer budget: %d MB of %d MB heap", budgetBytes shr 20, heapBytes shr 20)
+            return DefaultLoadControl
+                .Builder()
+                .setAllocator(DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE))
+                .setBufferDurationsMs(120_000, 180_000, 2_500, 10_000)
+                .setTargetBufferBytes(budgetBytes)
+                .setPrioritizeTimeOverSizeThresholds(false)
+                .build()
+        }
+
         suspend fun createVideoPlayer(
             backend: PlayerBackend,
             appPreferences: AppPreferences,
@@ -118,7 +157,9 @@ class PlayerFactory
                                 MediaExtensionStatus.MES_DISABLED -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
                                 else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
                             }
-                        val dataSourceFactory = DefaultDataSource.Factory(context)
+                        // NoBars: OkHttp with longer timeouts and kept-alive connections, so a Wi-Fi hiccup
+                        // doesn't turn into a reconnect stall
+                        val dataSourceFactory = DefaultDataSource.Factory(context, OkHttpDataSource.Factory(videoHttpClient))
                         val extractorsFactory = createExtractorsFactory()
 
                         // Applied outermost so that a profile 7 track is advertised as 8.1 whichever
@@ -174,6 +215,7 @@ class PlayerFactory
                             .setMediaSourceFactory(mediaSourceFactory)
                             .setRenderersFactory(renderersFactory)
                             .setTrackSelector(trackSelector)
+                            .setLoadControl(createVideoLoadControl())
                             .build()
                             .apply {
                                 assHandler?.init(this)

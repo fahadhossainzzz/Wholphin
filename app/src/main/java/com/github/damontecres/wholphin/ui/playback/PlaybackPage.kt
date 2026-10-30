@@ -213,6 +213,14 @@ fun PlaybackPageContent(
             }
         }
     }
+    // NoBars: free the poster/artwork memory cache while a video plays, so the video buffer has more room
+    val imageContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) {
+        coil3.SingletonImageLoader
+            .get(imageContext)
+            .memoryCache
+            ?.clear()
+    }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     LaunchedEffect(playbackSpeed) { player.setPlaybackSpeed(playbackSpeed) }
 

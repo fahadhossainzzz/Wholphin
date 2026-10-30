@@ -35,7 +35,7 @@ class PlaybackKeyHandler(
     private val dpadSeekMode: DpadSeekMode,
     private val onSeekToNext: () -> Unit,
     private val onPSeekToPrevious: () -> Unit,
-    /** NoBars: called with +1/-1 when up/down is pressed while the controls are hidden; null keeps the default. */
+    /** NoBars: called with +1/-1 (1% zoom steps) when up/down is pressed while the controls are hidden; null keeps the default. */
     private val onZoomStep: ((Int) -> Unit)? = null,
 ) {
     private var leftHandledByRepeat = false

@@ -13,7 +13,7 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
  */
 object ZoomPolicy {
     /** Zoom steps for the remote's up/down buttons. */
-    const val STEP = 1.03f
+    const val STEP = 1.01f
     const val MIN_ZOOM = 0.85f
     const val MAX_ZOOM = 2.0f
 

@@ -320,8 +320,10 @@ class WholphinRenderersFactory(
             MediaCodecVideoRenderer
                 .Builder(context)
                 .setCodecAdapterFactory(videoCodecAdapterFactory)
-                .setMediaCodecSelector(mediaCodecSelector)
-                .setAllowedJoiningTimeMs(allowedVideoJoiningTimeMs)
+                .setMediaCodecSelector(
+                    com.github.damontecres.wholphin.ui.playback.ZoomPolicy
+                        .wrap(mediaCodecSelector),
+                ).setAllowedJoiningTimeMs(allowedVideoJoiningTimeMs)
                 .setEnableDecoderFallback(enableDecoderFallback)
                 .setEventHandler(eventHandler)
                 .setEventListener(eventListener)

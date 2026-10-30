@@ -19,6 +19,8 @@ import kotlin.math.min
  */
 data class FullScreenContentScale(
     val pictureAspect: Float? = null,
+    /** Extra zoom chosen with the remote's up/down buttons (1 = automatic). */
+    val zoom: Float = 1f,
 ) : ContentScale {
     override fun computeScaleFactor(
         srcSize: Size,
@@ -39,7 +41,7 @@ data class FullScreenContentScale(
             } else {
                 max(dstSize.width / srcSize.width, dstSize.height / pictureHeight)
             }
-        return ScaleFactor(scale, scale)
+        return ScaleFactor(scale * zoom, scale * zoom)
     }
 
     companion object {

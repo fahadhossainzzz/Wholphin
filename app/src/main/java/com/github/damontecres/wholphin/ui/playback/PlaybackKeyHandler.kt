@@ -35,6 +35,8 @@ class PlaybackKeyHandler(
     private val dpadSeekMode: DpadSeekMode,
     private val onSeekToNext: () -> Unit,
     private val onPSeekToPrevious: () -> Unit,
+    /** NoBars: called with +1/-1 when up/down is pressed while the controls are hidden; null keeps the default. */
+    private val onZoomStep: ((Int) -> Unit)? = null,
 ) {
     private var leftHandledByRepeat = false
     private var rightHandledByRepeat = false
@@ -53,7 +55,9 @@ class PlaybackKeyHandler(
         var result = true
         if (isDirectionalDpad(it) || isEnterKey(it) || isControllerMedia(it)) {
             if (!controllerViewState.controlsVisible) {
-                if (skipWithLeftRight && isSkipBack(it)) {
+                if (onZoomStep != null && (it.key == Key.DirectionUp || it.key == Key.DirectionDown)) {
+                    onZoomStep.invoke(if (it.key == Key.DirectionUp) 1 else -1)
+                } else if (skipWithLeftRight && isSkipBack(it)) {
                     seekBy(-seekBack)
                 } else if (skipWithLeftRight && isSkipForward(it)) {
                     seekBy(seekForward)

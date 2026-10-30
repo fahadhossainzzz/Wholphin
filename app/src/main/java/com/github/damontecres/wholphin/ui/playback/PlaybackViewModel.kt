@@ -1162,7 +1162,13 @@ class PlaybackViewModel
          * baked-in black bars. Items from some lists don't include tags, so they are fetched if missing.
          */
         private fun updateBarsAspect(item: BaseItem) {
-            _state.update { it.copy(barsAspect = FullScreenContentScale.aspectFromTags(item.data.tags)) }
+            val aspect = FullScreenContentScale.aspectFromTags(item.data.tags)
+            // NoBars: decided before the player is prepared, so a tagged Dolby Vision file starts on the zoomable decoder
+            ZoomPolicy.avoidDolbyVision =
+                aspect != null &&
+                preferences.appPreferences.playbackPreferences.globalContentScale ==
+                com.github.damontecres.wholphin.preferences.PrefContentScale.FULL_SCREEN_AUTO
+            _state.update { it.copy(barsAspect = aspect) }
             if (item.data.tags == null) {
                 viewModelScope.launchIO {
                     try {

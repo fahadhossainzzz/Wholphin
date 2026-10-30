@@ -98,6 +98,9 @@ import com.github.damontecres.wholphin.util.LoadingState
 import com.github.damontecres.wholphin.util.Media3SubtitleOverride
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
+import androidx.compose.runtime.rememberUpdatedState
+import com.github.damontecres.wholphin.preferences.PrefContentScale
 import kotlinx.coroutines.launch
 import org.jellyfin.sdk.model.extensions.ticks
 import timber.log.Timber
@@ -182,10 +185,48 @@ fun PlaybackPageContent(
             },
         )
     }
-    // Full screen (auto) follows the current item's Jellyfin "bars:" tag
-    LaunchedEffect(state.barsAspect, contentScale is FullScreenContentScale) {
+    // NoBars: extra zoom from the remote's up/down buttons, back to automatic for every new video
+    val currentItemId = state.currentPlayback?.item?.id
+    var zoom by remember { mutableFloatStateOf(1f) }
+    LaunchedEffect(currentItemId) { zoom = 1f }
+    var zoomLabelShownAt by remember { mutableLongStateOf(0L) }
+    val onZoomStep: (Int) -> Unit = { step ->
+        zoom =
+            (if (step > 0) zoom * ZoomPolicy.STEP else zoom / ZoomPolicy.STEP)
+                .coerceIn(ZoomPolicy.MIN_ZOOM, ZoomPolicy.MAX_ZOOM)
+        if (contentScale !is FullScreenContentScale) {
+            contentScale = FullScreenContentScale(state.barsAspect, zoom)
+        }
+        zoomLabelShownAt = System.currentTimeMillis()
+    }
+    val zoomStepRef = rememberUpdatedState(onZoomStep)
+    var zoomLabelVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(zoomLabelShownAt) {
+        if (zoomLabelShownAt > 0L) {
+            zoomLabelVisible = true
+            delay(1500)
+            zoomLabelVisible = false
+        }
+    }
+
+    // Full screen (auto) follows the current item's Jellyfin "bars:" tag and the remote zoom
+    LaunchedEffect(state.barsAspect, zoom, contentScale is FullScreenContentScale) {
         if (contentScale is FullScreenContentScale) {
-            contentScale = FullScreenContentScale(state.barsAspect)
+            contentScale = FullScreenContentScale(state.barsAspect, zoom)
+        }
+    }
+
+    // NoBars: Dolby Vision can't be zoomed on some TVs, so switch to the HDR10 decoder when zooming is needed
+    val needsZoom =
+        playerBackend != PlayerBackend.MPV &&
+            contentScale is FullScreenContentScale &&
+            (state.barsAspect != null || zoom > 1.001f)
+    LaunchedEffect(needsZoom, currentItemId) {
+        if (needsZoom && !ZoomPolicy.avoidDolbyVision) {
+            ZoomPolicy.avoidDolbyVision = true
+            if (ZoomPolicy.isPlayingDolbyVision(player)) {
+                ZoomPolicy.restartVideoDecoder(player)
+            }
         }
     }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
@@ -277,6 +318,14 @@ fun PlaybackPageContent(
                 dpadSeekMode = prefs.dpadSeekMode,
                 onSeekToNext = viewModel::playNextUp,
                 onPSeekToPrevious = viewModel::playPrevious,
+                onZoomStep =
+                    if (prefs.globalContentScale == PrefContentScale.FULL_SCREEN_AUTO &&
+                        playerBackend != PlayerBackend.MPV
+                    ) {
+                        { step -> zoomStepRef.value.invoke(step) }
+                    } else {
+                        null
+                    },
             )
         }
 
@@ -605,6 +654,26 @@ fun PlaybackPageContent(
                                     1f
                                 }
                         },
+            )
+        }
+
+        // NoBars: zoom level label while zooming with the remote
+        AnimatedVisibility(
+            zoomLabelVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 32.dp),
+        ) {
+            androidx.tv.material3.Text(
+                text = "Zoom ${(zoom * 100).roundToInt()}%",
+                color = Color.White,
+                modifier =
+                    Modifier
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 

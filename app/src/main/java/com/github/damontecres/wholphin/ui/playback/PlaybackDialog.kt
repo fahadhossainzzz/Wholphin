@@ -63,6 +63,7 @@ enum class PlaybackDialogType {
     VIDEO_SCALE,
     SUBTITLE_DELAY,
     BITRATE,
+    ZOOM,
 }
 
 data class PlaybackSettings(
@@ -79,6 +80,8 @@ data class PlaybackSettings(
     val maxBitrate: Long,
     /** Picture aspect ratio from the item's Jellyfin "bars:" tag, if any */
     val barsAspect: Float? = null,
+    /** NoBars: current extra zoom (1 = automatic) */
+    val zoom: Float = 1f,
 )
 
 /**
@@ -100,6 +103,7 @@ fun PlaybackDialog(
     onClickPlaybackDialogType: (PlaybackDialogType) -> Unit,
     onPlaybackActionClick: (PlaybackAction) -> Unit,
     onChangeSubtitleDelay: (Duration) -> Unit,
+    onChangeZoom: (Float) -> Unit = {},
 ) {
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     // TODO, shouldn't this work out of the box?
@@ -160,6 +164,15 @@ fun PlaybackDialog(
                                         playbackScaleOptions[settings.contentScale]
                                             ?.let { stringResource(it) }
                                     },
+                            ),
+                        )
+                    }
+                    if (enableVideoScale) {
+                        add(
+                            BottomDialogItem(
+                                data = PlaybackDialogType.ZOOM,
+                                headline = "Zoom",
+                                supporting = "${kotlin.math.round(settings.zoom * 100).toInt()}%",
                             ),
                         )
                     }
@@ -293,6 +306,32 @@ fun PlaybackDialog(
                     SubtitleDelay(
                         delay = settings.subtitleDelay,
                         onChangeDelay = onChangeSubtitleDelay,
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
+            }
+        }
+
+        PlaybackDialogType.ZOOM -> {
+            Dialog(
+                onDismissRequest = onDismissRequest,
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                val dialogWindowProvider = LocalView.current.parent as? DialogWindowProvider
+                dialogWindowProvider?.window?.setDimAmount(0f)
+
+                Box(
+                    modifier =
+                        Modifier
+                            .wrapContentSize()
+                            .background(
+                                AppColors.TransparentBlack50,
+                                shape = RoundedCornerShape(16.dp),
+                            ),
+                ) {
+                    ZoomControl(
+                        zoom = settings.zoom,
+                        onChangeZoom = onChangeZoom,
                         modifier = Modifier.padding(8.dp),
                     )
                 }

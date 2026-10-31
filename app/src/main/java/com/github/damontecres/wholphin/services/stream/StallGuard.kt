@@ -48,6 +48,11 @@ class StallGuard(
     private val activityManager = context.getSystemService(ActivityManager::class.java)
     private val memInfo = ActivityManager.MemoryInfo()
     private var rateBytes = 0L
+    private var lastUsb = 0L to 0L
+    private var lastNet = 0L to 0L
+    private var lastPre = 0L
+    private var lastOpens = 0L
+    private var usbSlowSince = 0L
     private var rateAt = 0L
     private var gaveUp = false
     private val rebuildTimes = ArrayDeque<Long>()
@@ -104,6 +109,7 @@ class StallGuard(
 
     suspend fun run() {
         StreamHealth.resetCounters()
+        UsbReadAhead.playerBypass = false
         context.registerComponentCallbacks(trimCallbacks)
         try {
             while (currentCoroutineContext().isActive) {
@@ -135,8 +141,27 @@ class StallGuard(
 
         if (now - rateAt >= 2_000) {
             val bytes = StreamHealth.bytesDelivered.get()
-            if (rateAt > 0) StreamHealth.netMbps = (bytes - rateBytes) * 8f / 1000f / (now - rateAt)
+            val usb = StreamHealth.usbReads.bytes.get() to StreamHealth.usbReads.nanos.get()
+            val net = StreamHealth.netReads.bytes.get() to StreamHealth.netReads.nanos.get()
+            val pre = StreamHealth.prefetchReads.bytes.get()
+            val opens = StreamHealth.opens.get()
+            if (rateAt > 0) {
+                val ms = (now - rateAt).toFloat()
+                StreamHealth.netMbps = (bytes - rateBytes) * 8f / 1000f / ms
+                // Speed of each source while it is being read, and how much of the time the player waits on it
+                StreamHealth.usbMbps = speed(usb.first - lastUsb.first, usb.second - lastUsb.second)
+                StreamHealth.usbBusy = ((usb.second - lastUsb.second) / 1e4f / ms).toInt()
+                StreamHealth.netOnlyMbps = speed(net.first - lastNet.first, net.second - lastNet.second)
+                StreamHealth.netBusy = ((net.second - lastNet.second) / 1e4f / ms).toInt()
+                StreamHealth.prefetchMbps = (pre - lastPre) * 8f / 1000f / ms
+                StreamHealth.opensPerMin = ((opens - lastOpens) * 60_000f / ms).toInt()
+                checkUsbSpeed(now)
+            }
             rateBytes = bytes
+            lastUsb = usb
+            lastNet = net
+            lastPre = pre
+            lastOpens = opens
             rateAt = now
         }
 
@@ -155,7 +180,7 @@ class StallGuard(
         if (now - lastHealthLog >= 30_000) {
             lastHealthLog = now
             Timber.e(
-                "NoBars health: memory %d/%d MB (%d%%), TV free %d MB (spare %d), ahead %.1fs, loading=%b, state=%d, in %.1f Mbps, USB %s (%ds ahead), fixes %d/%d/%d",
+                "NoBars health: memory %d/%d MB (%d%%), TV free %d MB (spare %d), ahead %.1fs, loading=%b (%s), state=%d, in %.1f Mbps, usb read %.0f Mbps busy %d%%, net read %.0f Mbps busy %d%%, read-ahead %.1f Mbps, opens/min %d, USB %s (%ds ahead), fixes %d/%d/%d",
                 StreamHealth.heapUsed() shr 20,
                 StreamHealth.heapMax() shr 20,
                 (ratio * 100).toInt(),
@@ -163,8 +188,15 @@ class StallGuard(
                 StreamHealth.systemSpareMb,
                 ahead / 1000f,
                 player.isLoading,
+                StreamHealth.bufferState,
                 player.playbackState,
                 StreamHealth.netMbps,
+                StreamHealth.usbMbps,
+                StreamHealth.usbBusy,
+                StreamHealth.netOnlyMbps,
+                StreamHealth.netBusy,
+                StreamHealth.prefetchMbps,
+                StreamHealth.opensPerMin,
                 StreamHealth.usbStatus,
                 StreamHealth.usbAheadSec,
                 StreamHealth.reconnects,
@@ -236,6 +268,46 @@ class StallGuard(
                 now - lastReload in 2_000L..30_000L
         if (stuck3 && now - lastRebuild >= 20_000) {
             rebuild("no data for $idle ms")
+        }
+    }
+
+    private fun speed(
+        bytes: Long,
+        nanos: Long,
+    ): Float = if (nanos <= 0) 0f else bytes * 8f * 1000f / nanos
+
+    /**
+     * The drive must never make things worse: if the player is short of video while it waits on the
+     * drive most of the time and the drive delivers less than the film needs, switch the player to
+     * the network. The drive keeps filling as a safety net.
+     */
+    private fun checkUsbSpeed(now: Long) {
+        if (!UsbReadAhead.active || UsbReadAhead.playerBypass || !player.playWhenReady) {
+            usbSlowSince = 0
+            return
+        }
+        val needMbps = (player.videoFormat?.bitrate?.takeIf { it > 0 } ?: 0) / 1e6f
+        val slow =
+            StreamHealth.aheadMs < 20_000 &&
+                StreamHealth.usbBusy >= 70 &&
+                StreamHealth.usbMbps > 0f &&
+                StreamHealth.usbMbps < maxOf(needMbps * 1.5f, 40f)
+        if (!slow) {
+            usbSlowSince = 0
+            return
+        }
+        if (usbSlowSince == 0L) usbSlowSince = now
+        if (now - usbSlowSince >= 10_000) {
+            UsbReadAhead.playerBypass = true
+            StreamHealth.usbStatus = "drive too slow (${StreamHealth.usbMbps.toInt()} Mbps), player uses network"
+            Timber.e(
+                "NoBars USB: drive reads only %.1f Mbps (busy %d%%), %.1fs ahead; player switches to the network",
+                StreamHealth.usbMbps,
+                StreamHealth.usbBusy,
+                StreamHealth.aheadMs / 1000f,
+            )
+            // Reopen now so the switch takes effect right away
+            player.seekTo(player.currentPosition)
         }
     }
 

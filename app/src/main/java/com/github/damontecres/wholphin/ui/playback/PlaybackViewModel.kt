@@ -56,7 +56,9 @@ import com.github.damontecres.wholphin.services.RefreshRateService
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.services.UserPreferencesService
+import com.github.damontecres.wholphin.services.stream.ElasticLoadControl
 import com.github.damontecres.wholphin.services.stream.StallGuard
+import com.github.damontecres.wholphin.services.stream.StreamHealth
 import com.github.damontecres.wholphin.services.stream.UsbReadAhead
 import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.gt
@@ -1097,8 +1099,11 @@ class PlaybackViewModel
                             )
                         }
                     }
-                // The player comes first: read ahead only while its own buffer is comfortable
-                if (snapshot == null || snapshot.aheadMs < 12_000) {
+                // The player comes first: while it is still filling its own buffer, the read-ahead
+                // waits, so the two never compete for the network or the drive
+                val goal = ElasticLoadControl.current?.goal ?: 45_000L
+                val playerFilling = StreamHealth.bufferState == "loading" && snapshot != null && snapshot.aheadMs < goal - 5_000
+                if (snapshot == null || snapshot.aheadMs < 12_000 || playerFilling) {
                     delay(3_000)
                     continue
                 }

@@ -34,6 +34,7 @@ object UsbReadAhead {
     private const val MAX_CACHE_BYTES = 100L * 1024 * 1024 * 1024
     private const val PREFETCH_WINDOW_MS = 10 * 60 * 1000L
     private const val CHUNK_BYTES = 32L * 1024 * 1024
+    private const val BLOCK_BYTES = 1024 * 1024
 
     @Volatile private var cache: SimpleCache? = null
 
@@ -44,6 +45,12 @@ object UsbReadAhead {
     @Volatile private var failed = false
 
     val active: Boolean get() = enabled && !failed && cache != null
+
+    /**
+     * Set by the stall guard when reading from the drive is slower than the film needs: the player
+     * then reads from the network (the drive keeps filling and stays as a safety net).
+     */
+    @Volatile var playerBypass: Boolean = false
 
     @Synchronized
     fun init(context: Context) {
@@ -155,8 +162,15 @@ object UsbReadAhead {
             plain.addTransferListener(transferListener)
         }
 
+        private var viaUsb = false
+
+        // Reads from the drive go in big blocks: each read there has a fixed cost on Android
+        private val block = ByteArray(BLOCK_BYTES)
+        private var blockPos = 0
+        private var blockLen = 0
+
         override fun open(dataSpec: DataSpec): Long {
-            val useCache = cached != null && active && keyFor(dataSpec.uri) != null
+            val useCache = cached != null && active && !playerBypass && keyFor(dataSpec.uri) != null
             val source =
                 if (useCache) {
                     cached!!.createDataSource().also { ds -> listeners.forEach { ds.addTransferListener(it) } }
@@ -164,6 +178,10 @@ object UsbReadAhead {
                     plain
                 }
             current = source
+            viaUsb = useCache
+            blockPos = 0
+            blockLen = 0
+            StreamHealth.opens.incrementAndGet()
             StreamHealth.markActivity()
             return source.open(dataSpec)
         }
@@ -173,8 +191,26 @@ object UsbReadAhead {
             offset: Int,
             length: Int,
         ): Int {
-            val n = current!!.read(buffer, offset, length)
-            if (n > 0) StreamHealth.onBytes(n)
+            if (length == 0) return 0
+            if (!viaUsb) {
+                val t = System.nanoTime()
+                val n = current!!.read(buffer, offset, length)
+                StreamHealth.netReads.add(n, System.nanoTime() - t)
+                if (n > 0) StreamHealth.onBytes(n)
+                return n
+            }
+            if (blockPos >= blockLen) {
+                val t = System.nanoTime()
+                val n = current!!.read(block, 0, BLOCK_BYTES)
+                StreamHealth.usbReads.add(n, System.nanoTime() - t)
+                if (n <= 0) return n
+                blockPos = 0
+                blockLen = n
+            }
+            val n = minOf(length, blockLen - blockPos)
+            System.arraycopy(block, blockPos, buffer, offset, n)
+            blockPos += n
+            StreamHealth.onBytes(n)
             return n
         }
 
@@ -187,6 +223,8 @@ object UsbReadAhead {
                 current?.close()
             } finally {
                 current = null
+                blockPos = 0
+                blockLen = 0
             }
         }
     }
@@ -240,8 +278,10 @@ object UsbReadAhead {
                     .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
                     .createDataSource()
             val writer = CacheWriter(source, spec, null, null)
+            val started = System.nanoTime()
             try {
                 runInterruptible { writer.cache() }
+                StreamHealth.prefetchReads.add(gap.toInt(), System.nanoTime() - started)
             } catch (e: Exception) {
                 writer.cancel()
                 if (e is kotlinx.coroutines.CancellationException) throw e

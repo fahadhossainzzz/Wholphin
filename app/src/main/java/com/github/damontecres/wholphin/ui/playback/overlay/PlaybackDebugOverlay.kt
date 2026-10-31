@@ -105,6 +105,18 @@ fun PlaybackDebugOverlay(
                         "TV RAM:" to "${StreamHealth.systemAvailMb} MB free (${StreamHealth.systemSpareMb} spare)",
                         "Ahead:" to String.format(Locale.US, "%.1f s", StreamHealth.aheadMs / 1000f),
                         "Incoming:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.netMbps),
+                        "Buffer:" to StreamHealth.bufferState,
+                        "Sources:" to
+                            String.format(
+                                Locale.US,
+                                "USB %.0f Mbps (%d%% busy), net %.0f Mbps (%d%% busy), %d opens/min",
+                                StreamHealth.usbMbps,
+                                StreamHealth.usbBusy,
+                                StreamHealth.netOnlyMbps,
+                                StreamHealth.netBusy,
+                                StreamHealth.opensPerMin,
+                            ),
+                        "Read-ahead:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.prefetchMbps),
                         "USB:" to "${StreamHealth.usbStatus}, ${StreamHealth.usbAheadSec} s ahead",
                         "Fixes:" to "${StreamHealth.reconnects} reconnect / ${StreamHealth.reloads} reload / ${StreamHealth.rebuilds} rebuild",
                     )

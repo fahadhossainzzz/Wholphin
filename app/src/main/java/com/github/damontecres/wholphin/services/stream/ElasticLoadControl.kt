@@ -32,6 +32,10 @@ class ElasticLoadControl private constructor(
 ) : LoadControl {
     @Volatile private var loading = true
 
+    /** The current in-memory goal; the read-ahead waits for the player to reach it. */
+    @Volatile var goal: Long = GOAL_MS
+        private set
+
     /** Set by the stall guard when the player is starving: load regardless of memory, up to the floor x2. */
     @Volatile var emergencyUntil: Long = 0
 
@@ -66,9 +70,15 @@ class ElasticLoadControl private constructor(
         val bufferedMs = parameters.bufferedDurationUs / 1000
         val ratio = StreamHealth.heapRatio()
         // With the USB drive holding the next minutes, memory only needs a short buffer
-        val goalMs = if (UsbReadAhead.active) USB_GOAL_MS else GOAL_MS
         // The whole TV's free RAM counts too: Android kills the app outright when the system runs low
         val systemFreeMb = StreamHealth.systemSpareMb
+        val goalMs =
+            when {
+                !UsbReadAhead.active -> GOAL_MS
+                systemFreeMb > 400 -> USB_GOAL_ROOMY_MS
+                else -> USB_GOAL_MS
+            }
+        goal = goalMs
         val decision =
             when {
                 bufferedMs >= goalMs -> false
@@ -97,12 +107,19 @@ class ElasticLoadControl private constructor(
             allocator.setTargetBufferSize(Int.MAX_VALUE)
         }
         loading = decision
+        StreamHealth.bufferState =
+            when {
+                decision -> "loading"
+                bufferedMs >= goalMs -> "full (${goalMs / 1000} s goal)"
+                else -> "holding: memory"
+            }
         return decision
     }
 
     companion object {
         const val GOAL_MS = 120_000L
         const val USB_GOAL_MS = 45_000L
+        const val USB_GOAL_ROOMY_MS = 60_000L
         const val FLOOR_MS = 15_000L
         const val STOP_RATIO = 0.60f
         const val RESUME_RATIO = 0.50f

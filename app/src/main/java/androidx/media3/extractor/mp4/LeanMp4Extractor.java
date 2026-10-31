@@ -240,6 +240,13 @@ public final class LeanMp4Extractor implements Extractor {
    */
   private static final long MAXIMUM_READ_AHEAD_BYTES_STREAM = 10 * 1024 * 1024;
 
+  /**
+   * NoBars: gaps up to this size between wanted samples (the skipped language tracks) are read
+   * through instead of reopening the stream. Reading 4 MB takes a fraction of a second; a reopen
+   * costs a new request and seek on the server every time.
+   */
+  private static final long SKIP_INSTEAD_OF_RELOAD = 4 * 1024 * 1024;
+
   private final SubtitleParser.Factory subtitleParserFactory;
   private final @Flags int flags;
   private final boolean omitTrackSampleTable;
@@ -942,7 +949,7 @@ public final class LeanMp4Extractor implements Extractor {
     int sampleSize = track.sampleTable.sizes[sampleIndex];
     @Nullable TrueHdSampleRechunker trueHdSampleRechunker = track.trueHdSampleRechunker;
     long skipAmount = position - inputPosition + sampleBytesRead;
-    if (skipAmount < 0 || skipAmount >= RELOAD_MINIMUM_SEEK_DISTANCE) {
+    if (skipAmount < 0 || skipAmount >= SKIP_INSTEAD_OF_RELOAD) {
       positionHolder.position = position;
       return RESULT_SEEK;
     }
@@ -1212,7 +1219,7 @@ public final class LeanMp4Extractor implements Extractor {
       long sampleOffset = track.sampleTable.offsets[sampleIndex];
       long sampleAccumulatedBytes = checkNotNull(accumulatedSampleSizes)[trackIndex][sampleIndex];
       long skipAmount = sampleOffset - inputPosition;
-      boolean requiresReload = skipAmount < 0 || skipAmount >= RELOAD_MINIMUM_SEEK_DISTANCE;
+      boolean requiresReload = skipAmount < 0 || skipAmount >= SKIP_INSTEAD_OF_RELOAD;
       if ((!requiresReload && preferredRequiresReload)
           || (requiresReload == preferredRequiresReload && skipAmount < preferredSkipAmount)) {
         preferredRequiresReload = requiresReload;

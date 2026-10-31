@@ -41,6 +41,42 @@ object StreamHealth {
 
     @Volatile var systemAvailMb: Long = 0
 
+    /** Bytes and time spent inside reads, per source, to see which one is the bottleneck. */
+    class Meter {
+        val bytes = AtomicLong(0)
+        val nanos = AtomicLong(0)
+
+        fun add(
+            count: Int,
+            elapsedNanos: Long,
+        ) {
+            if (count > 0) bytes.addAndGet(count.toLong())
+            nanos.addAndGet(elapsedNanos)
+        }
+    }
+
+    val usbReads = Meter()
+    val netReads = Meter()
+    val prefetchReads = Meter()
+
+    /** How many times the player (re)opened the stream. Many reopens per minute = slow. */
+    val opens = AtomicLong(0)
+
+    // Updated by the stall guard every 2 s
+    @Volatile var usbMbps: Float = 0f
+
+    @Volatile var usbBusy: Int = 0
+
+    @Volatile var netOnlyMbps: Float = 0f
+
+    @Volatile var netBusy: Int = 0
+
+    @Volatile var prefetchMbps: Float = 0f
+
+    @Volatile var opensPerMin: Int = 0
+
+    @Volatile var bufferState: String = ""
+
     // Updated by the stall guard, shown by the overlay
     @Volatile var aheadMs: Long = 0
 

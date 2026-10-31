@@ -81,8 +81,11 @@ jobs:
               *armeabi-v7a*) cp "$apk" out/Wholphin-NoBars-armeabi-v7a.apk ;;
             esac
           done
-          ls -la out
           sha256sum out/*.apk | tee out/SHA256SUMS.txt
+          # R8 mapping, so crash stack traces in the TV's logs can be read
+          m=$(find app/build/outputs/mapping -name mapping.txt | head -1)
+          [ -n "$m" ] && gzip -c "$m" > out/mapping.txt.gz
+          ls -la out
 
       - name: Publish release nobars-latest
         env:
@@ -102,4 +105,4 @@ jobs:
           } > notes.md
           gh release delete nobars-latest --cleanup-tag -y || true
           gh release create nobars-latest --prerelease --title "Wholphin NoBars $VERSION_NAME" \
-            --target "$GITHUB_SHA" -F notes.md out/*.apk out/SHA256SUMS.txt
+            --target "$GITHUB_SHA" -F notes.md out/*

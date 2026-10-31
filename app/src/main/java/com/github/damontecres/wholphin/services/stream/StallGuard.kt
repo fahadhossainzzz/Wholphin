@@ -29,8 +29,12 @@ import java.util.Locale
 /**
  * NoBars: keeps playback moving instead of waiting for it to freeze, and records what happened.
  *
- * Rescue ladder (direct play only), four checks a second:
- * 1. No data for 2 s while loading: cut the connection, the loader reconnects at once (invisible).
+ * Rescue ladder (direct play only, and only once the film has started playing: while a film opens
+ * the connection's own 5 s timeouts apply, since cutting a connection mid-open broke the opening),
+ * four checks a second:
+ * 1. No data while loading: cut the connection, the loader reconnects at once (invisible). Waits
+ *    2 s, then 4, 8 and 15 s if reconnecting does not help (a busy disk needs time, and cutting
+ *    every 2 s would keep it from ever answering); at least 5 s right after a skip.
  * 2. Under 8 s ahead and still nothing: reload from the current spot, keeping decoder and tracks.
  * 3. Under 2 s ahead / stalled and still nothing, or memory critically full: rebuild the player at
  *    the same spot (1-2 s pause instead of a freeze). At most 3 times in 10 minutes.
@@ -52,6 +56,7 @@ class StallGuard(
     private val onReport: (String) -> Unit,
 ) {
     private var lastReconnect = 0L
+    private var reconnectStreak = 0
     private var lastReload = 0L
     private var lastRebuild = 0L
     private var lastImageTrim = 0L
@@ -215,6 +220,9 @@ class StallGuard(
             }
         }
 
+        /** How long a stream may go without data before reconnecting: 1st, 2nd, 3rd, later tries. */
+        private val RECONNECT_AFTER_MS = longArrayOf(2_000, 4_000, 8_000, 15_000)
+
         /** 1:02:03 or 5:16 */
         fun clock(ms: Long): String {
             val s = (ms / 1000).coerceAtLeast(0)
@@ -377,16 +385,28 @@ class StallGuard(
         // Server-side streams (transcodes) legitimately pause; the ladder is for direct play only
         if (!isDirectPlay()) return
 
+        // Not while the film is opening (or reopening after a track change)
+        if (!s.firstReady) return
+
         val loading = player.isLoading
         val idle = StreamHealth.msSinceLastByte()
+        if (idle < 1_000) reconnectStreak = 0
 
-        // Step 1: data stopped arriving while the player wants it: reconnect at once
-        if (loading && idle >= 2_000 && now - lastReconnect >= 3_000) {
+        // Step 1: data stopped arriving while the player wants it: reconnect, waiting longer each time
+        val afterSeek = s.pendingSeek?.let { now - it.at < 10_000 } == true
+        val patience =
+            RECONNECT_AFTER_MS[minOf(reconnectStreak, RECONNECT_AFTER_MS.size - 1)]
+                .let { if (afterSeek) maxOf(it, 5_000L) else it }
+        if (loading && idle >= patience && now - lastReconnect >= patience) {
             val cut = StreamHealth.cancelPlayerCalls()
             StreamHealth.reconnects++
             s.reconnects++
+            reconnectStreak++
             lastReconnect = now
-            StreamHealth.event("reconnect: no data for ${idle / 1000.0} s, ${ahead / 1000} s ahead ($cut connections cut)")
+            StreamHealth.event(
+                "reconnect #$reconnectStreak: no data for ${idle / 1000.0} s, ${ahead / 1000} s ahead ($cut connections cut; " +
+                    "server's last answer took ${StreamHealth.lastOpenMs} ms)",
+            )
         }
 
         // The buffer refusing to load while the player starves (should never happen): override it

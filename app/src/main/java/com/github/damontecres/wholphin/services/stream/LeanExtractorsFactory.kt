@@ -17,7 +17,8 @@ import androidx.media3.extractor.text.SubtitleParser
 
 /**
  * NoBars: the default extractors, except that MP4 files are read by [LeanMp4Extractor], which skips
- * tracks in unused languages (see [LanguageKeep]). Settings the player passes in are remembered so
+ * tracks in unused languages (see [LanguageKeep]), and every extractor tolerates stray bytes at the
+ * very end of a file ([EndTolerantExtractor]). Settings the player passes in are remembered so
  * the replacement is configured exactly like the Mp4Extractor it stands in for.
  */
 class LeanExtractorsFactory(
@@ -62,8 +63,11 @@ class LeanExtractorsFactory(
     ): Array<Extractor> = replace(super.createExtractors(uri, responseHeaders))
 
     private fun replace(extractors: Array<Extractor>): Array<Extractor> =
-        Array(extractors.size) { i ->
-            if (extractors[i] is Mp4Extractor) {
+        Array(extractors.size) { i -> EndTolerantExtractor(lean(extractors[i])) }
+
+    private fun lean(extractor: Extractor): Extractor =
+        extractor.let {
+            if (it is Mp4Extractor) {
                 LeanMp4Extractor(
                     subtitleParserFactory,
                     LeanMp4Extractor.codecsToParseWithinGopSampleDependenciesAsFlags(codecsToParseWithinGop) or
@@ -71,7 +75,7 @@ class LeanExtractorsFactory(
                         (if (parseHagcMetadata) 0 else LeanMp4Extractor.FLAG_DISABLE_HAGC_METADATA),
                 )
             } else {
-                extractors[i]
+                it
             }
         }
 }

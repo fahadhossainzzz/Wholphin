@@ -38,6 +38,9 @@ object StreamHealth {
     /** How many times the player (re)opened the stream. */
     val opens = AtomicLong(0)
 
+    /** How long the server took to answer the latest request (until the response headers). */
+    @Volatile var lastOpenMs: Long = 0
+
     fun onBytes(count: Int) {
         if (count > 0) {
             bytesDelivered.addAndGet(count.toLong())
@@ -160,7 +163,15 @@ object StreamHealth {
         override fun open(dataSpec: DataSpec): Long {
             opens.incrementAndGet()
             markActivity()
-            return inner.open(dataSpec)
+            val t = SystemClock.elapsedRealtime()
+            try {
+                return inner.open(dataSpec)
+            } finally {
+                val ms = SystemClock.elapsedRealtime() - t
+                lastOpenMs = ms
+                if (ms >= 1_500) Timber.e("NoBars slow server answer: %d ms for byte %d", ms, dataSpec.position)
+                markActivity()
+            }
         }
 
         override fun read(

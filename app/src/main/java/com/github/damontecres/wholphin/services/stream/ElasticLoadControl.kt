@@ -65,24 +65,33 @@ class ElasticLoadControl private constructor(
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
         val bufferedMs = parameters.bufferedDurationUs / 1000
         val ratio = StreamHealth.heapRatio()
+        // With the USB drive holding the next minutes, memory only needs a short buffer
+        val goalMs = if (UsbReadAhead.active) USB_GOAL_MS else GOAL_MS
+        // The whole TV's free RAM counts too: Android kills the app outright when the system runs low
+        val systemFreeMb = StreamHealth.systemSpareMb
         val decision =
             when {
-                bufferedMs >= GOAL_MS -> false
+                bufferedMs >= goalMs -> false
 
                 System.currentTimeMillis() < emergencyUntil -> bufferedMs < FLOOR_MS * 2
 
                 // Never starve: keep loading below the floor unless memory is truly at the edge
-                bufferedMs < FLOOR_MS -> ratio < 0.95f || bufferedMs < 3_000
+                bufferedMs < FLOOR_MS -> (ratio < 0.95f && systemFreeMb > 50) || bufferedMs < 3_000
 
-                loading -> ratio < STOP_RATIO
+                loading -> ratio < STOP_RATIO && systemFreeMb > SYSTEM_STOP_MB
 
-                else -> ratio < RESUME_RATIO
+                else -> ratio < RESUME_RATIO && systemFreeMb > SYSTEM_RESUME_MB
             }
         if (loading && !decision) {
             // Hand spare buffer memory back
             allocator.setTargetBufferSize(allocator.totalBytesAllocated)
-            if (bufferedMs < GOAL_MS) {
-                Timber.i("NoBars buffer: holding at %ds ahead, memory %d%%", bufferedMs / 1000, (ratio * 100).toInt())
+            if (bufferedMs < goalMs) {
+                Timber.e(
+                    "NoBars buffer: holding at %ds ahead, app memory %d%%, TV spare RAM %d MB",
+                    bufferedMs / 1000,
+                    (ratio * 100).toInt(),
+                    systemFreeMb,
+                )
             }
         } else if (!loading && decision) {
             allocator.setTargetBufferSize(Int.MAX_VALUE)
@@ -93,9 +102,14 @@ class ElasticLoadControl private constructor(
 
     companion object {
         const val GOAL_MS = 120_000L
+        const val USB_GOAL_MS = 45_000L
         const val FLOOR_MS = 15_000L
-        const val STOP_RATIO = 0.75f
-        const val RESUME_RATIO = 0.65f
+        const val STOP_RATIO = 0.60f
+        const val RESUME_RATIO = 0.50f
+
+        // Spare TV RAM above Android's low-memory line
+        const val SYSTEM_STOP_MB = 200L
+        const val SYSTEM_RESUME_MB = 300L
 
         @Volatile
         var current: ElasticLoadControl? = null

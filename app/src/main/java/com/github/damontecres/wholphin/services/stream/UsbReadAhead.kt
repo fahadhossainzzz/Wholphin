@@ -53,19 +53,19 @@ object UsbReadAhead {
             val dir = findUsbDir(context)
             if (dir == null) {
                 StreamHealth.usbStatus = "no USB drive"
-                Timber.w("NoBars USB: no writable removable drive found")
+                Timber.e("NoBars USB: no writable removable drive found")
                 return
             }
             val existing = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
             val max = minOf(MAX_CACHE_BYTES, ((dir.usableSpace + existing) * 0.9).toLong())
             if (max < 4L * 1024 * 1024 * 1024) {
                 StreamHealth.usbStatus = "USB drive full"
-                Timber.w("NoBars USB: drive has too little space (%d MB)", max shr 20)
+                Timber.e("NoBars USB: drive has too little space (%d MB)", max shr 20)
                 return
             }
             cache = SimpleCache(dir, LeastRecentlyUsedCacheEvictor(max), StandaloneDatabaseProvider(context))
             StreamHealth.usbStatus = "ready (${max shr 30} GB)"
-            Timber.w("NoBars USB: read-ahead on %s, up to %d GB", dir, max shr 30)
+            Timber.e("NoBars USB: read-ahead on %s, up to %d GB", dir, max shr 30)
         } catch (e: Exception) {
             failed = true
             StreamHealth.usbStatus = "error"
@@ -95,7 +95,7 @@ object UsbReadAhead {
                     probe.delete()
                     true
                 } catch (e: Exception) {
-                    Timber.w(e, "NoBars USB: %s is not writable", dir)
+                    Timber.e(e, "NoBars USB: %s is not writable", dir)
                     false
                 }
             }
@@ -133,7 +133,7 @@ object UsbReadAhead {
                         ) {}
 
                         override fun onCacheIgnored(reason: Int) {
-                            Timber.w("NoBars USB: cache ignored for a read (reason %d)", reason)
+                            Timber.e("NoBars USB: cache ignored for a read (reason %d)", reason)
                         }
                     },
                 )
@@ -245,7 +245,7 @@ object UsbReadAhead {
             } catch (e: Exception) {
                 writer.cancel()
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Timber.w(e, "NoBars USB: read-ahead chunk failed at %d MB", p shr 20)
+                Timber.e(e, "NoBars USB: read-ahead chunk failed at %d MB", p shr 20)
                 if (e is androidx.media3.datasource.cache.Cache.CacheException) {
                     failed = true
                     StreamHealth.usbStatus = "drive error, streaming only"

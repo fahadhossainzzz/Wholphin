@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.services.stream
 
+import android.app.ActivityManager
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
@@ -43,6 +44,9 @@ class StallGuard(
     private var lastGcHint = 0L
     private var lastHealthLog = 0L
     private var starvingSince = 0L
+    private var lastSystemCheck = 0L
+    private val activityManager = context.getSystemService(ActivityManager::class.java)
+    private val memInfo = ActivityManager.MemoryInfo()
     private var rateBytes = 0L
     private var rateAt = 0L
     private var gaveUp = false
@@ -52,7 +56,7 @@ class StallGuard(
         object : ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
                 if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
-                    Timber.w("NoBars memory: system asked to trim (level %d), dropping cached images", level)
+                    Timber.e("NoBars memory: system asked to trim (level %d), dropping cached images", level)
                     trimImages()
                 }
             }
@@ -62,6 +66,41 @@ class StallGuard(
             @Deprecated("Deprecated in Java")
             override fun onLowMemory() = trimImages()
         }
+
+    companion object {
+        /** Writes why the app's previous runs ended (killed for memory, crashed, ...) to the log. */
+        fun logPreviousExits(context: Context) {
+            try {
+                val am = context.getSystemService(ActivityManager::class.java) ?: return
+                val info = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+                Timber.e(
+                    "NoBars device: RAM %d MB total, %d MB free, low-memory line %d MB, app limit %d MB (large %d MB), lowRam=%b",
+                    info.totalMem shr 20,
+                    info.availMem shr 20,
+                    info.threshold shr 20,
+                    Runtime.getRuntime().maxMemory() shr 20,
+                    am.largeMemoryClass,
+                    am.isLowRamDevice,
+                )
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    am.getHistoricalProcessExitReasons(null, 0, 3).forEach {
+                        Timber.e(
+                            "NoBars previous exit: %s at %tF %<tT, reason=%d (%s), importance=%d, pss=%d MB, rss=%d MB",
+                            it.processName,
+                            java.util.Date(it.timestamp),
+                            it.reason,
+                            it.description ?: "",
+                            it.importance,
+                            it.pss shr 10,
+                            it.rss shr 10,
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Could not read exit reasons")
+            }
+        }
+    }
 
     suspend fun run() {
         StreamHealth.resetCounters()
@@ -101,18 +140,27 @@ class StallGuard(
             rateAt = now
         }
 
+        if (now - lastSystemCheck >= 1_000) {
+            lastSystemCheck = now
+            activityManager?.getMemoryInfo(memInfo)
+            StreamHealth.systemAvailMb = memInfo.availMem shr 20
+            StreamHealth.systemSpareMb = (memInfo.availMem - memInfo.threshold) shr 20
+        }
+
         var ratio = StreamHealth.heapRatio()
-        if (ratio >= 0.70f && now - lastImageTrim >= 30_000) {
-            Timber.i("NoBars memory: %d%% used, dropping cached images", (ratio * 100).toInt())
+        if ((ratio >= 0.60f || StreamHealth.systemSpareMb < 250) && now - lastImageTrim >= 30_000) {
+            Timber.e("NoBars memory: app %d%%, TV spare %d MB, dropping cached images", (ratio * 100).toInt(), StreamHealth.systemSpareMb)
             trimImages()
         }
         if (now - lastHealthLog >= 30_000) {
             lastHealthLog = now
-            Timber.w(
-                "NoBars health: memory %d/%d MB (%d%%), ahead %.1fs, loading=%b, state=%d, in %.1f Mbps, USB %s (%ds ahead), fixes %d/%d/%d",
+            Timber.e(
+                "NoBars health: memory %d/%d MB (%d%%), TV free %d MB (spare %d), ahead %.1fs, loading=%b, state=%d, in %.1f Mbps, USB %s (%ds ahead), fixes %d/%d/%d",
                 StreamHealth.heapUsed() shr 20,
                 StreamHealth.heapMax() shr 20,
                 (ratio * 100).toInt(),
+                StreamHealth.systemAvailMb,
+                StreamHealth.systemSpareMb,
                 ahead / 1000f,
                 player.isLoading,
                 player.playbackState,
@@ -155,7 +203,7 @@ class StallGuard(
             val cut = StreamHealth.cancelPlayerCalls()
             StreamHealth.reconnects++
             lastReconnect = now
-            Timber.w("NoBars rescue 1: no data for %d ms (%.1fs ahead), reconnecting (%d connections cut)", idle, ahead / 1000f, cut)
+            Timber.e("NoBars rescue 1: no data for %d ms (%.1fs ahead), reconnecting (%d connections cut)", idle, ahead / 1000f, cut)
         }
 
         // The buffer refusing to load while the player starves (should never happen): override it
@@ -174,7 +222,7 @@ class StallGuard(
         if (stuck2 && now - lastReload >= 10_000 && now - lastReconnect >= 1_500) {
             StreamHealth.reloads++
             lastReload = now
-            Timber.w("NoBars rescue 2: still no data (%d ms, %.1fs ahead), reloading from the current position", idle, ahead / 1000f)
+            Timber.e("NoBars rescue 2: still no data (%d ms, %.1fs ahead), reloading from the current position", idle, ahead / 1000f)
             StreamHealth.markActivity()
             player.seekTo(player.currentPosition)
             return
@@ -211,7 +259,7 @@ class StallGuard(
         lastRebuild = now
         StreamHealth.rebuilds++
         val position = player.currentPosition
-        Timber.w("NoBars rescue 3: rebuilding the player at %d ms (%s)", position, reason)
+        Timber.e("NoBars rescue 3: rebuilding the player at %d ms (%s)", position, reason)
         trimImages()
         StreamHealth.markActivity()
         player.stop()

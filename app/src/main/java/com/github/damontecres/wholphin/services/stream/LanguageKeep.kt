@@ -82,7 +82,7 @@ object LanguageKeep {
             val result = Result(audioCount, audioKept.toList(), textCount, textKept.toList())
             last = result
             if (result.dropped > 0) {
-                Timber.w(
+                Timber.e(
                     "NoBars: MP4 tracks kept: audio %d of %d, subtitles %d of %d",
                     result.audioKept.size,
                     result.audioTotal,
@@ -129,7 +129,7 @@ object LanguageKeep {
         val language = normalize(streams[ordinal].language)
         val occurrence = streams.take(ordinal).count { normalize(it.language) == language }
         val matches = playerGroupLanguages.withIndex().filter { normalize(it.value) == language }
-        Timber.w(
+        Timber.e(
             "NoBars: track counts differ (server %d, file %d, player %d); matching %s #%d by language",
             streams.size,
             total,

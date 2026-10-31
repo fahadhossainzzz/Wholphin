@@ -54,6 +54,9 @@ class WholphinApplication :
 
     override fun onCreate() {
         super.onCreate()
+        // NoBars: record why the last run ended (memory kill, crash) so it shows up in sent logs
+        com.github.damontecres.wholphin.services.stream.StallGuard
+            .logPreviousExits(this)
         if (BuildConfig.DEBUG) {
             StrictMode.setThreadPolicy(
                 StrictMode.ThreadPolicy

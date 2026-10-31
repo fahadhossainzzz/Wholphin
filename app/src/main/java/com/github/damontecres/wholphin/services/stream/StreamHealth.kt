@@ -36,6 +36,11 @@ object StreamHealth {
 
     fun heapRatio(): Float = heapUsed().toFloat() / heapMax().toFloat()
 
+    /** TV-wide RAM left above Android's low-memory line, in MB (updated every second by the stall guard). */
+    @Volatile var systemSpareMb: Long = Long.MAX_VALUE
+
+    @Volatile var systemAvailMb: Long = 0
+
     // Updated by the stall guard, shown by the overlay
     @Volatile var aheadMs: Long = 0
 

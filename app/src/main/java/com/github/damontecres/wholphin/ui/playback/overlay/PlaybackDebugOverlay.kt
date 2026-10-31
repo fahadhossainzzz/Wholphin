@@ -102,6 +102,7 @@ fun PlaybackDebugOverlay(
                 value = "${formatBytes(used)} / ${formatBytes(max)} (${used * 100 / max}%)"
                 streamInfo =
                     listOf(
+                        "TV RAM:" to "${StreamHealth.systemAvailMb} MB free (${StreamHealth.systemSpareMb} spare)",
                         "Ahead:" to String.format(Locale.US, "%.1f s", StreamHealth.aheadMs / 1000f),
                         "Incoming:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.netMbps),
                         "USB:" to "${StreamHealth.usbStatus}, ${StreamHealth.usbAheadSec} s ahead",

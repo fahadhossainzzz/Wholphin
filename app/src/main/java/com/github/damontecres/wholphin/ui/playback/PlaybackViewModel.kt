@@ -56,7 +56,6 @@ import com.github.damontecres.wholphin.services.RefreshRateService
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.services.UserPreferencesService
-import com.github.damontecres.wholphin.services.stream.ElasticLoadControl
 import com.github.damontecres.wholphin.services.stream.StallGuard
 import com.github.damontecres.wholphin.services.stream.StreamHealth
 import com.github.damontecres.wholphin.services.stream.UsbReadAhead
@@ -1076,63 +1075,43 @@ class PlaybackViewModel
             }
         }
 
-        /** NoBars: keeps the next minutes of a direct-play film on the USB drive, if there is one */
+        /**
+         * NoBars: the USB downloader. For a direct-play film it is the only connection to the server:
+         * it keeps the drive 5 minutes ahead of where the player reads (see UsbReadAhead).
+         */
         private suspend fun readAheadLoop(exo: ExoPlayer) {
-            while (currentCoroutineContext().isActive) {
-                if (!UsbReadAhead.active) {
-                    delay(10_000)
-                    continue
-                }
-                val snapshot =
-                    withContext(WholphinDispatchers.Main) {
-                        val playback = state.value.currentPlayback
-                        val uri = exo.currentMediaItem?.localConfiguration?.uri
-                        if (playback?.playMethod != PlayMethod.DIRECT_PLAY || uri == null || exo.duration <= 0) {
-                            null
+            try {
+                while (currentCoroutineContext().isActive) {
+                    val playback = state.value.currentPlayback
+                    val source = playback?.mediaSourceInfo
+                    UsbReadAhead.film =
+                        if (playback?.playMethod == PlayMethod.DIRECT_PLAY && source != null) {
+                            val size = source.size ?: 0L
+                            val durationMs = (source.runTimeTicks ?: 0L) / 10_000
+                            if (size > 0 && durationMs > 0) UsbReadAhead.Film(size, durationMs) else null
                         } else {
-                            ReadAheadSnapshot(
-                                uri = uri,
-                                fileSize = playback.mediaSourceInfo.size ?: 0L,
-                                durationMs = exo.duration,
-                                positionMs = exo.currentPosition,
-                                aheadMs = exo.bufferedPosition - exo.currentPosition,
-                            )
+                            null
                         }
+                    if (!UsbReadAhead.active) {
+                        delay(2_000)
+                        continue
                     }
-                // The player comes first: while it is still filling its own buffer, the read-ahead
-                // waits, so the two never compete for the network or the drive
-                val goal = ElasticLoadControl.current?.goal ?: 45_000L
-                val playerFilling = StreamHealth.bufferState == "loading" && snapshot != null && snapshot.aheadMs < goal - 5_000
-                if (snapshot == null || snapshot.aheadMs < 12_000 || playerFilling) {
-                    delay(3_000)
-                    continue
+                    val didWork =
+                        try {
+                            UsbReadAhead.downloadStep(playerFactory.prefetchUpstream)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Timber.e(e, "NoBars USB download step failed")
+                            false
+                        }
+                    if (!didWork) delay(300)
                 }
-                val didWork =
-                    try {
-                        UsbReadAhead.prefetchStep(
-                            playerFactory.prefetchUpstream,
-                            snapshot.uri,
-                            snapshot.fileSize,
-                            snapshot.durationMs,
-                            snapshot.positionMs,
-                        )
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Timber.w(e, "NoBars USB read-ahead step failed")
-                        false
-                    }
-                if (!didWork) delay(5_000)
+            } finally {
+                UsbReadAhead.film = null
+                StreamHealth.driveFed = false
             }
         }
-
-        private data class ReadAheadSnapshot(
-            val uri: android.net.Uri,
-            val fileSize: Long,
-            val durationMs: Long,
-            val positionMs: Long,
-            val aheadMs: Long,
-        )
 
         private suspend fun prefetchTrickplay(
             duration: Duration,

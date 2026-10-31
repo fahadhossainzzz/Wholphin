@@ -53,6 +53,7 @@ import com.github.damontecres.wholphin.preferences.AppPreferences
 import com.github.damontecres.wholphin.preferences.AppSwitchPreference
 import com.github.damontecres.wholphin.preferences.ExoPlayerPreferences
 import com.github.damontecres.wholphin.preferences.ExperimentalPreference
+import com.github.damontecres.wholphin.services.stream.UsbReadAhead
 import com.github.damontecres.wholphin.preferences.HdrFormatPreferences
 import com.github.damontecres.wholphin.preferences.MpvPreferences
 import com.github.damontecres.wholphin.preferences.PlayerBackend
@@ -383,6 +384,26 @@ fun PreferencesContent(
                                             },
                                         interactionSource = interactionSource,
                                         modifier = focusModifier,
+                                    )
+                                }
+
+                                ExperimentalPreference.UsbClear, ExperimentalPreference.UsbRetest -> {
+                                    // NoBars: USB read-ahead maintenance; the summary shows the drive's state
+                                    var usbSummary by remember { mutableStateOf(UsbReadAhead.summary()) }
+                                    ClickPreference(
+                                        title = stringResource(pref.title),
+                                        onClick = {
+                                            if (pref == ExperimentalPreference.UsbClear) {
+                                                UsbReadAhead.clear(context)
+                                            } else {
+                                                UsbReadAhead.retest(context)
+                                            }
+                                            usbSummary = "working…"
+                                        },
+                                        modifier = focusModifier,
+                                        summary = usbSummary,
+                                        onLongClick = { usbSummary = UsbReadAhead.summary() },
+                                        interactionSource = interactionSource,
                                     )
                                 }
 

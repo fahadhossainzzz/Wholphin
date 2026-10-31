@@ -116,8 +116,13 @@ fun PlaybackDebugOverlay(
                                 StreamHealth.netBusy,
                                 StreamHealth.opensPerMin,
                             ),
-                        "Read-ahead:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.prefetchMbps),
-                        "USB:" to "${StreamHealth.usbStatus}, ${StreamHealth.usbAheadSec} s ahead",
+                        "Downloader:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.prefetchMbps),
+                        "USB:" to
+                            if (StreamHealth.driveFed) {
+                                "${StreamHealth.usbStatus}, playing from drive, ${StreamHealth.usbAheadSec} s ahead"
+                            } else {
+                                "${StreamHealth.usbStatus}, playing from network"
+                            },
                         "Fixes:" to "${StreamHealth.reconnects} reconnect / ${StreamHealth.reloads} reload / ${StreamHealth.rebuilds} rebuild",
                     )
                 delay(1.seconds)

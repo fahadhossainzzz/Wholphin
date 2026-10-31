@@ -89,19 +89,19 @@ class PlayerFactory
                 .build()
         }
 
-        /** NoBars: separate client for USB read-ahead downloads, so cutting the player's connections never hits them */
+        /** NoBars: client for the USB downloader (the only connection for a drive-fed film) */
         private val prefetchHttpClient: OkHttpClient by lazy {
             authOkHttpClient
                 .newBuilder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(true)
                 .build()
         }
 
         /** NoBars: where USB read-ahead downloads come from */
         val prefetchUpstream: DataSource.Factory by lazy {
-            DefaultDataSource.Factory(context, OkHttpDataSource.Factory(prefetchHttpClient))
+            DefaultDataSource.Factory(context, OkHttpDataSource.Factory(StreamHealth.trackingCallFactory(prefetchHttpClient)))
         }
 
         suspend fun createVideoPlayer(
@@ -158,7 +158,8 @@ class PlayerFactory
                         // stuck, and direct-play streams go through the USB read-ahead when a drive is present
                         UsbReadAhead.enabled = !appPreferences.experimentalPreferences.disableUsbReadahead
                         if (UsbReadAhead.enabled) {
-                            withContext(WholphinDispatchers.IO) { UsbReadAhead.init(context) }
+                            // Also finds a drive plugged in since the last film
+                            withContext(WholphinDispatchers.IO) { UsbReadAhead.refresh(context) }
                         } else {
                             StreamHealth.usbStatus = "off in settings"
                         }

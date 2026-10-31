@@ -77,6 +77,9 @@ object StreamHealth {
 
     @Volatile var bufferState: String = ""
 
+    /** The current film is fed from the USB drive (the player never reads the network). */
+    @Volatile var driveFed: Boolean = false
+
     // Updated by the stall guard, shown by the overlay
     @Volatile var aheadMs: Long = 0
 

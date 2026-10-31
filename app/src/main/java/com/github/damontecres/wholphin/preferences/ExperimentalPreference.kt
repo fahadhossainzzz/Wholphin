@@ -94,6 +94,16 @@ object ExperimentalPreference {
             summary = R.string.usb_readahead_summary,
         )
 
+    val UsbClear =
+        AppClickablePreference<AppPreferences>(
+            title = R.string.usb_clear,
+        )
+
+    val UsbRetest =
+        AppClickablePreference<AppPreferences>(
+            title = R.string.usb_retest,
+        )
+
     val DisableAudioOffload =
         AppSwitchPreference<AppPreferences>(
             title = R.string.disable_audio_offload,
@@ -119,6 +129,8 @@ val experimentalPreferences =
                         ExperimentalPreference.PreferAc3ForSurround,
                         ExperimentalPreference.DisableAudioOffload,
                         ExperimentalPreference.UsbReadAhead,
+                        ExperimentalPreference.UsbRetest,
+                        ExperimentalPreference.UsbClear,
                     ),
             ),
         )

@@ -72,21 +72,19 @@ class ElasticLoadControl private constructor(
         // With the USB drive holding the next minutes, memory only needs a short buffer
         // The whole TV's free RAM counts too: Android kills the app outright when the system runs low
         val systemFreeMb = StreamHealth.systemSpareMb
-        val goalMs =
-            when {
-                !UsbReadAhead.active -> GOAL_MS
-                systemFreeMb > 400 -> USB_GOAL_ROOMY_MS
-                else -> USB_GOAL_MS
-            }
+        // Fed from the USB drive, memory only needs a few seconds: the drive itself is the buffer
+        val driveFed = StreamHealth.driveFed
+        val goalMs = if (driveFed) DRIVE_GOAL_MS else GOAL_MS
+        val floorMs = if (driveFed) DRIVE_FLOOR_MS else FLOOR_MS
         goal = goalMs
         val decision =
             when {
                 bufferedMs >= goalMs -> false
 
-                System.currentTimeMillis() < emergencyUntil -> bufferedMs < FLOOR_MS * 2
+                System.currentTimeMillis() < emergencyUntil -> bufferedMs < floorMs * 2
 
                 // Never starve: keep loading below the floor unless memory is truly at the edge
-                bufferedMs < FLOOR_MS -> (ratio < 0.95f && systemFreeMb > 50) || bufferedMs < 3_000
+                bufferedMs < floorMs -> (ratio < 0.95f && systemFreeMb > 50) || bufferedMs < 3_000
 
                 loading -> ratio < STOP_RATIO && systemFreeMb > SYSTEM_STOP_MB
 
@@ -118,8 +116,8 @@ class ElasticLoadControl private constructor(
 
     companion object {
         const val GOAL_MS = 120_000L
-        const val USB_GOAL_MS = 45_000L
-        const val USB_GOAL_ROOMY_MS = 60_000L
+        const val DRIVE_GOAL_MS = 20_000L
+        const val DRIVE_FLOOR_MS = 8_000L
         const val FLOOR_MS = 15_000L
         const val STOP_RATIO = 0.60f
         const val RESUME_RATIO = 0.50f

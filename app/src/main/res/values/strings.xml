@@ -414,10 +414,6 @@
     <string name="image_cache_size">Image disk cache size (MB)</string>
     <string name="disable_audio_offload">Disable audio hardware offload</string>
     <string name="disable_audio_offload_summary">Disabling offloading audio decoding may fix playback freezes on some devices</string>
-    <string name="usb_readahead">Use USB drive for read-ahead</string>
-    <string name="usb_readahead_summary">Films play from a USB drive plugged into the TV, which is kept 5 minutes ahead over Wi-Fi, so Wi-Fi dips never stall playback. Takes effect from the next film.</string>
-    <string name="usb_clear">Clear USB read-ahead</string>
-    <string name="usb_retest">Test USB drive again</string>
     <string name="hdr_formats">HDR formats</string>
     <string name="hdr10_override">HDR10</string>
     <string name="hdr10_plus_override">HDR10+</string>

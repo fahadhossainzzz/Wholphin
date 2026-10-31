@@ -17,13 +17,15 @@ import androidx.media3.exoplayer.upstream.DefaultAllocator
 import timber.log.Timber
 
 /**
- * NoBars: a read-ahead buffer measured in seconds that gives way to the rest of the app.
+ * NoBars: the read-ahead buffer, with a goal in seconds and a budget in megabytes.
  *
- * - Aims for [GOAL_MS] of video ahead.
+ * - Aims for [GOAL_MS] of video ahead, and stops earlier when its own size (counted exactly by the
+ *   allocator, not guessed from the app's memory) reaches the budget: at most [MAX_BUDGET_BYTES], half
+ *   the app's limit, and always leaving [SYSTEM_KEEP_MB] of the TV's RAM spare.
+ * - Once full it tops up again as soon as it drops under [RESUME_SHARE] of the budget, so it stays
+ *   near full instead of draining down to the floor.
  * - Below [FLOOR_MS] it always loads, so playback can never jam itself.
- * - Between the two it loads only while the app's memory is below [STOP_RATIO] of its real limit,
- *   and resumes once it is back under [RESUME_RATIO]. A high-bitrate film simply ends up with fewer
- *   seconds ahead; no file size can fill memory through the buffer.
+ * - Emergency brakes: the app above [HEAP_BRAKE] of its limit, or the TV under [SYSTEM_BRAKE_MB] spare.
  * - When it stops, spare buffer memory is handed back instead of being kept for reuse.
  */
 class ElasticLoadControl private constructor(
@@ -33,10 +35,6 @@ class ElasticLoadControl private constructor(
     @Volatile private var loading = true
 
     private var lastHoldLog = 0L
-
-    /** The current in-memory goal; the read-ahead waits for the player to reach it. */
-    @Volatile var goal: Long = GOAL_MS
-        private set
 
     /** Set by the stall guard when the player is starving: load regardless of memory, up to the floor x2. */
     @Volatile var emergencyUntil: Long = 0
@@ -70,65 +68,86 @@ class ElasticLoadControl private constructor(
 
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
         val bufferedMs = parameters.bufferedDurationUs / 1000
-        val ratio = StreamHealth.heapRatio()
-        // With the USB drive holding the next minutes, memory only needs a short buffer
-        // The whole TV's free RAM counts too: Android kills the app outright when the system runs low
-        val systemFreeMb = StreamHealth.systemSpareMb
-        // Fed from the USB drive, memory only needs a few seconds: the drive itself is the buffer
-        val driveFed = StreamHealth.driveFed
-        val goalMs = if (driveFed) DRIVE_GOAL_MS else GOAL_MS
-        val floorMs = if (driveFed) DRIVE_FLOOR_MS else FLOOR_MS
-        goal = goalMs
-        val decision =
+        val bytes = allocator.totalBytesAllocated.toLong()
+        val heap = StreamHealth.heapRatio()
+        val spareMb = StreamHealth.systemSpareMb
+        val budget = budgetFor(bytes, spareMb)
+        StreamHealth.bufferBytes = bytes
+        StreamHealth.bufferBudget = budget
+        val emergencyLoad = System.currentTimeMillis() < emergencyUntil
+        val (decision, state) =
             when {
-                bufferedMs >= goalMs -> false
+                // Never starve: below the floor it loads unless memory is truly at the edge
+                bufferedMs < FLOOR_MS -> {
+                    ((heap < 0.95f && spareMb > 50) || bufferedMs < 3_000) to "loading (under ${FLOOR_MS / 1000} s)"
+                }
 
-                System.currentTimeMillis() < emergencyUntil -> bufferedMs < floorMs * 2
+                emergencyLoad -> {
+                    (bufferedMs < FLOOR_MS * 2) to "loading (rescue)"
+                }
 
-                // Never starve: keep loading below the floor unless memory is truly at the edge
-                bufferedMs < floorMs -> (ratio < 0.95f && systemFreeMb > 50) || bufferedMs < 3_000
+                // Emergency brakes: the app or the whole TV is short of memory
+                heap >= HEAP_BRAKE || spareMb < SYSTEM_BRAKE_MB -> {
+                    false to "holding: low memory"
+                }
 
-                loading -> ratio < STOP_RATIO && systemFreeMb > SYSTEM_STOP_MB
+                bufferedMs >= GOAL_MS -> {
+                    false to "full (${GOAL_MS / 1000} s goal)"
+                }
 
-                else -> ratio < RESUME_RATIO && systemFreeMb > SYSTEM_RESUME_MB
+                loading -> {
+                    (bytes < budget).let { it to if (it) "loading" else "full (${budget shr 20} MB budget)" }
+                }
+
+                // Top up early, so the buffer stays near full instead of draining to the floor
+                else -> {
+                    val resume = bytes < budget * RESUME_SHARE && bufferedMs < GOAL_MS - 10_000
+                    resume to if (resume) "loading" else StreamHealth.bufferState
+                }
             }
         if (loading && !decision) {
             // Hand spare buffer memory back
             allocator.setTargetBufferSize(allocator.totalBytesAllocated)
             val now = System.currentTimeMillis()
-            if (bufferedMs < goalMs && now - lastHoldLog >= 30_000) {
+            if (state.startsWith("holding") && now - lastHoldLog >= 30_000) {
                 lastHoldLog = now
                 Timber.e(
-                    "NoBars buffer: holding at %ds ahead, app memory %d%%, TV spare RAM %d MB",
+                    "NoBars buffer: holding at %ds ahead (%d MB), app memory %d%%, TV spare RAM %d MB",
                     bufferedMs / 1000,
-                    (ratio * 100).toInt(),
-                    systemFreeMb,
+                    bytes shr 20,
+                    (heap * 100).toInt(),
+                    spareMb,
                 )
             }
         } else if (!loading && decision) {
             allocator.setTargetBufferSize(Int.MAX_VALUE)
         }
         loading = decision
-        StreamHealth.bufferState =
-            when {
-                decision -> "loading"
-                bufferedMs >= goalMs -> "full (${goalMs / 1000} s goal)"
-                else -> "holding: memory"
-            }
+        StreamHealth.bufferState = state
         return decision
+    }
+
+    /**
+     * How many bytes the buffer may hold now: at most [MAX_BUDGET_BYTES] or half the app's limit, and
+     * always leaving [SYSTEM_KEEP_MB] of the TV's RAM spare.
+     */
+    private fun budgetFor(
+        bytes: Long,
+        spareMb: Long,
+    ): Long {
+        val bySystem = if (spareMb == Long.MAX_VALUE) Long.MAX_VALUE else bytes + ((spareMb - SYSTEM_KEEP_MB) shl 20)
+        return minOf(MAX_BUDGET_BYTES, StreamHealth.heapMax() / 2, bySystem).coerceAtLeast(MIN_BUDGET_BYTES)
     }
 
     companion object {
         const val GOAL_MS = 120_000L
-        const val DRIVE_GOAL_MS = 20_000L
-        const val DRIVE_FLOOR_MS = 8_000L
         const val FLOOR_MS = 15_000L
-        const val STOP_RATIO = 0.60f
-        const val RESUME_RATIO = 0.50f
-
-        // Spare TV RAM above Android's low-memory line
-        const val SYSTEM_STOP_MB = 200L
-        const val SYSTEM_RESUME_MB = 300L
+        const val MAX_BUDGET_BYTES = 250L * 1024 * 1024
+        const val MIN_BUDGET_BYTES = 48L * 1024 * 1024
+        const val RESUME_SHARE = 0.85
+        const val HEAP_BRAKE = 0.85f
+        const val SYSTEM_BRAKE_MB = 150L
+        const val SYSTEM_KEEP_MB = 200L
 
         @Volatile
         var current: ElasticLoadControl? = null

@@ -5,6 +5,8 @@ import android.os.Build
 import com.github.damontecres.wholphin.BuildConfig
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.services.hilt.IoCoroutineScope
+import com.github.damontecres.wholphin.services.stream.NoBarsLog
+import com.github.damontecres.wholphin.services.stream.StreamHealth
 import com.github.damontecres.wholphin.ui.detail.DebugViewModel.Companion.getLogCatLines
 import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.ui.showToast
@@ -104,8 +106,31 @@ class ServerReportService
             val logcat = getLogCatLines().joinToString("\n") { it.text }
             val header = buildLogHeader("Send App Logs")
             Timber.w(header)
-            val response by api.clientLogApi.logFile(header + "\n\n" + logcat)
+            // NoBars: include the TV's own log file (whole evening of diagnostics and film reports)
+            val noBars = NoBarsLog.tail(1_500_000)
+            val body = header + "\n\n" + logcat + "\n\n=== NoBars log (most recent part) ===\n" + noBars
+            val response by api.clientLogApi.logFile(body)
             showToast(context, "Sent! Filename=${response.fileName}")
+        }
+
+        /**
+         * NoBars: sends the report of a film that just ended to the server, where it lands next to
+         * Jellyfin's own logs, and keeps it in the TV's log file. Runs on its own scope so it
+         * survives the playback screen closing.
+         */
+        fun sendPlaybackReport(report: String) {
+            NoBarsLog.writeBlock(report)
+            StreamHealth.reportStatus = "sending (${StreamHealth.now()})"
+            ioScope.launchIO(ExceptionHandler(autoToast = false)) {
+                try {
+                    val response by api.clientLogApi.logFile(buildLogHeader("NoBars playback report") + "\n\n" + report)
+                    StreamHealth.reportStatus = "sent ${StreamHealth.now()} (${response.fileName})"
+                    Timber.e("NoBars report sent as %s", response.fileName)
+                } catch (e: Exception) {
+                    StreamHealth.reportStatus = "not sent: ${e.javaClass.simpleName}"
+                    Timber.e(e, "NoBars report could not be sent")
+                }
+            }
         }
     }
 

@@ -54,7 +54,11 @@ class WholphinApplication :
 
     override fun onCreate() {
         super.onCreate()
-        // NoBars: record why the last run ended (memory kill, crash) so it shows up in sent logs
+        // NoBars: keep a log file on the TV, and record why the last run ended (memory kill, crash)
+        Timber.plant(
+            com.github.damontecres.wholphin.services.stream.NoBarsLog
+                .tree(this),
+        )
         com.github.damontecres.wholphin.services.stream.StallGuard
             .logPreviousExits(this)
         if (BuildConfig.DEBUG) {

@@ -133,6 +133,7 @@ class PlaybackViewModelTests {
             imageUrlService = mockImageUrlService,
             screensaverService = mockScreensaverService,
             musicService = mockMusicService,
+            serverReportService = io.mockk.mockk(relaxed = true),
             destination = destination,
         )
 

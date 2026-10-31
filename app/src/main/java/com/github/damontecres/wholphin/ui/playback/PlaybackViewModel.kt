@@ -58,7 +58,6 @@ import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.stream.StallGuard
 import com.github.damontecres.wholphin.services.stream.StreamHealth
-import com.github.damontecres.wholphin.services.stream.UsbReadAhead
 import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.gt
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
@@ -161,6 +160,7 @@ class PlaybackViewModel
         private val imageUrlService: ImageUrlService,
         private val screensaverService: ScreensaverService,
         private val musicService: MusicService,
+        private val serverReportService: com.github.damontecres.wholphin.services.ServerReportService,
         @Assisted private val destination: Destination,
     ) : ViewModel(),
         Player.Listener,
@@ -282,15 +282,18 @@ class PlaybackViewModel
             player.addListener(this)
             (player as? ExoPlayer)?.addAnalyticsListener(this)
             (player as? ExoPlayer)?.let { exo ->
-                // NoBars: stall rescue + memory manager, and USB read-ahead
+                // NoBars: stall rescue, memory manager and playback diagnostics
                 jobs.add(
                     viewModelScope.launch(WholphinDispatchers.Main) {
-                        StallGuard(context, exo) {
-                            state.value.currentPlayback?.playMethod == PlayMethod.DIRECT_PLAY
-                        }.run()
+                        StallGuard(
+                            context = context,
+                            player = exo,
+                            isDirectPlay = { state.value.currentPlayback?.playMethod == PlayMethod.DIRECT_PLAY },
+                            describe = { describePlayback() },
+                            onReport = { serverReportService.sendPlaybackReport(it) },
+                        ).run()
                     },
                 )
-                jobs.add(viewModelScope.launchIO { readAheadLoop(exo) })
             }
             subscribeToWebSocket()
             jobs.add(listenForTranscodeReason())
@@ -1075,42 +1078,32 @@ class PlaybackViewModel
             }
         }
 
-        /**
-         * NoBars: the USB downloader. For a direct-play film it is the only connection to the server:
-         * it keeps the drive 5 minutes ahead of where the player reads (see UsbReadAhead).
-         */
-        private suspend fun readAheadLoop(exo: ExoPlayer) {
-            try {
-                while (currentCoroutineContext().isActive) {
-                    val playback = state.value.currentPlayback
-                    val source = playback?.mediaSourceInfo
-                    UsbReadAhead.film =
-                        if (playback?.playMethod == PlayMethod.DIRECT_PLAY && source != null) {
-                            val size = source.size ?: 0L
-                            val durationMs = (source.runTimeTicks ?: 0L) / 10_000
-                            if (size > 0 && durationMs > 0) UsbReadAhead.Film(size, durationMs) else null
-                        } else {
-                            null
-                        }
-                    if (!UsbReadAhead.active) {
-                        delay(2_000)
-                        continue
-                    }
-                    val didWork =
-                        try {
-                            UsbReadAhead.downloadStep(playerFactory.prefetchUpstream)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Timber.e(e, "NoBars USB download step failed")
-                            false
-                        }
-                    if (!didWork) delay(300)
-                }
-            } finally {
-                UsbReadAhead.film = null
-                StreamHealth.driveFed = false
-            }
+        /** NoBars: one line describing what is playing, for the playback report. */
+        private fun describePlayback(): String {
+            val playback = state.value.currentPlayback
+            val source = playback?.mediaSourceInfo
+            val streams = source?.mediaStreams.orEmpty()
+            val video = streams.firstOrNull { it.type == MediaStreamType.VIDEO }
+            val audio = streams.firstOrNull { it.type == MediaStreamType.AUDIO && it.index == playback?.audioIndex }
+            val subtitle = streams.firstOrNull { it.type == MediaStreamType.SUBTITLE && it.index == playback?.subtitleIndex }
+            val sizeGb = (source?.size ?: 0L) / 1e9
+            val mbps = (source?.bitrate ?: 0) / 1e6
+            val title = currentItem.item.name ?: "?"
+            return String.format(
+                java.util.Locale.US,
+                "%s | %s, %.1f GB, %.1f Mbps | video %s %sx%s %s | audio %s | subtitles %s | %s",
+                title,
+                source?.container ?: "?",
+                sizeGb,
+                mbps,
+                video?.codec ?: "?",
+                video?.width ?: "?",
+                video?.height ?: "?",
+                video?.videoRangeType?.serialName ?: "",
+                audio?.displayTitle ?: "default",
+                subtitle?.displayTitle ?: "off",
+                playback?.playMethod?.serialName ?: "?",
+            )
         }
 
         private suspend fun prefetchTrickplay(

@@ -13,7 +13,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -39,7 +38,6 @@ import com.github.damontecres.wholphin.services.stream.ElasticLoadControl
 import com.github.damontecres.wholphin.services.stream.LeanExtractorsFactory
 import com.github.damontecres.wholphin.services.stream.PatientLoadErrorPolicy
 import com.github.damontecres.wholphin.services.stream.StreamHealth
-import com.github.damontecres.wholphin.services.stream.UsbReadAhead
 import com.github.damontecres.wholphin.util.BitstreamFilter
 import com.github.damontecres.wholphin.util.BitstreamFilteringCodecAdapterFactory
 import com.github.damontecres.wholphin.util.DolbyVisionProfile7Conversion
@@ -87,21 +85,6 @@ class PlayerFactory
                 .readTimeout(5, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(true)
                 .build()
-        }
-
-        /** NoBars: client for the USB downloader (the only connection for a drive-fed film) */
-        private val prefetchHttpClient: OkHttpClient by lazy {
-            authOkHttpClient
-                .newBuilder()
-                .connectTimeout(5, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
-                .retryOnConnectionFailure(true)
-                .build()
-        }
-
-        /** NoBars: where USB read-ahead downloads come from */
-        val prefetchUpstream: DataSource.Factory by lazy {
-            DefaultDataSource.Factory(context, OkHttpDataSource.Factory(StreamHealth.trackingCallFactory(prefetchHttpClient)))
         }
 
         suspend fun createVideoPlayer(
@@ -154,21 +137,15 @@ class PlayerFactory
                                 MediaExtensionStatus.MES_DISABLED -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
                                 else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
                             }
-                        // NoBars: every byte is counted for the stall guard, connections can be cut when
-                        // stuck, and direct-play streams go through the USB read-ahead when a drive is present
-                        UsbReadAhead.enabled = !appPreferences.experimentalPreferences.disableUsbReadahead
-                        if (UsbReadAhead.enabled) {
-                            // Also finds a drive plugged in since the last film
-                            withContext(WholphinDispatchers.IO) { UsbReadAhead.refresh(context) }
-                        } else {
-                            StreamHealth.usbStatus = "off in settings"
-                        }
-                        val upstream =
-                            DefaultDataSource.Factory(
-                                context,
-                                OkHttpDataSource.Factory(StreamHealth.trackingCallFactory(videoHttpClient)),
+                        // NoBars: every byte is counted for the stall guard and the diagnostics, and
+                        // stuck connections can be cut
+                        val dataSourceFactory =
+                            StreamHealth.countingFactory(
+                                DefaultDataSource.Factory(
+                                    context,
+                                    OkHttpDataSource.Factory(StreamHealth.trackingCallFactory(videoHttpClient)),
+                                ),
                             )
-                        val dataSourceFactory = UsbReadAhead.playerDataSourceFactory(upstream)
                         // NoBars: MP4s skip tracks in unused languages (see LanguageKeep)
                         val extractorsFactory = LeanExtractorsFactory(createExtractorsFactory())
 

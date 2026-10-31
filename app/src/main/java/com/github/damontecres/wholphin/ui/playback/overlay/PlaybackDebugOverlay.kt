@@ -102,28 +102,38 @@ fun PlaybackDebugOverlay(
                 value = "${formatBytes(used)} / ${formatBytes(max)} (${used * 100 / max}%)"
                 streamInfo =
                     listOf(
-                        "TV RAM:" to "${StreamHealth.systemAvailMb} MB free (${StreamHealth.systemSpareMb} spare)",
-                        "Ahead:" to String.format(Locale.US, "%.1f s", StreamHealth.aheadMs / 1000f),
-                        "Incoming:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.netMbps),
-                        "Buffer:" to StreamHealth.bufferState,
-                        "Sources:" to
+                        "Buffer:" to
                             String.format(
                                 Locale.US,
-                                "USB %.0f Mbps (%d%% busy), net %.0f Mbps (%d%% busy), %d opens/min",
-                                StreamHealth.usbMbps,
-                                StreamHealth.usbBusy,
-                                StreamHealth.netOnlyMbps,
-                                StreamHealth.netBusy,
+                                "%.1f s ahead · %d of %d MB · %s",
+                                StreamHealth.aheadMs / 1000f,
+                                StreamHealth.bufferBytes shr 20,
+                                StreamHealth.bufferBudget shr 20,
+                                StreamHealth.bufferState,
+                            ),
+                        "TV RAM:" to "${StreamHealth.systemAvailMb} MB free (${StreamHealth.systemSpareMb} spare)",
+                        "Network:" to
+                            String.format(
+                                Locale.US,
+                                "in %.1f Mbps · connection %.0f Mbps (%d%% busy) · %d opens/min",
+                                StreamHealth.netMbps,
+                                StreamHealth.readMbps,
+                                StreamHealth.readBusy,
                                 StreamHealth.opensPerMin,
                             ),
-                        "Downloader:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.prefetchMbps),
-                        "USB:" to
-                            if (StreamHealth.driveFed) {
-                                "${StreamHealth.usbStatus}, playing from drive, ${StreamHealth.usbAheadSec} s ahead"
+                        "Wi-Fi:" to
+                            if (StreamHealth.wifiRssi == 0) {
+                                "no reading"
                             } else {
-                                "${StreamHealth.usbStatus}, playing from network"
+                                "${StreamHealth.wifiRssi} dBm · link ${StreamHealth.wifiLinkMbps} Mbps · " +
+                                    if (StreamHealth.wifiFreqMhz >= 4900) "5 GHz" else "2.4 GHz"
                             },
+                        "Waits:" to StreamHealth.recentWaits,
+                        "Dropped:" to "${StreamHealth.recentDrops} in last 10 min",
                         "Fixes:" to "${StreamHealth.reconnects} reconnect / ${StreamHealth.reloads} reload / ${StreamHealth.rebuilds} rebuild",
+                        "Last event:" to StreamHealth.lastEvent.ifEmpty { "none" },
+                        "Report:" to StreamHealth.reportStatus,
+                        "Time:" to StreamHealth.now(),
                     )
                 delay(1.seconds)
             }

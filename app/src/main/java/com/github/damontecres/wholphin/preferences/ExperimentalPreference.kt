@@ -83,27 +83,6 @@ object ExperimentalPreference {
             },
         )
 
-    val UsbReadAhead =
-        AppSwitchPreference<AppPreferences>(
-            title = R.string.usb_readahead,
-            defaultValue = true,
-            getter = { !it.experimentalPreferences.disableUsbReadahead },
-            setter = { prefs, value ->
-                prefs.updateExperimentalPreferences { disableUsbReadahead = !value }
-            },
-            summary = R.string.usb_readahead_summary,
-        )
-
-    val UsbClear =
-        AppClickablePreference<AppPreferences>(
-            title = R.string.usb_clear,
-        )
-
-    val UsbRetest =
-        AppClickablePreference<AppPreferences>(
-            title = R.string.usb_retest,
-        )
-
     val DisableAudioOffload =
         AppSwitchPreference<AppPreferences>(
             title = R.string.disable_audio_offload,
@@ -128,9 +107,6 @@ val experimentalPreferences =
                         ExperimentalPreference.ConvertDolbyVisionProfile7,
                         ExperimentalPreference.PreferAc3ForSurround,
                         ExperimentalPreference.DisableAudioOffload,
-                        ExperimentalPreference.UsbReadAhead,
-                        ExperimentalPreference.UsbRetest,
-                        ExperimentalPreference.UsbClear,
                     ),
             ),
         )

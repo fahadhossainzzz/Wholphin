@@ -32,6 +32,8 @@ class ElasticLoadControl private constructor(
 ) : LoadControl {
     @Volatile private var loading = true
 
+    private var lastHoldLog = 0L
+
     /** The current in-memory goal; the read-ahead waits for the player to reach it. */
     @Volatile var goal: Long = GOAL_MS
         private set
@@ -93,7 +95,9 @@ class ElasticLoadControl private constructor(
         if (loading && !decision) {
             // Hand spare buffer memory back
             allocator.setTargetBufferSize(allocator.totalBytesAllocated)
-            if (bufferedMs < goalMs) {
+            val now = System.currentTimeMillis()
+            if (bufferedMs < goalMs && now - lastHoldLog >= 30_000) {
+                lastHoldLog = now
                 Timber.e(
                     "NoBars buffer: holding at %ds ahead, app memory %d%%, TV spare RAM %d MB",
                     bufferedMs / 1000,

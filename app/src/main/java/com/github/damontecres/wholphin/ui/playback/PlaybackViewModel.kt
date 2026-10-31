@@ -56,6 +56,8 @@ import com.github.damontecres.wholphin.services.RefreshRateService
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.services.UserPreferencesService
+import com.github.damontecres.wholphin.services.stream.StallGuard
+import com.github.damontecres.wholphin.services.stream.UsbReadAhead
 import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.gt
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
@@ -85,6 +87,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -277,6 +280,17 @@ class PlaybackViewModel
         private fun configurePlayer() {
             player.addListener(this)
             (player as? ExoPlayer)?.addAnalyticsListener(this)
+            (player as? ExoPlayer)?.let { exo ->
+                // NoBars: stall rescue + memory manager, and USB read-ahead
+                jobs.add(
+                    viewModelScope.launch(WholphinDispatchers.Main) {
+                        StallGuard(context, exo) {
+                            state.value.currentPlayback?.playMethod == PlayMethod.DIRECT_PLAY
+                        }.run()
+                    },
+                )
+                jobs.add(viewModelScope.launchIO { readAheadLoop(exo) })
+            }
             subscribeToWebSocket()
             jobs.add(listenForTranscodeReason())
             val sessionPlayer =
@@ -579,17 +593,8 @@ class PlaybackViewModel
                             ?.firstOrNull()
                     }
 
-                trickPlayInfo?.let { trickplayInfo ->
-                    mediaSource.runTimeTicks?.ticks?.let { duration ->
-                        viewModelScope.launchIO {
-                            prefetchTrickplay(
-                                duration,
-                                trickplayInfo,
-                                mediaSource.id?.toUUIDOrNull(),
-                            )
-                        }
-                    }
-                }
+                // NoBars: seek thumbnails are no longer all loaded up front at full size; they load
+                // when the seek bar asks for them
 
                 val chapters = Chapter.fromDto(base)
                 _state.update {
@@ -1068,6 +1073,61 @@ class PlaybackViewModel
                 )
             }
         }
+
+        /** NoBars: keeps the next minutes of a direct-play film on the USB drive, if there is one */
+        private suspend fun readAheadLoop(exo: ExoPlayer) {
+            while (currentCoroutineContext().isActive) {
+                if (!UsbReadAhead.active) {
+                    delay(10_000)
+                    continue
+                }
+                val snapshot =
+                    withContext(WholphinDispatchers.Main) {
+                        val playback = state.value.currentPlayback
+                        val uri = exo.currentMediaItem?.localConfiguration?.uri
+                        if (playback?.playMethod != PlayMethod.DIRECT_PLAY || uri == null || exo.duration <= 0) {
+                            null
+                        } else {
+                            ReadAheadSnapshot(
+                                uri = uri,
+                                fileSize = playback.mediaSourceInfo.size ?: 0L,
+                                durationMs = exo.duration,
+                                positionMs = exo.currentPosition,
+                                aheadMs = exo.bufferedPosition - exo.currentPosition,
+                            )
+                        }
+                    }
+                // The player comes first: read ahead only while its own buffer is comfortable
+                if (snapshot == null || snapshot.aheadMs < 12_000) {
+                    delay(3_000)
+                    continue
+                }
+                val didWork =
+                    try {
+                        UsbReadAhead.prefetchStep(
+                            playerFactory.prefetchUpstream,
+                            snapshot.uri,
+                            snapshot.fileSize,
+                            snapshot.durationMs,
+                            snapshot.positionMs,
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars USB read-ahead step failed")
+                        false
+                    }
+                if (!didWork) delay(5_000)
+            }
+        }
+
+        private data class ReadAheadSnapshot(
+            val uri: android.net.Uri,
+            val fileSize: Long,
+            val durationMs: Long,
+            val positionMs: Long,
+            val aheadMs: Long,
+        )
 
         private suspend fun prefetchTrickplay(
             duration: Duration,

@@ -357,6 +357,8 @@ object SubtitleSettings {
 
     @OptIn(UnstableApi::class)
     fun SubtitlePreferences.applyTo(view: SubtitleView) {
+        // NoBars: the subtitle's own colours/fonts/sizes would override the style chosen in settings
+        view.setApplyEmbeddedStyles(false)
         view.setStyle(toSubtitleStyle())
         view.setFixedTextSize(Dimension.SP, fontSize.toFloat())
         view.setBottomPaddingFraction(margin.toFloat() / 100f)

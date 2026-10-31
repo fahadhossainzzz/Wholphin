@@ -7,6 +7,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import com.github.damontecres.wholphin.services.stream.LanguageKeep
 import com.github.damontecres.wholphin.ui.indexOfFirstOrNull
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaStream
@@ -35,9 +36,7 @@ object TrackSelectionUtils {
                             group.type == C.TRACK_TYPE_TEXT && group.isExternal
                         }
                     } else {
-                        val playerIndex =
-                            getPlayerIndex(subtitleIndex, source, MediaStreamType.SUBTITLE)
-                        if (playerIndex != null) {
+                        val groups =
                             tracks.groups
                                 .filter { group ->
                                     group.type == C.TRACK_TYPE_TEXT &&
@@ -46,7 +45,10 @@ object TrackSelectionUtils {
                                 }
                                 // TODO why are exoplayer tracks out of order sometimes?
                                 .sortedById()
-                                .getOrNull(playerIndex)
+                        val playerIndex =
+                            getPlayerIndex(subtitleIndex, source, MediaStreamType.SUBTITLE, groups.map { it.trackFormats.firstOrNull()?.language })
+                        if (playerIndex != null) {
+                            groups.getOrNull(playerIndex)
                         } else {
                             null
                         }
@@ -79,16 +81,17 @@ object TrackSelectionUtils {
 
         val audioSelected =
             if (audioIndex != null && audioIndex >= 0) {
-                val playerIndex = getPlayerIndex(audioIndex, source, MediaStreamType.AUDIO)
+                val groups =
+                    tracks.groups
+                        .filter { group ->
+                            group.type == C.TRACK_TYPE_AUDIO && group.length >= 1
+                        }
+                        // TODO why are exoplayer tracks out of order sometimes?
+                        .sortedById()
+                val playerIndex = getPlayerIndex(audioIndex, source, MediaStreamType.AUDIO, groups.map { it.trackFormats.firstOrNull()?.language })
                 val chosenTrack =
                     if (playerIndex != null) {
-                        tracks.groups
-                            .filter { group ->
-                                group.type == C.TRACK_TYPE_AUDIO && group.length >= 1
-                            }
-                            // TODO why are exoplayer tracks out of order sometimes?
-                            .sortedById()
-                            .getOrNull(playerIndex)
+                        groups.getOrNull(playerIndex)
                     } else {
                         null
                     }
@@ -121,7 +124,12 @@ object TrackSelectionUtils {
         serverIndex: Int,
         source: MediaSourceInfo,
         type: MediaStreamType,
+        playerGroupLanguages: List<String?>,
     ): Int? {
+        // NoBars: MP4 tracks in unused languages are never loaded; map to the kept ones
+        LanguageKeep.playerIndexFor(serverIndex, source, type, playerGroupLanguages)?.let {
+            return it.takeIf { it >= 0 }
+        }
         val playerIndex =
             source.mediaStreams
                 .orEmpty()

@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -26,6 +28,7 @@ import androidx.tv.material3.ProvideTextStyle
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.preferences.PlayerBackend
+import com.github.damontecres.wholphin.services.stream.StreamHealth
 import com.github.damontecres.wholphin.ui.PreviewTvSpec
 import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.formatBytes
@@ -89,17 +92,22 @@ fun PlaybackDebugOverlay(
             color = MaterialTheme.colorScheme.onSurface,
         )
 
+    var streamInfo by remember { mutableStateOf(listOf<Pair<String, Any?>>()) }
     val memoryUsed by produceState("") {
         withContext(WholphinDispatchers.Default) {
             while (isActive) {
-                val runtime = Runtime.getRuntime()
-                val total = runtime.totalMemory()
-                val free = runtime.freeMemory()
-                val used = total - free
-                val totalMemory = formatBytes(total)
-                val usedMemory = formatBytes(used)
-                value = "$usedMemory / $totalMemory"
-                delay(2.seconds)
+                // NoBars: used against the app's real limit, plus the stream's read-ahead
+                val used = StreamHealth.heapUsed()
+                val max = StreamHealth.heapMax()
+                value = "${formatBytes(used)} / ${formatBytes(max)} (${used * 100 / max}%)"
+                streamInfo =
+                    listOf(
+                        "Ahead:" to String.format(Locale.US, "%.1f s", StreamHealth.aheadMs / 1000f),
+                        "Incoming:" to String.format(Locale.US, "%.1f Mbps", StreamHealth.netMbps),
+                        "USB:" to "${StreamHealth.usbStatus}, ${StreamHealth.usbAheadSec} s ahead",
+                        "Fixes:" to "${StreamHealth.reconnects} reconnect / ${StreamHealth.reloads} reload / ${StreamHealth.rebuilds} rebuild",
+                    )
+                delay(1.seconds)
             }
         }
     }
@@ -135,7 +143,7 @@ fun PlaybackDebugOverlay(
                             "Bitrate (est): " to analyticsState.bitrateEstimate,
                             "Dropped frames: " to analyticsState.droppedFrames,
                             "Memory" to memoryUsed,
-                        ),
+                        ) + streamInfo,
                     keyWidth = 80.dp,
                     modifier = Modifier.weight(1f, fill = false),
                 )

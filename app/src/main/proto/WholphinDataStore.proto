@@ -243,6 +243,8 @@ message ExperimentalPreferences {
   bool disable_audio_offload = 4;
   bool prefer_dolby_vision_over_hdr10_plus = 5;
   bool convert_dolby_vision_profile_7 = 6;
+  // NoBars: false = use a USB drive in the TV for read-ahead when one is present
+  bool disable_usb_readahead = 7;
 }
 
 message AppPreferences {

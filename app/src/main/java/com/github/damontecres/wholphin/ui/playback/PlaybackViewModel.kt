@@ -22,6 +22,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DecoderReuseEvaluation
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.session.MediaSession
@@ -647,6 +648,7 @@ class PlaybackViewModel
             enableDirectPlay: Boolean = !this.forceTranscoding,
             enableDirectStream: Boolean = !this.forceTranscoding,
             maxBitrate: Long = this.state.value.maxBitrate,
+            allowAudioCopy: Boolean = enableDirectStream,
         ): Unit =
             withContext(WholphinDispatchers.IO) {
                 val itemId = item.id
@@ -706,7 +708,7 @@ class PlaybackViewModel
                                 enableDirectPlay = enableDirectPlay,
                                 enableDirectStream = enableDirectStream,
                                 allowVideoStreamCopy = enableDirectStream,
-                                allowAudioStreamCopy = enableDirectStream,
+                                allowAudioStreamCopy = allowAudioCopy,
                                 enableTranscoding = true,
                                 autoOpenLiveStream = true,
                             ),
@@ -1496,11 +1498,23 @@ class PlaybackViewModel
                         }
 
                         PlayMethod.DIRECT_STREAM, PlayMethod.DIRECT_PLAY -> {
-                            Timber.w("Playback error during ${it.playMethod}, falling back to transcoding")
                             val currentPlayback = state.value.currentPlayback
                             if (currentPlayback == null) {
                                 Timber.w("Playback error, currentPlayback is null")
                             }
+                            // NoBars: when only the audio failed during direct play, let the server
+                            // convert just the audio and pass the video through untouched (re-encoding
+                            // a 4K Dolby Vision film live is more than the server can do)
+                            val audioOnly =
+                                it.playMethod == PlayMethod.DIRECT_PLAY &&
+                                    (error as? ExoPlaybackException)?.let { e ->
+                                        e.type == ExoPlaybackException.TYPE_RENDERER &&
+                                            MimeTypes.isAudio(e.rendererFormat?.sampleMimeType)
+                                    } == true
+                            if (audioOnly) {
+                                StreamHealth.event("audio could not play on the TV, server converts the audio only")
+                            }
+                            Timber.w("Playback error during ${it.playMethod}, falling back to transcoding (audio only: $audioOnly)")
                             changeStreams(
                                 item = currentItem.item,
                                 sourceId = currentPlayback?.mediaSourceInfo?.id,
@@ -1508,7 +1522,8 @@ class PlaybackViewModel
                                 subtitleIndex = currentPlayback?.subtitleIndex,
                                 positionMs = player.currentPosition,
                                 enableDirectPlay = false,
-                                enableDirectStream = false,
+                                enableDirectStream = audioOnly,
+                                allowAudioCopy = false,
                             )
                             withContext(WholphinDispatchers.Main) {
                                 player.prepare()

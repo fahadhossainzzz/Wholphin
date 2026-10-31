@@ -158,7 +158,7 @@ class StallGuard(
                 reason: Int,
             ) {
                 // A new film (next episode, playlist): close the previous one's report
-                if (session.firstReady) finishSession("moved on to the next item")
+                if (session.firstReady) finishSession("stream restarted (track change, resume or next item)")
             }
         }
 
@@ -440,6 +440,7 @@ class StallGuard(
             seek.readyMs = now - seek.at
             s.pendingSeek = null
         }
+        val firstOfSession = !s.firstReady
         if (!s.firstReady) {
             s.firstReady = true
             s.description =
@@ -455,7 +456,9 @@ class StallGuard(
             s.bufferingSince = 0L
             val cause =
                 when {
-                    s.waits.isEmpty() && s.seeks.isEmpty() && waited > 0 && player.currentPosition < 60_000 && s.playingMs < 5_000 -> "start"
+                    // The first wait of a stream is its start: a new film, a resume, or a restart
+                    // after changing the audio/subtitle track
+                    firstOfSession -> "start"
                     seek != null && now - seek.at < 60_000 -> "skip"
                     else -> "stall"
                 }

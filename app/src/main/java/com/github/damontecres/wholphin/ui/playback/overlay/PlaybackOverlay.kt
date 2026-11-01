@@ -51,7 +51,6 @@ import coil3.compose.AsyncImage
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.Chapter
 import com.github.damontecres.wholphin.data.model.PlaylistItem
-import com.github.damontecres.wholphin.ui.AppColors
 import com.github.damontecres.wholphin.ui.LocalImageUrlService
 import com.github.damontecres.wholphin.ui.components.TimeDisplay
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
@@ -327,6 +326,16 @@ fun PlaybackOverlay(
             TimeDisplay()
         }
 
+        // NoBars: one-line summary while watching
+        AnimatedVisibility(
+            visible = showDebugInfo && !controllerViewState.controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart),
+        ) {
+            PlaybackDebugCompact(Modifier.padding(start = 12.dp, top = 8.dp))
+        }
+
         // Debug overlay
         AnimatedVisibility(
             visible = showDebugInfo && controllerViewState.controlsVisible,
@@ -349,9 +358,7 @@ fun PlaybackOverlay(
                     Modifier
                         .align(Alignment.TopStart)
                         .heightIn(max = height)
-                        .padding(bottom = 16.dp)
-                        .background(AppColors.TransparentBlack50)
-                        .padding(8.dp)
+                        .padding(bottom = 8.dp)
                         .onFocusChanged {
                             if (it.hasFocus) {
                                 // If Debug overlay gains focus, do not hide the controls

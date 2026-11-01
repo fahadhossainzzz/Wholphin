@@ -1480,6 +1480,9 @@ class PlaybackViewModel
             _state.update { it.copy(subtitleCues = cueGroup.cues) }
         }
 
+        /** NoBars: recent restarts after a decoder error during direct play. */
+        private val directRetries = ArrayDeque<Long>()
+
         override fun onPlayerError(error: PlaybackException) {
             Timber.e(error, "Playback error")
             viewModelScope.launch(WholphinDispatchers.Main + ExceptionHandler()) {
@@ -1511,6 +1514,31 @@ class PlaybackViewModel
                                         e.type == ExoPlaybackException.TYPE_RENDERER &&
                                             MimeTypes.isAudio(e.rendererFormat?.sampleMimeType)
                                     } == true
+                            // NoBars: the TV's video decoder can fail once under rapid skipping (MediaCodec
+                            // flush error). That is not a problem with the file, so restart the player at
+                            // the same spot, still playing directly; switch to server conversion only if it
+                            // keeps failing (3 times in 2 minutes)
+                            val decoderGlitch =
+                                it.playMethod == PlayMethod.DIRECT_PLAY && !audioOnly &&
+                                    (error as? ExoPlaybackException)?.type.let { t ->
+                                        t == ExoPlaybackException.TYPE_RENDERER || t == ExoPlaybackException.TYPE_UNEXPECTED
+                                    }
+                            if (decoderGlitch) {
+                                val now = android.os.SystemClock.elapsedRealtime()
+                                while (directRetries.isNotEmpty() && now - directRetries.first() > 120_000) directRetries.removeFirst()
+                                if (directRetries.size < 2) {
+                                    directRetries.addLast(now)
+                                    val position = player.currentPosition
+                                    StreamHealth.event("player error (${error.errorCodeName}), restarting at ${position / 1000} s, still direct play")
+                                    withContext(WholphinDispatchers.Main) {
+                                        player.prepare()
+                                        player.seekTo(position)
+                                        player.play()
+                                    }
+                                    return@let
+                                }
+                                StreamHealth.event("player error again (${error.errorCodeName}), switching to server conversion")
+                            }
                             if (audioOnly) {
                                 StreamHealth.event("audio could not play on the TV, server converts the audio only")
                             }

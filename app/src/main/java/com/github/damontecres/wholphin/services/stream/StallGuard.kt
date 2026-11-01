@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -387,6 +388,12 @@ class StallGuard(
 
         // Not while the film is opening (or reopening after a track change)
         if (!s.firstReady) return
+        // Nothing left to load: the whole film up to its end is in the buffer
+        val duration = player.duration
+        if (duration != C.TIME_UNSET && player.bufferedPosition >= duration - 1_000) {
+            starvingSince = 0
+            return
+        }
 
         val loading = player.isLoading
         val idle = StreamHealth.msSinceLastByte()

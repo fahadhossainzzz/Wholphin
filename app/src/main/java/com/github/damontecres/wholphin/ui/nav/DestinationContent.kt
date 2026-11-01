@@ -354,6 +354,22 @@ fun DestinationContent(
             NowPlayingPage(modifier)
         }
 
+        Destination.BrowseYears -> {
+            com.github.damontecres.wholphin.ui.detail.BrowseRowsPage(
+                mode = com.github.damontecres.wholphin.ui.detail.BrowseMode.YEARS,
+                preferences = preferences,
+                modifier = modifier,
+            )
+        }
+
+        Destination.BrowseGenres -> {
+            com.github.damontecres.wholphin.ui.detail.BrowseRowsPage(
+                mode = com.github.damontecres.wholphin.ui.detail.BrowseMode.GENRES,
+                preferences = preferences,
+                modifier = modifier,
+            )
+        }
+
         Destination.UpdateApp -> {
             InstallUpdatePage(preferences, modifier)
         }

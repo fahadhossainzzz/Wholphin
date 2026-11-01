@@ -132,6 +132,16 @@ class NavDrawerViewModel
                     setShowMore(!state.value.moreExpanded)
                 }
 
+                NavDrawerItem.Years -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.BrowseYears)
+                }
+
+                NavDrawerItem.Genres -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.BrowseGenres)
+                }
+
                 NavDrawerItem.Discover -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -170,6 +180,8 @@ class NavDrawerViewModel
                             is ServerNavDrawerItem -> it.destination
                             is NavDrawerItem.Favorites -> Destination.Favorites
                             is NavDrawerItem.Discover -> Destination.Discover
+                            is NavDrawerItem.Years -> Destination.BrowseYears
+                            is NavDrawerItem.Genres -> Destination.BrowseGenres
                             else -> null
                         }
                     }
@@ -243,6 +255,22 @@ sealed interface NavDrawerItem {
             get() = "a_discover"
 
         override fun name(context: Context): String = context.getString(R.string.discover)
+    }
+
+    /** NoBars: films by year */
+    object Years : NavDrawerItem {
+        override val id: String
+            get() = "a_years"
+
+        override fun name(context: Context): String = "Years"
+    }
+
+    /** NoBars: films by genre */
+    object Genres : NavDrawerItem {
+        override val id: String
+            get() = "a_genres"
+
+        override fun name(context: Context): String = "Genres"
     }
 }
 
@@ -674,6 +702,14 @@ fun NavigationDrawerScope.NavItem(
 
                 NavDrawerItem.Discover -> {
                     R.string.fa_magnifying_glass_plus
+                }
+
+                NavDrawerItem.Years -> {
+                    R.string.fa_clock
+                }
+
+                NavDrawerItem.Genres -> {
+                    R.string.fa_tag
                 }
 
                 is ServerNavDrawerItem -> {

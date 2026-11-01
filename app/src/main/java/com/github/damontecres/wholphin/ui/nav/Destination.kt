@@ -145,6 +145,14 @@ sealed class Destination(
     @Serializable
     data object Favorites : Destination(false)
 
+    /** NoBars: films in rows by year */
+    @Serializable
+    data object BrowseYears : Destination(false)
+
+    /** NoBars: films in rows by genre */
+    @Serializable
+    data object BrowseGenres : Destination(false)
+
     @Serializable
     data object Discover : Destination(false)
 

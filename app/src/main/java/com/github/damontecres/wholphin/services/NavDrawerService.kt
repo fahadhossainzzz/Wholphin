@@ -195,6 +195,8 @@ class NavDrawerService
             val builtins =
                 buildList {
                     add(NavDrawerItem.Favorites)
+                    add(NavDrawerItem.Years)
+                    add(NavDrawerItem.Genres)
                     if (discoverActive) add(NavDrawerItem.Discover)
                 }
             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)

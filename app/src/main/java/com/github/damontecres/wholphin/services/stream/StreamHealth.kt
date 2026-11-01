@@ -41,20 +41,6 @@ object StreamHealth {
     /** How long the server took to answer the latest request (until the response headers). */
     @Volatile var lastOpenMs: Long = 0
 
-    /** The slowest answer this episode. */
-    @Volatile var maxOpenMs: Long = 0
-
-    /** Byte position in the file the player is reading now. */
-    @Volatile var readPosition: Long = 0
-
-    /** Round trip to the server, measured every 10 s (-1 = not yet). */
-    @Volatile var pingMs: Long = -1
-
-    @Volatile var pingMaxMs: Long = 0
-
-    /** How long the buffer took to fill up again the last time it topped up. */
-    @Volatile var lastRefillMs: Long = 0
-
     fun onBytes(count: Int) {
         if (count > 0) {
             bytesDelivered.addAndGet(count.toLong())
@@ -107,10 +93,6 @@ object StreamHealth {
 
     @Volatile var wifiFreqMhz: Int = 0
 
-    @Volatile var wifiTxMbps: Int = 0
-
-    @Volatile var wifiRxMbps: Int = 0
-
     @Volatile var reconnects: Int = 0
 
     @Volatile var reloads: Int = 0
@@ -132,8 +114,6 @@ object StreamHealth {
         recentWaits = "none"
         recentDrops = 0
         lastEvent = ""
-        maxOpenMs = 0
-        pingMaxMs = 0
     }
 
     private val clock = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -178,8 +158,6 @@ object StreamHealth {
     private class CountingDataSource(
         private val inner: DataSource,
     ) : DataSource {
-        private var position = 0L
-
         override fun addTransferListener(transferListener: TransferListener) = inner.addTransferListener(transferListener)
 
         override fun open(dataSpec: DataSpec): Long {
@@ -191,8 +169,6 @@ object StreamHealth {
             } finally {
                 val ms = SystemClock.elapsedRealtime() - t
                 lastOpenMs = ms
-                if (ms > maxOpenMs) maxOpenMs = ms
-                position = dataSpec.position
                 if (ms >= 1_500) Timber.e("NoBars slow server answer: %d ms for byte %d", ms, dataSpec.position)
                 markActivity()
             }
@@ -206,11 +182,7 @@ object StreamHealth {
             val t = System.nanoTime()
             val n = inner.read(buffer, offset, length)
             readNanos.addAndGet(System.nanoTime() - t)
-            if (n > 0) {
-                onBytes(n)
-                position += n
-                readPosition = position
-            }
+            if (n > 0) onBytes(n)
             return n
         }
 

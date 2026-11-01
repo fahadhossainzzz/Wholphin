@@ -11,7 +11,6 @@ import android.os.Build
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.annotation.OptIn
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -19,15 +18,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import coil3.imageLoader
 import com.github.damontecres.wholphin.BuildConfig
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import org.jellyfin.sdk.model.api.MediaSourceInfo
-import java.net.HttpURLConnection
-import java.net.URL
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -61,17 +54,7 @@ class StallGuard(
     private val isDirectPlay: () -> Boolean,
     private val describe: () -> String,
     private val onReport: (String) -> Unit,
-    source: () -> MediaSourceInfo? = { null },
-    title: () -> String = { "?" },
-    playMethod: () -> String = { "?" },
-    transcodeReason: () -> String? = { null },
-    private val otherPlayback: suspend () -> Pair<List<String>, Boolean>? = { null },
 ) {
-    private val diag = DiagCollector(context, player, source, title, playMethod, transcodeReason)
-    private var lastDiag = 0L
-
-    @Volatile private var serverBase: String? = null
-
     private var lastReconnect = 0L
     private var reconnectStreak = 0
     private var lastReload = 0L
@@ -97,16 +80,6 @@ class StallGuard(
     /** Everything recorded about one film, for its report. */
     private class Session {
         val startedAt = System.currentTimeMillis()
-        val reportId = "R-" + Integer.toHexString((System.nanoTime() and 0xFFFF).toInt()).uppercase().padStart(4, '0')
-        var thermalMax = 0
-        var cpuMax = 0
-        var judder = false
-        var judderText = ""
-        var videoText = ""
-        var audioText = ""
-        var fileText = ""
-        val otherPlayback = linkedSetOf<String>()
-        var macBusy = false
         var description = ""
         var firstReady = false
         var bufferingSince = 0L
@@ -270,69 +243,24 @@ class StallGuard(
         context.registerComponentCallbacks(trimCallbacks)
         player.addListener(listener)
         player.addAnalyticsListener(analytics)
-        player.addAnalyticsListener(diag.analytics)
         try {
-            coroutineScope {
-                launch(Dispatchers.IO) { pingLoop() }
-                launch(Dispatchers.IO) { otherPlaybackLoop() }
-                while (isActive) {
-                    try {
-                        tick()
-                    } catch (e: Exception) {
-                        Timber.w(e, "NoBars stall guard tick failed")
-                    }
-                    delay(250)
+            while (currentCoroutineContext().isActive) {
+                try {
+                    tick()
+                } catch (e: Exception) {
+                    Timber.w(e, "NoBars stall guard tick failed")
                 }
+                delay(250)
             }
         } finally {
             context.unregisterComponentCallbacks(trimCallbacks)
             try {
                 player.removeListener(listener)
                 player.removeAnalyticsListener(analytics)
-                player.removeAnalyticsListener(diag.analytics)
             } catch (e: Exception) {
                 // player already released
             }
-            Diag.snapshot = null
             if (session.firstReady) finishSession(endReason())
-        }
-    }
-
-    /** Round trip to the server every 10 s (a tiny request Jellyfin answers without touching the disks). */
-    private suspend fun pingLoop() {
-        while (currentCoroutineContext().isActive) {
-            val base = serverBase
-            if (base != null) {
-                try {
-                    val t = SystemClock.elapsedRealtime()
-                    val conn = URL("$base/System/Ping").openConnection() as HttpURLConnection
-                    conn.connectTimeout = 3_000
-                    conn.readTimeout = 3_000
-                    conn.inputStream.use { it.readBytes() }
-                    conn.disconnect()
-                    val ms = SystemClock.elapsedRealtime() - t
-                    StreamHealth.pingMs = ms
-                    if (ms > StreamHealth.pingMaxMs) StreamHealth.pingMaxMs = ms
-                } catch (e: Exception) {
-                    StreamHealth.pingMs = 9_999
-                }
-            }
-            delay(10_000)
-        }
-    }
-
-    /** Other playback and conversions on the server, every 15 s. */
-    private suspend fun otherPlaybackLoop() {
-        while (currentCoroutineContext().isActive) {
-            try {
-                otherPlayback()?.let { (lines, busy) ->
-                    diag.macLines = lines
-                    diag.macBusy = busy
-                }
-            } catch (e: Exception) {
-                diag.macLines = listOf("could not ask the server")
-            }
-            delay(15_000)
         }
     }
 
@@ -430,11 +358,6 @@ class StallGuard(
 
         trackWaits(now, state, ahead)
 
-        if (now - lastDiag >= 1_000) {
-            lastDiag = now
-            updateDiagnostics()
-        }
-
         if (!player.playWhenReady || state == Player.STATE_IDLE || state == Player.STATE_ENDED || player.playerError != null) {
             starvingSince = 0
             return
@@ -464,12 +387,6 @@ class StallGuard(
 
         // Not while the film is opening (or reopening after a track change)
         if (!s.firstReady) return
-        // Nothing left to load: the whole film up to its end is in the buffer
-        val duration = player.duration
-        if (duration != C.TIME_UNSET && player.bufferedPosition >= duration - 1_000) {
-            starvingSince = 0
-            return
-        }
 
         val loading = player.isLoading
         val idle = StreamHealth.msSinceLastByte()
@@ -524,51 +441,6 @@ class StallGuard(
         if (stuck3 && now - lastRebuild >= 20_000) {
             rebuild("no data for $idle ms")
         }
-    }
-
-    private fun episodeStats(): EpisodeStats {
-        val s = session
-        val ready = s.seeks.filter { it.readyMs >= 0 }
-        return EpisodeStats(
-            reportId = s.reportId,
-            playingMs = s.playingMs,
-            waits = s.waits.size,
-            stalls = s.waits.count { it.cause == "stall" },
-            waitSeconds = s.waits.sumOf { it.ms } / 1000.0,
-            skips = s.seeks.size,
-            skipAvgMs = if (ready.isEmpty()) null else ready.sumOf { it.readyMs } / ready.size,
-            reconnects = s.reconnects,
-            reloads = s.reloads,
-            rebuilds = s.rebuilds,
-            readMbpsAvg = if (s.readMbpsSamples > 0) s.readMbpsSum / s.readMbpsSamples else 0.0,
-            lastTrimAt = if (lastImageTrim == 0L) "never" else wall(System.currentTimeMillis() - (SystemClock.elapsedRealtime() - lastImageTrim)),
-        )
-    }
-
-    /** Refreshes the overlay's figures and keeps the worst values of the episode for its report. */
-    private fun updateDiagnostics() {
-        player.currentMediaItem?.localConfiguration?.uri?.let { uri ->
-            if (uri.scheme?.startsWith("http") == true && uri.host != null) {
-                serverBase = "${uri.scheme}://${uri.host}${if (uri.port > 0) ":${uri.port}" else ""}"
-            }
-        }
-        val snapshot = diag.build(episodeStats())
-        Diag.snapshot = snapshot
-        val s = session
-        s.thermalMax = maxOf(s.thermalMax, diag.thermal)
-        s.cpuMax = maxOf(s.cpuMax, diag.cpuPercent)
-        snapshot.sections.firstOrNull { it.title == "VIDEO" }?.let { v ->
-            s.videoText = v.lines.filter { !it.startsWith("shown") }.joinToString(" · ")
-            if (diag.judder && !s.judder) {
-                s.judder = true
-                s.judderText = v.lines.firstOrNull { it.contains("JUDDER") } ?: "frame rate does not match the screen"
-                StreamHealth.event("judder: ${s.judderText} (turn on Refresh rate switching)")
-            }
-        }
-        snapshot.sections.firstOrNull { it.title == "AUDIO" }?.let { a -> s.audioText = a.lines.joinToString(" · ") }
-        snapshot.sections.firstOrNull { it.title == "FILE" }?.let { f -> s.fileText = f.lines.drop(1).filter { !it.startsWith("read at") }.joinToString(" · ") }
-        diag.macLines?.let { lines -> lines.filter { it != "no other playback" }.forEach { s.otherPlayback.add(it) } }
-        if (diag.macBusy) s.macBusy = true
     }
 
     /** Every wait for data: at the start, after a skip, or a stall in the middle of playback. */
@@ -655,10 +527,6 @@ class StallGuard(
             StreamHealth.wifiRssi = rssi
             StreamHealth.wifiLinkMbps = info.linkSpeed
             StreamHealth.wifiFreqMhz = info.frequency
-            if (Build.VERSION.SDK_INT >= 29) {
-                StreamHealth.wifiTxMbps = info.txLinkSpeedMbps
-                StreamHealth.wifiRxMbps = info.rxLinkSpeedMbps
-            }
             val s = session
             s.rssiSum += rssi
             s.rssiSamples++
@@ -709,9 +577,6 @@ class StallGuard(
                 "NoBars playback report could not be built: $e"
             }
         session = Session()
-        diag.reset()
-        StreamHealth.maxOpenMs = 0
-        StreamHealth.pingMaxMs = 0
         Timber.e("NoBars report ready (%s)", reason)
         try {
             onReport(report)
@@ -733,14 +598,11 @@ class StallGuard(
         val bytes = StreamHealth.bytesDelivered.get() - s.bytesAtStart
         val avgIn = if (s.playingMs > 0) bytes * 8.0 / 1000.0 / s.playingMs else 0.0
         return buildString {
-            appendLine("=== NoBars playback report ${s.reportId} ===")
+            appendLine("=== NoBars playback report ===")
             appendLine("When: ${stamp.format(Date(s.startedAt))} to ${wall(end)} ($minutes min, ${clock(s.playingMs)} playing)")
             appendLine("App: ${BuildConfig.VERSION_NAME} on ${Build.MODEL}")
             appendLine("Film: ${s.description}")
             appendLine("Ended: $reason")
-            if (s.fileText.isNotEmpty()) appendLine("File: ${s.fileText}")
-            if (s.videoText.isNotEmpty()) appendLine("Video: ${s.videoText}")
-            if (s.audioText.isNotEmpty()) appendLine("Audio: ${s.audioText}")
             appendLine(
                 String.format(
                     Locale.US,
@@ -793,18 +655,6 @@ class StallGuard(
                     s.rebuilds,
                 ),
             )
-            appendLine(
-                String.format(
-                    Locale.US,
-                    "Server: ping max %s ms; slowest answer %d ms; other playback %s%s",
-                    if (StreamHealth.pingMaxMs > 0) StreamHealth.pingMaxMs.toString() else "?",
-                    StreamHealth.maxOpenMs,
-                    if (s.otherPlayback.isEmpty()) "none" else s.otherPlayback.take(5).joinToString("; "),
-                    if (s.macBusy) " (server was busy)" else "",
-                ),
-            )
-            appendLine("TV: hottest ${DiagCollector.thermalName(s.thermalMax)}, app CPU peak ${s.cpuMax}%")
-            if (s.judder) appendLine("WARNING judder: ${s.judderText} (turn on Refresh rate switching)")
             if (s.rssiSamples > 0) {
                 appendLine("Wi-Fi: signal avg ${s.rssiSum / s.rssiSamples} dBm (worst ${s.rssiMin}), link ${s.linkMbps} Mbps, ${s.freqMhz} MHz")
             } else {

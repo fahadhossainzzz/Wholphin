@@ -1,139 +1,334 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
-import androidx.compose.foundation.background
+import android.content.Context
+import android.hardware.display.DisplayManager
+import android.view.Display
+import androidx.annotation.OptIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.common.Format
+import androidx.media3.common.util.UnstableApi
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.ProvideTextStyle
 import androidx.tv.material3.Text
-import com.github.damontecres.wholphin.services.stream.Diag
-import com.github.damontecres.wholphin.services.stream.DiagSection
-import com.github.damontecres.wholphin.services.stream.DiagSnapshot
-import com.github.damontecres.wholphin.services.stream.Level
+import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.preferences.PlayerBackend
+import com.github.damontecres.wholphin.services.stream.StreamHealth
+import com.github.damontecres.wholphin.ui.PreviewTvSpec
+import com.github.damontecres.wholphin.ui.formatBitrate
+import com.github.damontecres.wholphin.ui.formatBytes
+import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.playback.AnalyticsState
 import com.github.damontecres.wholphin.ui.playback.CurrentPlayback
+import com.github.damontecres.wholphin.ui.theme.WholphinTheme
+import com.github.damontecres.wholphin.util.TrackSupport
+import com.github.damontecres.wholphin.util.TrackSupportReason
+import com.github.damontecres.wholphin.util.TrackType
+import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import org.jellyfin.sdk.model.UUID
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.HardwareAccelerationType
+import org.jellyfin.sdk.model.api.MediaProtocol
+import org.jellyfin.sdk.model.api.MediaSourceInfo
+import org.jellyfin.sdk.model.api.MediaSourceType
+import org.jellyfin.sdk.model.api.MediaStreamProtocol
+import org.jellyfin.sdk.model.api.PlayMethod
+import org.jellyfin.sdk.model.api.TranscodeReason
+import org.jellyfin.sdk.model.api.TranscodingInfo
+import timber.log.Timber
+import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-private val Ok = Color(0xFF5BD46B)
-private val Warn = Color(0xFFFFC23D)
-private val Bad = Color(0xFFFF5A5A)
-private val Value = Color(0xFFEDEDED)
-
-private fun Level.color() =
-    when (this) {
-        Level.OK -> Ok
-        Level.WARN -> Warn
-        Level.BAD -> Bad
-    }
-
-@Composable
-private fun rememberSnapshot(): DiagSnapshot? {
-    val snapshot by produceState(Diag.snapshot) {
-        while (true) {
-            value = Diag.snapshot
-            delay(1.seconds)
-        }
-    }
-    return snapshot
-}
-
-/**
- * NoBars: the full diagnostics panel, shown with the player controls. Eight sections in two rows
- * of four plus the episode line, colour-coded, sized so one phone photo of the TV captures all of it.
- */
 @Composable
 fun PlaybackDebugOverlay(
     analyticsState: AnalyticsState,
     currentPlayback: CurrentPlayback?,
     modifier: Modifier = Modifier,
 ) {
-    val snapshot = rememberSnapshot()
-    val valueStyle = TextStyle(fontSize = 11.sp, lineHeight = 13.sp, color = Value, fontFamily = FontFamily.SansSerif)
+    val context = LocalContext.current
+    val display =
+        remember(context) {
+            try {
+                val displayManager =
+                    context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+                displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+            } catch (ex: Exception) {
+                Timber.e(ex)
+                null
+            }
+        }
+    val displayMode by produceState<String?>(null) {
+        while (isActive) {
+            value =
+                display?.mode?.let {
+                    val rate = String.format(Locale.getDefault(), "%.3f", it.refreshRate)
+                    "${it.physicalWidth}x${it.physicalHeight}@${rate}fps, id=${it.modeId}"
+                }
+            delay(10.seconds)
+        }
+    }
+    val textStyle =
+        MaterialTheme.typography.bodySmall.copy(
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+    var streamInfo by remember { mutableStateOf(listOf<Pair<String, Any?>>()) }
+    val memoryUsed by produceState("") {
+        withContext(WholphinDispatchers.Default) {
+            while (isActive) {
+                // NoBars: used against the app's real limit, plus the stream's read-ahead
+                val used = StreamHealth.heapUsed()
+                val max = StreamHealth.heapMax()
+                value = "${formatBytes(used)} / ${formatBytes(max)} (${used * 100 / max}%)"
+                streamInfo =
+                    listOf(
+                        "Buffer:" to
+                            String.format(
+                                Locale.US,
+                                "%.1f s ahead · %d of %d MB · %s",
+                                StreamHealth.aheadMs / 1000f,
+                                StreamHealth.bufferBytes shr 20,
+                                StreamHealth.bufferBudget shr 20,
+                                StreamHealth.bufferState,
+                            ),
+                        "TV RAM:" to "${StreamHealth.systemAvailMb} MB free (${StreamHealth.systemSpareMb} spare)",
+                        "Network:" to
+                            String.format(
+                                Locale.US,
+                                "in %.1f Mbps · connection %.0f Mbps (%d%% busy) · %d opens/min",
+                                StreamHealth.netMbps,
+                                StreamHealth.readMbps,
+                                StreamHealth.readBusy,
+                                StreamHealth.opensPerMin,
+                            ),
+                        "Wi-Fi:" to
+                            if (StreamHealth.wifiRssi == 0) {
+                                "no reading"
+                            } else {
+                                "${StreamHealth.wifiRssi} dBm · link ${StreamHealth.wifiLinkMbps} Mbps · " +
+                                    if (StreamHealth.wifiFreqMhz >= 4900) "5 GHz" else "2.4 GHz"
+                            },
+                        "Waits:" to StreamHealth.recentWaits,
+                        "Dropped:" to "${StreamHealth.recentDrops} in last 10 min",
+                        "Fixes:" to "${StreamHealth.reconnects} reconnect / ${StreamHealth.reloads} reload / ${StreamHealth.rebuilds} rebuild",
+                        "Last event:" to StreamHealth.lastEvent.ifEmpty { "none" },
+                        "Report:" to StreamHealth.reportStatus,
+                        "Time:" to StreamHealth.now(),
+                    )
+                delay(1.seconds)
+            }
+        }
+    }
+
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.78f))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+        modifier = modifier,
     ) {
-        if (snapshot == null) {
-            Text("Collecting playback details…", style = valueStyle)
-            return@Column
-        }
-        snapshot.sections.chunked(4).forEach { row ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                row.forEach { DiagBlock(it, valueStyle, Modifier.weight(1f)) }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+        ) {
+            ProvideTextStyle(textStyle) {
+                SimpleTable(
+                    remember(currentPlayback, displayMode) {
+                        buildList {
+                            add("Backend:" to currentPlayback?.backend?.toString())
+                            add("Play method:" to currentPlayback?.playMethod?.serialName)
+                            if (currentPlayback?.backend == PlayerBackend.EXO_PLAYER) {
+                                add("Video Decoder:" to currentPlayback.videoDecoder)
+                                add("Audio Decoder:" to (currentPlayback.audioDecoder ?: "Non-ExoPlayer"))
+                            }
+                            add("Display Mode: " to displayMode)
+                        }
+                    },
+                    modifier = Modifier.weight(1f, fill = false),
+                    keyWidth = 80.dp,
+                )
+                SimpleTable(
+                    rows =
+                        listOf(
+                            "Bitrate: " to analyticsState.bitrate,
+                            "Bitrate (est): " to analyticsState.bitrateEstimate,
+                            "Dropped frames: " to analyticsState.droppedFrames,
+                            "Memory" to memoryUsed,
+                        ) + streamInfo,
+                    keyWidth = 80.dp,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                currentPlayback?.transcodeInfo?.let { info ->
+                    SimpleTable(
+                        listOf(
+                            "Reason:" to info.transcodeReasons.joinToString(", "),
+                            "HW Accel:" to info.hardwareAccelerationType?.toString(),
+                            "Container:" to info.container,
+                            "Bitrate:" to info.bitrate?.let { formatBitrate(it) },
+                        ),
+                        modifier = Modifier.weight(1f, fill = false),
+                        keyWidth = 64.dp,
+                    )
+                    SimpleTable(
+                        listOf(
+                            "Video:" to "${info.videoCodec}, ${info.width}x${info.height}",
+                            "Video Direct:" to info.isVideoDirect.toString(),
+                            "Audio:" to "${info.audioCodec}, ch=${info.audioChannels}",
+                            "Audio Direct:" to info.isAudioDirect.toString(),
+                        ),
+                        modifier = Modifier.weight(1f, fill = false),
+                        keyWidth = 64.dp,
+                    )
+                }
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            snapshot.footer.forEach {
-                Text(it, style = valueStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text(
-                "Bitrate now ${analyticsState.bitrate} · est ${analyticsState.bitrateEstimate} · " +
-                    "backend ${currentPlayback?.backend ?: "?"}",
-                style = valueStyle.copy(color = Value.copy(alpha = 0.7f)),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        currentPlayback?.tracks?.letNotEmpty {
+            PlaybackTrackInfo(
+                trackSupport = it,
+                textStyle = textStyle,
             )
         }
     }
 }
 
 @Composable
-private fun DiagBlock(
-    section: DiagSection,
-    valueStyle: TextStyle,
+fun SimpleTable(
+    rows: List<Pair<String, Any?>>,
     modifier: Modifier = Modifier,
+    keyWidth: Dp = 100.dp,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(1.dp), modifier = modifier) {
-        Text(
-            "● ${section.title}",
-            style = valueStyle.copy(color = section.level.color(), fontWeight = FontWeight.Bold, fontSize = 12.sp),
-        )
-        section.lines.forEach {
-            val alert = it.contains("JUDDER") || it.contains("SW!")
-            Text(
-                it,
-                style = if (alert) valueStyle.copy(color = Warn) else valueStyle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier,
+    ) {
+        rows.forEach {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = it.first,
+                    modifier = Modifier.width(keyWidth),
+                )
+                Text(
+                    text = it.second.toString(),
+                    modifier = Modifier,
+                )
+            }
         }
     }
 }
 
-/** NoBars: one line along the top while watching, when debug info is on and the controls are hidden. */
+@OptIn(UnstableApi::class)
+@PreviewTvSpec
 @Composable
-fun PlaybackDebugCompact(modifier: Modifier = Modifier) {
-    val snapshot = rememberSnapshot() ?: return
-    Text(
-        "● " + snapshot.compact,
-        style = TextStyle(fontSize = 11.sp, color = snapshot.compactLevel.color()),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier =
-            modifier
-                .background(Color.Black.copy(alpha = 0.6f))
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-    )
+fun PlaybackDebugOverlayPreview() {
+    val currentPlayback =
+        CurrentPlayback(
+            item =
+                BaseItem(
+                    data =
+                        BaseItemDto(
+                            id = UUID.randomUUID(),
+                            type = BaseItemKind.EPISODE,
+                        ),
+                ),
+            backend = PlayerBackend.EXO_PLAYER,
+            playMethod = PlayMethod.TRANSCODE,
+            playSessionId = "123",
+            liveStreamId = "123",
+            videoDecoder = "video.decoder.name",
+            audioDecoder = null, // "audio.decoder.name",
+            mediaSourceInfo =
+                MediaSourceInfo(
+                    protocol = MediaProtocol.HTTP,
+                    type = MediaSourceType.DEFAULT,
+                    isRemote = false,
+                    readAtNativeFramerate = true,
+                    ignoreDts = true,
+                    ignoreIndex = true,
+                    genPtsInput = false,
+                    supportsTranscoding = true,
+                    supportsDirectStream = true,
+                    supportsDirectPlay = true,
+                    isInfiniteStream = false,
+                    requiresOpening = false,
+                    requiresClosing = false,
+                    requiresLooping = false,
+                    supportsProbing = true,
+                    transcodingSubProtocol = MediaStreamProtocol.HTTP,
+                    hasSegments = false,
+                ),
+            transcodeInfo =
+                TranscodingInfo(
+                    videoCodec = "h264",
+                    audioCodec = "aac",
+                    container = "HLS",
+                    width = 1080,
+                    height = 1920,
+                    isVideoDirect = false,
+                    isAudioDirect = false,
+                    transcodeReasons =
+                        listOf(
+                            TranscodeReason.VIDEO_PROFILE_NOT_SUPPORTED,
+                            TranscodeReason.AUDIO_CHANNELS_NOT_SUPPORTED,
+                        ),
+                    hardwareAccelerationType = HardwareAccelerationType.NONE,
+                ),
+            tracks =
+                listOf(
+                    TrackSupport(
+                        id = "0",
+                        type = TrackType.VIDEO,
+                        supported = TrackSupportReason.EXCEEDS_CAPABILITIES,
+                        selected = true,
+                        labels = listOf(),
+                        codecs = "avc1",
+                        format = Format.Builder().build(),
+                    ),
+                    TrackSupport(
+                        id = "0",
+                        type = TrackType.AUDIO,
+                        supported = TrackSupportReason.HANDLED,
+                        selected = true,
+                        labels = listOf(),
+                        codecs = "ac3",
+                        format = Format.Builder().build(),
+                    ),
+                ) +
+                    List(10) {
+                        TrackSupport(
+                            id = "0",
+                            type = TrackType.TEXT,
+                            supported = TrackSupportReason.HANDLED,
+                            selected = false,
+                            labels = listOf(),
+                            codecs = "srt",
+                            format = Format.Builder().build(),
+                        )
+                    },
+        )
+    WholphinTheme {
+        PlaybackDebugOverlay(
+            analyticsState = AnalyticsState(),
+            currentPlayback = currentPlayback,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
 }

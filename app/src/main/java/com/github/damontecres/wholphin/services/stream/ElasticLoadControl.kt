@@ -36,8 +36,6 @@ class ElasticLoadControl private constructor(
 
     private var lastHoldLog = 0L
 
-    private var refillStart = 0L
-
     /** Set by the stall guard when the player is starving: load regardless of memory, up to the floor x2. */
     @Volatile var emergencyUntil: Long = 0
 
@@ -108,8 +106,6 @@ class ElasticLoadControl private constructor(
                 }
             }
         if (loading && !decision) {
-            if (refillStart > 0 && state.startsWith("full")) StreamHealth.lastRefillMs = System.currentTimeMillis() - refillStart
-            refillStart = 0
             // Hand spare buffer memory back
             allocator.setTargetBufferSize(allocator.totalBytesAllocated)
             val now = System.currentTimeMillis()
@@ -124,7 +120,6 @@ class ElasticLoadControl private constructor(
                 )
             }
         } else if (!loading && decision) {
-            refillStart = System.currentTimeMillis()
             allocator.setTargetBufferSize(Int.MAX_VALUE)
         }
         loading = decision

@@ -292,16 +292,6 @@ class PlaybackViewModel
                             isDirectPlay = { state.value.currentPlayback?.playMethod == PlayMethod.DIRECT_PLAY },
                             describe = { describePlayback() },
                             onReport = { serverReportService.sendPlaybackReport(it) },
-                            source = { state.value.currentPlayback?.mediaSourceInfo },
-                            title = { currentItem.item.name ?: "?" },
-                            playMethod = { state.value.currentPlayback?.playMethod?.serialName ?: "?" },
-                            transcodeReason = {
-                                state.value.currentPlayback
-                                    ?.transcodeInfo
-                                    ?.transcodeReasons
-                                    ?.joinToString(", ")
-                            },
-                            otherPlayback = { otherPlaybackOnServer() },
                         ).run()
                     },
                 )
@@ -1091,19 +1081,6 @@ class PlaybackViewModel
         }
 
         /** NoBars: one line describing what is playing, for the playback report. */
-        /** NoBars: what else the server is playing or converting right now (for the debug overlay). */
-        private suspend fun otherPlaybackOnServer(): Pair<List<String>, Boolean> {
-            val sessions = api.sessionApi.getSessions(activeWithinSeconds = 120).content
-            val others = sessions.filter { it.nowPlayingItem != null && it.deviceId != deviceInfo.id }
-            val transcodes = sessions.count { it.transcodingInfo != null }
-            val lines =
-                others.map {
-                    val method = if (it.transcodingInfo != null) "converting" else it.playState?.playMethod?.serialName ?: "?"
-                    "${(it.deviceName ?: it.client ?: "?").take(14)}: ${(it.nowPlayingItem?.name ?: "?").take(18)} ($method)"
-                } + if (transcodes > 0) listOf("conversions running: $transcodes") else emptyList()
-            return lines to (others.isNotEmpty() || transcodes > 0)
-        }
-
         private fun describePlayback(): String {
             val playback = state.value.currentPlayback
             val source = playback?.mediaSourceInfo

@@ -57,6 +57,7 @@ class StallGuard(
 ) {
     private var lastReconnect = 0L
     private var reconnectStreak = 0
+    private var bytesAtReconnect = 0L
     private var lastReload = 0L
     private var lastRebuild = 0L
     private var lastImageTrim = 0L
@@ -390,7 +391,14 @@ class StallGuard(
 
         val loading = player.isLoading
         val idle = StreamHealth.msSinceLastByte()
-        if (idle < 1_000) reconnectStreak = 0
+        // The streak only ends when real data flows again (at least 1 MB since the last reconnect).
+        // Opening a connection is not enough: a busy disk answers quickly and then sends nothing.
+        if (reconnectStreak > 0 &&
+            StreamHealth.msSinceRealByte() < 1_000 &&
+            StreamHealth.bytesDelivered.get() - bytesAtReconnect >= 1L shl 20
+        ) {
+            reconnectStreak = 0
+        }
 
         // Step 1: data stopped arriving while the player wants it: reconnect, waiting longer each time
         val afterSeek = s.pendingSeek?.let { now - it.at < 10_000 } == true
@@ -403,6 +411,7 @@ class StallGuard(
             s.reconnects++
             reconnectStreak++
             lastReconnect = now
+            bytesAtReconnect = StreamHealth.bytesDelivered.get()
             StreamHealth.event(
                 "reconnect #$reconnectStreak: no data for ${idle / 1000.0} s, ${ahead / 1000} s ahead ($cut connections cut; " +
                     "server's last answer took ${StreamHealth.lastOpenMs} ms)",

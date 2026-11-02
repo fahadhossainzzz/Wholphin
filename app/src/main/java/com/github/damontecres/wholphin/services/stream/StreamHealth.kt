@@ -32,6 +32,9 @@ object StreamHealth {
     /** elapsedRealtime of the last byte handed to the player. */
     val lastByteAt = AtomicLong(SystemClock.elapsedRealtime())
 
+    /** elapsedRealtime of the last real byte; unlike [lastByteAt] never moved by [markActivity]. */
+    val lastRealByteAt = AtomicLong(SystemClock.elapsedRealtime())
+
     /** Time spent waiting inside network reads, to tell a slow network from a player that is not asking. */
     val readNanos = AtomicLong(0)
 
@@ -44,11 +47,15 @@ object StreamHealth {
     fun onBytes(count: Int) {
         if (count > 0) {
             bytesDelivered.addAndGet(count.toLong())
-            lastByteAt.set(SystemClock.elapsedRealtime())
+            val now = SystemClock.elapsedRealtime()
+            lastByteAt.set(now)
+            lastRealByteAt.set(now)
         }
     }
 
     fun msSinceLastByte(): Long = SystemClock.elapsedRealtime() - lastByteAt.get()
+
+    fun msSinceRealByte(): Long = SystemClock.elapsedRealtime() - lastRealByteAt.get()
 
     fun markActivity() = lastByteAt.set(SystemClock.elapsedRealtime())
 

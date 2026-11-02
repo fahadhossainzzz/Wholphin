@@ -70,6 +70,7 @@ fun SeasonCard(
         interactionSource = interactionSource,
         showImageOverlay = showImageOverlay,
         aspectRatio = aspectRatio,
+        ratingItem = item,
     )
 }
 
@@ -136,6 +137,7 @@ fun SeasonCard(
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     showImageOverlay: Boolean = false,
     aspectRatio: Float = AspectRatios.TALL,
+    ratingItem: BaseItem? = null,
 ) {
     val focused by interactionSource.collectIsFocusedAsState()
     // Do not use `by` here, this way we are Defer reads and recompositions to only when modifier calculates
@@ -185,6 +187,21 @@ fun SeasonCard(
                     modifier =
                         Modifier
                             .fillMaxSize(),
+                )
+                // NoBars: star rating and Rotten Tomatoes score
+                PosterRatingBand(
+                    item = ratingItem,
+                    modifier =
+                        Modifier
+                            .align(androidx.compose.ui.Alignment.BottomCenter)
+                            .padding(
+                                bottom =
+                                    if (playedPercentage > 0 && playedPercentage < 100) {
+                                        com.github.damontecres.wholphin.ui.Cards.playedPercentHeight
+                                    } else {
+                                        0.dp
+                                    },
+                            ),
                 )
             }
         }

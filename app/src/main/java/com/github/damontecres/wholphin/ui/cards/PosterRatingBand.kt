@@ -25,8 +25,10 @@ import com.github.damontecres.wholphin.ui.util.LocalInterfaceCustomization
 import org.jellyfin.sdk.model.api.BaseItemKind
 import java.util.Locale
 
+private val RATED_TYPES = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES, BaseItemKind.SEASON, BaseItemKind.EPISODE)
+
 /**
- * NoBars: a thin band along the bottom of a film or show poster with its star rating (left) and
+ * NoBars: a thin band along the bottom of a film, show, season or episode poster with its star rating (left) and
  * Rotten Tomatoes score (right). Shows only what the item has; nothing when it has neither or when
  * turned off in settings.
  */
@@ -37,7 +39,7 @@ fun PosterRatingBand(
 ) {
     if (!LocalInterfaceCustomization.current.showPosterRatings) return
     val dto = item?.data ?: return
-    if (dto.type != BaseItemKind.MOVIE && dto.type != BaseItemKind.SERIES) return
+    if (dto.type !in RATED_TYPES) return
     val stars = dto.communityRating?.takeIf { it > 0f }
     val tomatoes = dto.criticRating?.takeIf { it >= 0f }
     if (stars == null && tomatoes == null) return

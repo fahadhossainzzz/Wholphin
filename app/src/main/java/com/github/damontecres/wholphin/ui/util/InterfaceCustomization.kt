@@ -10,6 +10,8 @@ import java.util.EnumSet
  */
 data class InterfaceCustomization(
     val enabledDisplayToggles: EnumSet<DisplayToggle>,
+    // NoBars: star rating and Rotten Tomatoes band on posters
+    val showPosterRatings: Boolean = true,
 ) {
     constructor(prefs: AppPreferences) : this(
         prefs.interfacePreferences.displayTogglesList.let {
@@ -19,6 +21,7 @@ data class InterfaceCustomization(
                 EnumSet.copyOf(it)
             }
         },
+        !prefs.interfacePreferences.hidePosterRatings,
     )
 }
 

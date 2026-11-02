@@ -80,19 +80,31 @@ fun ItemCardImage(
                 null
             }
         }
-    ItemCardImage(
-        imageUrl = imageUrl,
-        name = name,
-        showOverlay = showOverlay,
-        favorite = favorite,
-        watched = watched,
-        unwatchedCount = unwatchedCount,
-        watchedPercent = watchedPercent,
-        numberOfVersions = numberOfVersions,
-        modifier = modifier,
-        useFallbackText = useFallbackText,
-        contentScale = contentScale,
-    )
+    Box(modifier = modifier) {
+        ItemCardImage(
+            imageUrl = imageUrl,
+            name = name,
+            showOverlay = showOverlay,
+            favorite = favorite,
+            watched = watched,
+            unwatchedCount = unwatchedCount,
+            watchedPercent = watchedPercent,
+            numberOfVersions = numberOfVersions,
+            modifier = Modifier.fillMaxSize(),
+            useFallbackText = useFallbackText,
+            contentScale = contentScale,
+        )
+        // NoBars: star rating and Rotten Tomatoes score
+        PosterRatingBand(
+            item = item,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(
+                        bottom = if (watchedPercent != null && watchedPercent > 0 && watchedPercent < 100) Cards.playedPercentHeight else 0.dp,
+                    ),
+        )
+    }
 }
 
 @Composable

@@ -15,6 +15,7 @@ import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.HomeGetItemsFilter
 import com.github.damontecres.wholphin.data.model.HomeRowConfig
 import com.github.damontecres.wholphin.data.model.HomeRowViewOptions
+import com.github.damontecres.wholphin.preferences.BrowseOrder
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.services.NavigationManager
@@ -46,7 +47,7 @@ import org.jellyfin.sdk.model.api.SortOrder
 import timber.log.Timber
 import javax.inject.Inject
 
-/** NoBars: which browse page to show. */
+/** NoBars: which browse page to show. Films inside each row follow the "Years and Genres order" setting. */
 enum class BrowseMode { YEARS, GENRES }
 
 /**
@@ -61,7 +62,8 @@ fun BrowseRowsPage(
     modifier: Modifier = Modifier,
     viewModel: BrowseRowsViewModel = hiltViewModel(key = mode.name),
 ) {
-    LaunchedEffect(mode) { viewModel.init(mode) }
+    val order = preferences.appPreferences.interfacePreferences.browseOrder
+    LaunchedEffect(mode, order) { viewModel.init(mode, order) }
     val loading by viewModel.loading.collectAsState()
     val rows by viewModel.rows.collectAsState()
     when (val state = loading) {
@@ -135,11 +137,17 @@ class BrowseRowsViewModel
         private val _rows = MutableStateFlow<List<HomeRowLoadingState>>(emptyList())
         val rows: StateFlow<List<HomeRowLoadingState>> = _rows
 
-        private var started = false
+        private var started: BrowseOrder? = null
+        private var order: BrowseOrder = BrowseOrder.BROWSE_HIGHEST_RATED
 
-        fun init(mode: BrowseMode) {
-            if (started) return
-            started = true
+        fun init(
+            mode: BrowseMode,
+            order: BrowseOrder,
+        ) {
+            if (started == order) return
+            started = order
+            this.order = order
+            _loading.value = LoadingState.Loading
             viewModelScope.launchIO {
                 try {
                     val userId = serverRepository.currentUser?.id
@@ -245,8 +253,18 @@ class BrowseRowsViewModel
                 base.copy(
                     includeItemTypes = listOf(BaseItemKind.MOVIE),
                     recursive = true,
-                    sortBy = listOf(ItemSortBy.PREMIERE_DATE, ItemSortBy.SORT_NAME),
-                    sortOrder = listOf(SortOrder.DESCENDING, SortOrder.ASCENDING),
+                    sortBy =
+                        when (order) {
+                            BrowseOrder.BROWSE_NEWEST -> listOf(ItemSortBy.PREMIERE_DATE, ItemSortBy.SORT_NAME)
+                            BrowseOrder.BROWSE_TOMATOES -> listOf(ItemSortBy.CRITIC_RATING, ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME)
+                            else -> listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.CRITIC_RATING, ItemSortBy.SORT_NAME)
+                        },
+                    sortOrder =
+                        if (order == BrowseOrder.BROWSE_NEWEST) {
+                            listOf(SortOrder.DESCENDING, SortOrder.ASCENDING)
+                        } else {
+                            listOf(SortOrder.DESCENDING, SortOrder.DESCENDING, SortOrder.ASCENDING)
+                        },
                 ),
             viewOptions = HomeRowViewOptions(),
         )

@@ -182,6 +182,13 @@ fun BannerCard(
                     fontFamily = FontAwesome,
                 )
             }
+            PosterRatingBand(
+                item = item,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = if (playPercent > 0 && playPercent < 100) Cards.playedPercentHeight else 0.dp),
+            )
             if (playPercent > 0 && playPercent < 100) {
                 Box(
                     modifier =

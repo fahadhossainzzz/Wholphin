@@ -212,6 +212,16 @@ message InterfacePreferences {
   bool show_logos = 13;
   SearchPreferences search_preferences = 14;
   repeated DisplayToggle display_toggles = 15;
+  // NoBars
+  bool hide_poster_ratings = 16;
+  BrowseOrder browse_order = 17;
+}
+
+// NoBars: order of films inside the Years and Genres rows
+enum BrowseOrder {
+  BROWSE_HIGHEST_RATED = 0;
+  BROWSE_NEWEST = 1;
+  BROWSE_TOMATOES = 2;
 }
 
 message AdvancedPreferences {

@@ -480,6 +480,8 @@
     <string name="color_code_programs">Color-code programs</string>
     <string name="subtitle_delay">Subtitle delay</string>
     <string name="backdrop_display">Backdrop style</string>
+    <string name="poster_ratings">Ratings on posters</string>
+    <string name="browse_order">Years and Genres order</string>
     <string name="combined_search_results">Combined search results</string>
     <string name="combined_search_results_on">Show all results in a single list</string>
     <string name="combined_search_results_off">Show results by category</string>
@@ -779,6 +781,12 @@
     <string name="in_app_screensaver">Use in-app screensaver</string>
     <string name="delete_item">Are you sure you want to delete this item?</string>
     <string name="show_media_management">Show media management options</string>
+    <string-array name="browse_order_options">
+        <item>Highest rated</item>
+        <item>Newest first</item>
+        <item>Highest Rotten Tomatoes</item>
+    </string-array>
+
     <string-array name="backdrop_style_options">
         <item>@string/backdrop_style_dynamic</item>
         <item>@string/backdrop_style_image</item>

@@ -860,6 +860,33 @@ sealed interface AppPreference<Pref, T> {
                 summaryOff = R.string.disabled,
             )
 
+        // NoBars
+        val PosterRatings =
+            AppSwitchPreference<AppPreferences>(
+                title = R.string.poster_ratings,
+                defaultValue = true,
+                getter = { !it.interfacePreferences.hidePosterRatings },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { hidePosterRatings = !value }
+                },
+                summaryOn = R.string.enabled,
+                summaryOff = R.string.disabled,
+            )
+
+        // NoBars
+        val BrowseOrderPref =
+            AppChoicePreference<AppPreferences, BrowseOrder>(
+                title = R.string.browse_order,
+                defaultValue = BrowseOrder.BROWSE_HIGHEST_RATED,
+                getter = { it.interfacePreferences.browseOrder },
+                setter = { prefs, value ->
+                    prefs.updateInterfacePreferences { browseOrder = value }
+                },
+                displayValues = R.array.browse_order_options,
+                indexToValue = { BrowseOrder.forNumber(it) },
+                valueToIndex = { it.number },
+            )
+
         val BackdropStylePref =
             AppChoicePreference<AppPreferences, BackdropStyle>(
                 title = R.string.backdrop_display,
@@ -1309,6 +1336,8 @@ val advancedPreferences =
                         AppPreference.ShowClock,
                         AppPreference.BackdropStylePref,
                         AppPreference.ShowLogos,
+                        AppPreference.PosterRatings,
+                        AppPreference.BrowseOrderPref,
                         AppPreference.ManageMedia,
                         AppPreference.DisplayTogglesPref,
                         // Temporarily disabled, see https://github.com/damontecres/Wholphin/pull/127#issuecomment-3478058418

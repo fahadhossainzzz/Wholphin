@@ -93,8 +93,12 @@ fun PlaybackOverlay(
     trickplayInfo: TrickplayInfo? = null,
     trickplayUrlFor: (Int) -> String? = { null },
     onClickPlaylist: (BaseItem) -> Unit = {},
+    quickSettings: List<QuickSetting> = emptyList(),
+    people: List<com.github.damontecres.wholphin.data.model.Person> = emptyList(),
+    onClickPerson: (com.github.damontecres.wholphin.data.model.Person) -> Unit = {},
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
+    val hasPeople = people.isNotEmpty()
     val seekBarFocused by seekBarInteractionSource.collectIsFocusedAsState()
     // Will be used for preview/trick play images
     var seekProgressMs by remember(seekBarFocused) { mutableLongStateOf(player.currentPosition) }
@@ -177,11 +181,13 @@ fun PlaybackOverlay(
                         }
                     }
                     val nextState =
-                        remember(chapters, nextEnabled) {
+                        remember(chapters, nextEnabled, hasPeople) {
                             if (chapters.isNotEmpty()) {
                                 OverlayViewState.CHAPTERS
                             } else if (nextEnabled) {
                                 OverlayViewState.QUEUE
+                            } else if (hasPeople) {
+                                OverlayViewState.PEOPLE
                             } else {
                                 null
                             }
@@ -206,6 +212,7 @@ fun PlaybackOverlay(
                         },
                         currentSegment = currentSegment,
                         onChangeState = onChangeState,
+                        quickSettings = quickSettings,
                         modifier =
                             Modifier
                                 .padding(bottom = 8.dp)
@@ -223,6 +230,7 @@ fun PlaybackOverlay(
                             controllerViewState = controllerViewState,
                             chapters = chapters,
                             hasNext = nextEnabled,
+                            hasPeople = hasPeople,
                             onChangeState = onChangeState,
                             modifier =
                                 Modifier
@@ -247,6 +255,28 @@ fun PlaybackOverlay(
                                 },
                             onChangeState = onChangeState,
                             onClickPlaylist = onClickPlaylist,
+                            hasPeople = hasPeople,
+                            modifier =
+                                Modifier
+                                    .padding(8.dp)
+                                    .fillMaxWidth(),
+                        )
+                    }
+                }
+
+                OverlayViewState.PEOPLE -> {
+                    if (hasPeople) {
+                        PeopleRowOverlay(
+                            people = people,
+                            controllerViewState = controllerViewState,
+                            previousState =
+                                when {
+                                    nextEnabled -> OverlayViewState.QUEUE
+                                    chapters.isNotEmpty() -> OverlayViewState.CHAPTERS
+                                    else -> OverlayViewState.CONTROLLER
+                                },
+                            onChangeState = onChangeState,
+                            onClickPerson = onClickPerson,
                             modifier =
                                 Modifier
                                     .padding(8.dp)
@@ -373,4 +403,5 @@ enum class OverlayViewState {
     CONTROLLER,
     CHAPTERS,
     QUEUE,
+    PEOPLE,
 }

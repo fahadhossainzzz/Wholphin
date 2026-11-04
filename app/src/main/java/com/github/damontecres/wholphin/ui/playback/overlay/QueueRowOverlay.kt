@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +39,7 @@ fun QueueRowOverlay(
     onChangeState: (OverlayViewState) -> Unit,
     onClickPlaylist: (BaseItem) -> Unit,
     modifier: Modifier = Modifier,
+    hasPeople: Boolean = false,
 ) {
     val focusRequester = remember { FocusRequester() }
     val hiddenFocusRequester = remember { FocusRequester() }
@@ -93,6 +96,18 @@ fun QueueRowOverlay(
                         ),
                 )
             }
+        }
+        if (hasPeople) {
+            Text(
+                text = stringResource(R.string.cast_and_crew),
+                style = MaterialTheme.typography.titleLarge,
+                modifier =
+                    Modifier
+                        .padding(bottom = 8.dp)
+                        .onFocusChanged {
+                            if (it.isFocused) onChangeState.invoke(OverlayViewState.PEOPLE)
+                        }.focusable(),
+            )
         }
     }
 }

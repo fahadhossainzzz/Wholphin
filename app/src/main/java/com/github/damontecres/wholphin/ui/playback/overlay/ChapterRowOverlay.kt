@@ -46,6 +46,7 @@ fun ChapterRowOverlay(
     hasNext: Boolean,
     onChangeState: (OverlayViewState) -> Unit,
     modifier: Modifier = Modifier,
+    hasPeople: Boolean = false,
 ) {
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val chapterInteractionSources =
@@ -142,15 +143,17 @@ fun ChapterRowOverlay(
                 )
             }
         }
-        if (hasNext) {
+        if (hasNext || hasPeople) {
             Text(
-                text = stringResource(R.string.queue),
+                text = stringResource(if (hasNext) R.string.queue else R.string.cast_and_crew),
                 style = MaterialTheme.typography.titleLarge,
                 modifier =
                     Modifier
                         .padding(bottom = 8.dp)
                         .onFocusChanged {
-                            if (it.isFocused) onChangeState.invoke(OverlayViewState.QUEUE)
+                            if (it.isFocused) {
+                                onChangeState.invoke(if (hasNext) OverlayViewState.QUEUE else OverlayViewState.PEOPLE)
+                            }
                         }.focusable(),
             )
         }

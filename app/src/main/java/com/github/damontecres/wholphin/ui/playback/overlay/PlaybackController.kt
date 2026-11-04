@@ -63,6 +63,7 @@ fun PlaybackController(
     currentSegment: MediaSegmentDto?,
     onChangeState: (OverlayViewState) -> Unit,
     modifier: Modifier = Modifier,
+    quickSettings: List<QuickSetting> = emptyList(),
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
     Column(
@@ -86,12 +87,26 @@ fun PlaybackController(
             onSeekProgress = onSeekBarChange,
             seekBarInteractionSource = seekBarInteractionSource,
             currentSegment = currentSegment,
+            quickSettings = quickSettings,
             modifier = Modifier,
         )
         when (nextState) {
             OverlayViewState.CHAPTERS -> {
                 Text(
                     text = stringResource(R.string.chapters),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier =
+                        Modifier
+                            .padding(start = 16.dp, top = 0.dp)
+                            .onFocusChanged {
+                                if (it.isFocused) onChangeState.invoke(nextState)
+                            }.focusable(),
+                )
+            }
+
+            OverlayViewState.PEOPLE -> {
+                Text(
+                    text = stringResource(R.string.cast_and_crew),
                     style = MaterialTheme.typography.titleLarge,
                     modifier =
                         Modifier
@@ -148,6 +163,7 @@ fun Controller(
     currentSegment: MediaSegmentDto?,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    quickSettings: List<QuickSetting> = emptyList(),
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
     val seekBarFocused by seekBarInteractionSource.collectIsFocusedAsState()
@@ -243,6 +259,7 @@ fun Controller(
             skipBackOnResume = skipBackOnResume,
             currentSegment = currentSegment,
             onClickPlaybackDialogType = onClickPlaybackDialogType,
+            quickSettings = quickSettings,
         )
     }
 }

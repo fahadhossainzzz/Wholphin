@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
@@ -150,6 +151,7 @@ fun PlaybackControls(
     seekForward: Duration,
     currentSegment: MediaSegmentDto?,
     modifier: Modifier = Modifier,
+    quickSettings: List<QuickSetting> = emptyList(),
     initialFocusRequester: FocusRequester = remember { FocusRequester() },
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
@@ -195,6 +197,7 @@ fun PlaybackControls(
             LeftPlaybackButtons(
                 onControllerInteraction = onControllerInteraction,
                 onClickPlaybackDialogType = onClickPlaybackDialogType,
+                quickSettings = quickSettings,
                 modifier = Modifier.align(Alignment.CenterStart),
             )
 
@@ -338,6 +341,7 @@ fun LeftPlaybackButtons(
     onControllerInteraction: () -> Unit,
     onClickPlaybackDialogType: (PlaybackDialogType) -> Unit,
     modifier: Modifier = Modifier,
+    quickSettings: List<QuickSetting> = emptyList(),
 ) {
     Row(
         modifier = modifier.focusGroup(),
@@ -352,6 +356,64 @@ fun LeftPlaybackButtons(
             enabled = true,
             onControllerInteraction = onControllerInteraction,
             modifier = Modifier,
+        )
+        // NoBars: the settings people change most, one press away, showing their current value
+        quickSettings.forEach { setting ->
+            PlaybackValueButton(
+                text = setting.label,
+                enabled = setting.enabled,
+                onClick = {
+                    onControllerInteraction.invoke()
+                    onClickPlaybackDialogType.invoke(setting.type)
+                },
+                onControllerInteraction = onControllerInteraction,
+            )
+        }
+    }
+}
+
+/** NoBars: a playback setting shown on the control bar, e.g. "1.0×" for speed. */
+data class QuickSetting(
+    val type: PlaybackDialogType,
+    val label: String,
+    val enabled: Boolean = true,
+)
+
+/** NoBars: a control-bar button showing a short text value instead of an icon. */
+@Composable
+fun PlaybackValueButton(
+    text: String,
+    onClick: () -> Unit,
+    onControllerInteraction: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val selectedColor = MaterialTheme.colorScheme.border
+    Button(
+        enabled = enabled,
+        onClick = onClick,
+        colors =
+            ClickableSurfaceDefaults.colors(
+                containerColor = AppColors.TransparentBlack25,
+                focusedContainerColor = selectedColor,
+            ),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+        modifier =
+            modifier
+                .height(36.dp)
+                .onFocusChanged { onControllerInteraction.invoke() },
+    ) {
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            maxLines = 1,
+            color =
+                if (LocalTheme.current == AppThemeColors.OLED_BLACK) {
+                    LocalContentColor.current
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            modifier = Modifier.align(Alignment.CenterVertically),
         )
     }
 }

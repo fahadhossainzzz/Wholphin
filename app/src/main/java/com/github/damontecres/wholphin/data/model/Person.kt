@@ -35,7 +35,7 @@ data class Person(
                 name = dto.name,
                 role = personRole(context, dto.role, dto.type),
                 type = dto.type,
-                imageUrl = api.imageApi.getItemImageUrl(dto.id, ImageType.PRIMARY, tag = dto.primaryImageTag),
+                imageUrl = api.imageApi.getItemImageUrl(dto.id, ImageType.PRIMARY, tag = dto.primaryImageTag, maxHeight = 300), // NoBars: card size
                 favorite = false,
             )
 
@@ -50,7 +50,7 @@ data class Person(
                 name = dto.name,
                 role = personRole(context, dto.role, dto.type),
                 type = dto.type,
-                imageUrl = api.imageApi.getItemImageUrl(dto.id, ImageType.PRIMARY, tag = dto.primaryImageTag),
+                imageUrl = api.imageApi.getItemImageUrl(dto.id, ImageType.PRIMARY, tag = dto.primaryImageTag, maxHeight = 300), // NoBars: card size
                 favorite = favorite,
             )
     }

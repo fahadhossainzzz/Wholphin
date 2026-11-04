@@ -144,38 +144,7 @@ fun PlaybackDialog(
         PlaybackDialogType.SETTINGS -> {
             val options =
                 buildList {
-                    add(
-                        BottomDialogItem(
-                            data = PlaybackDialogType.PLAYBACK_SPEED,
-                            headline = stringResource(R.string.playback_speed),
-                            supporting = settings.playbackSpeed.toString(),
-                            enabled = settings.playbackSpeedEnabled,
-                        ),
-                    )
-                    if (enableVideoScale) {
-                        add(
-                            BottomDialogItem(
-                                data = PlaybackDialogType.VIDEO_SCALE,
-                                headline = stringResource(R.string.video_scale),
-                                supporting =
-                                    if (settings.contentScale is FullScreenContentScale) {
-                                        stringResource(R.string.content_scale_full_screen_auto)
-                                    } else {
-                                        playbackScaleOptions[settings.contentScale]
-                                            ?.let { stringResource(it) }
-                                    },
-                            ),
-                        )
-                    }
-                    if (enableVideoScale) {
-                        add(
-                            BottomDialogItem(
-                                data = PlaybackDialogType.ZOOM,
-                                headline = "Zoom",
-                                supporting = "${kotlin.math.round(settings.zoom * 100).toInt()}%",
-                            ),
-                        )
-                    }
+                    // NoBars: speed, scale and zoom live on the control bar now
                     if (enableSubtitleDelay) {
                         add(
                             BottomDialogItem(

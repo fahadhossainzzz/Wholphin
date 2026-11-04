@@ -1,5 +1,11 @@
 package com.github.damontecres.wholphin.ui.playback
 
+import com.github.damontecres.wholphin.R
+import androidx.compose.ui.res.stringResource
+import org.jellyfin.sdk.model.api.BaseItemKind
+import com.github.damontecres.wholphin.ui.playback.overlay.QuickSetting
+import com.github.damontecres.wholphin.ui.playback.overlay.PlayerPeopleViewModel
+import com.github.damontecres.wholphin.ui.playback.overlay.PersonPanel
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -223,6 +229,39 @@ fun PlaybackPageContent(
     }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     LaunchedEffect(playbackSpeed) { player.setPlaybackSpeed(playbackSpeed) }
+
+    // NoBars: speed, scale and zoom on the control bar, showing their current value
+    val playbackSpeedEnabled = playerBackend == PlayerBackend.MPV || state.currentPlayback?.audioDecoder != null
+    val quickSettings =
+        buildList {
+            add(QuickSetting(PlaybackDialogType.PLAYBACK_SPEED, "${playbackSpeed}×", playbackSpeedEnabled))
+            if (player !is MpvPlayer) {
+                val scaleLabel =
+                    if (contentScale is FullScreenContentScale) {
+                        stringResource(R.string.content_scale_full_screen_auto)
+                    } else {
+                        playbackScaleOptions[contentScale]?.let { stringResource(it) } ?: stringResource(R.string.video_scale)
+                    }
+                add(QuickSetting(PlaybackDialogType.VIDEO_SCALE, scaleLabel))
+                add(QuickSetting(PlaybackDialogType.ZOOM, "Zoom ${kotlin.math.round(zoom * 100).toInt()}%"))
+            }
+        }
+
+    // NoBars: cast & crew row and the light person panel over the film
+    val peopleViewModel: PlayerPeopleViewModel = hiltViewModel()
+    LaunchedEffect(currentItemId) { peopleViewModel.load(state.currentPlayback?.item) }
+    val people by peopleViewModel.people.collectAsState()
+    val personPanel by peopleViewModel.panel.collectAsState()
+    val navigationManager = viewModel.navigationManager
+    // Leaving the player for another page: it shuts down (freeing its memory) and Back restarts the film here
+    val restartHereAfter: (Destination) -> Unit = { next ->
+        val id = state.currentPlayback?.item?.id
+        val position = player.currentPosition
+        peopleViewModel.close()
+        navigationManager.goBack()
+        if (id != null) navigationManager.navigateTo(Destination.Playback(id, position))
+        navigationManager.navigateTo(next)
+    }
 
     LaunchedEffect(state.currentPlayback?.subtitleDelay) {
         (player as? MpvPlayer)?.subtitleDelay =
@@ -535,6 +574,9 @@ fun PlaybackPageContent(
                 trickplayUrlFor = viewModel::getTrickplayUrl,
                 queue = remember(state.playlistIndex, state.playlist) { state.upcomingItems },
                 onClickPlaylist = viewModel::playItemInPlaylist,
+                quickSettings = quickSettings,
+                people = people,
+                onClickPerson = peopleViewModel::openPerson,
                 currentSegment = state.currentSegment?.segment,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
                 analyticsState = state.analyticsState,
@@ -794,21 +836,14 @@ fun PlaybackPageContent(
                         remember(userDto) { userDto?.policy?.let { it.isAdministrator || it.enableSubtitleManagement } == true },
                     // TODO Passing through audio prevents changing playback speed
                     // See https://github.com/damontecres/Wholphin/issues/164
-                    playbackSpeedEnabled = playerBackend == PlayerBackend.MPV || state.currentPlayback?.audioDecoder != null,
+                    playbackSpeedEnabled = playbackSpeedEnabled,
                     maxBitrate = state.maxBitrate,
                     barsAspect = state.barsAspect,
                     zoom = zoom,
                 ),
             onDismissRequest = {
-                playbackDialog =
-                    when (type) {
-                        // Go back to settings dialog
-                        PlaybackDialogType.PLAYBACK_SPEED,
-                        PlaybackDialogType.VIDEO_SCALE,
-                        -> PlaybackDialogType.SETTINGS
-
-                        else -> null
-                    }
+                // NoBars: speed and scale now open from the control bar, so closing them goes back to the film
+                playbackDialog = null
                 if (controllerViewState.controlsVisible) {
                     controllerViewState.pulseControls()
                 }
@@ -828,6 +863,21 @@ fun PlaybackPageContent(
             onChangeZoom = onChangeZoom,
             enableSubtitleDelay = player is MpvPlayer,
             enableVideoScale = player !is MpvPlayer,
+        )
+    }
+    personPanel?.let { panel ->
+        PersonPanel(
+            state = panel,
+            thumbUrl = peopleViewModel::thumbUrl,
+            onSelect = peopleViewModel::select,
+            onBack = peopleViewModel::back,
+            onPlay = { film ->
+                peopleViewModel.close()
+                navigationManager.goBack()
+                navigationManager.navigateTo(Destination.Playback(film))
+            },
+            onOpenItem = { restartHereAfter(it.destination()) },
+            onOpenProfile = { restartHereAfter(Destination.MediaItem(it.id, BaseItemKind.PERSON)) },
         )
     }
 }

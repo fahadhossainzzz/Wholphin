@@ -47,7 +47,8 @@ object ImdbVotesStore {
                 val conn = URL(baseUrl.trimEnd('/') + "/Plugins/ImdbRatings/Votes").openConnection() as HttpURLConnection
                 conn.connectTimeout = 10_000
                 conn.readTimeout = 20_000
-                conn.setRequestProperty("X-Emby-Token", token)
+                // Jellyfin 12 only accepts the Authorization header (the old X-Emby-Token is rejected with 401)
+                conn.setRequestProperty("Authorization", "MediaBrowser Token=\"$token\"")
                 conn.setRequestProperty("Accept", "application/json")
                 try {
                     if (conn.responseCode != 200) {

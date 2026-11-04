@@ -495,7 +495,8 @@ class PlaybackViewModel
                 }
                 this@PlaybackViewModel.currentItem = playlistItem
                 this@PlaybackViewModel.itemId = item.id
-                updateBarsAspect(item)
+                // NoBars: each film starts on its best decoder; zooming switches Dolby Vision off if needed
+                ZoomPolicy.avoidDolbyVision = false
 
                 val isLiveTv = item.type == BaseItemKind.TV_CHANNEL
                 val base = item.data
@@ -1196,31 +1197,6 @@ class PlaybackViewModel
         private val autoSkippedSegments = mutableSetOf<UUID>()
         private val outroShownSegments = mutableSetOf<UUID>()
 
-        /**
-         * Reads the item's Jellyfin "bars:" tag (see [FullScreenContentScale]) so playback can zoom past
-         * baked-in black bars. Items from some lists don't include tags, so they are fetched if missing.
-         */
-        private fun updateBarsAspect(item: BaseItem) {
-            val aspect = FullScreenContentScale.aspectFromTags(item.data.tags)
-            // NoBars: decided before the player is prepared, so a tagged Dolby Vision file starts on the zoomable decoder
-            ZoomPolicy.avoidDolbyVision =
-                aspect != null &&
-                preferences.appPreferences.playbackPreferences.globalContentScale ==
-                com.github.damontecres.wholphin.preferences.PrefContentScale.FULL_SCREEN_AUTO
-            _state.update { it.copy(barsAspect = aspect) }
-            if (item.data.tags == null) {
-                viewModelScope.launchIO {
-                    try {
-                        val tags = api.userLibraryApi.getItem(item.id).content.tags
-                        if (this@PlaybackViewModel.itemId == item.id) {
-                            _state.update { it.copy(barsAspect = FullScreenContentScale.aspectFromTags(tags)) }
-                        }
-                    } catch (ex: Exception) {
-                        Timber.w(ex, "Could not fetch tags for ${item.id}")
-                    }
-                }
-            }
-        }
 
         /**
          * Cancels listening for segments and clears current segment state

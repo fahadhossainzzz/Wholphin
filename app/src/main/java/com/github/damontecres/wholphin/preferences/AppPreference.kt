@@ -750,7 +750,14 @@ sealed interface AppPreference<Pref, T> {
                 },
                 displayValues = R.array.playback_content_scale,
                 indexToValue = { PrefContentScale.forNumber(it) },
-                valueToIndex = { if (it != PrefContentScale.UNRECOGNIZED) it.number else 0 },
+                // NoBars: the old "Full screen (auto)" choice is gone; it now means Crop
+                valueToIndex = {
+                    when (it) {
+                        PrefContentScale.UNRECOGNIZED -> 0
+                        PrefContentScale.FULL_SCREEN_AUTO -> PrefContentScale.CROP.number
+                        else -> it.number
+                    }
+                },
             )
 
         val FfmpegPreference =

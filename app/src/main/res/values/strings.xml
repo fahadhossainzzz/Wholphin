@@ -666,7 +666,6 @@
         <item>@string/content_scale_fill</item>
         <item>@string/content_scale_fill_width</item>
         <item>@string/content_scale_fill_height</item>
-        <item>@string/content_scale_full_screen_auto</item>
     </string-array>
 
     <string name="ffmpeg_fallback">Only use FFmpeg if no built-in decoder exists</string>

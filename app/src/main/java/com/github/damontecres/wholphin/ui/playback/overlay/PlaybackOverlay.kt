@@ -1,5 +1,9 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import com.github.damontecres.wholphin.ui.playback.isBackKey
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -96,6 +100,8 @@ fun PlaybackOverlay(
     quickSettings: List<QuickSetting> = emptyList(),
     people: List<com.github.damontecres.wholphin.data.model.Person> = emptyList(),
     onClickPerson: (com.github.damontecres.wholphin.data.model.Person) -> Unit = {},
+    returnToPersonId: java.util.UUID? = null,
+    onReturnedToPerson: () -> Unit = {},
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
     val hasPeople = people.isNotEmpty()
@@ -118,7 +124,14 @@ fun PlaybackOverlay(
     // This will be calculated after composition
     var controllerHeight by remember { mutableStateOf(0.dp) }
     var state by remember(controllerViewState.controlsVisible) {
-        mutableStateOf(if (controllerViewState.controlsVisible) OverlayViewState.CONTROLLER else OverlayViewState.HIDDEN)
+        mutableStateOf(
+            when {
+                !controllerViewState.controlsVisible -> OverlayViewState.HIDDEN
+                // NoBars: closing the person panel comes back to the Cast & Crew row
+                returnToPersonId != null && people.isNotEmpty() -> OverlayViewState.PEOPLE
+                else -> OverlayViewState.CONTROLLER
+            },
+        )
     }
     val onChangeState = { newState: OverlayViewState ->
         state = newState
@@ -156,6 +169,21 @@ fun PlaybackOverlay(
 
         AnimatedContent(
             targetState = state,
+            // NoBars: Back from Chapters / Queue / Cast & Crew goes to the controls, one step at a time
+            modifier =
+                Modifier.onKeyEvent {
+                    if (isBackKey(it) &&
+                        (state == OverlayViewState.CHAPTERS || state == OverlayViewState.QUEUE || state == OverlayViewState.PEOPLE)
+                    ) {
+                        if (it.type == KeyEventType.KeyUp) {
+                            state = OverlayViewState.CONTROLLER
+                            controllerViewState.pulseControls()
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                },
             label = "controls transition",
             transitionSpec = {
                 if (targetState.ordinal > initialState.ordinal) {
@@ -277,6 +305,8 @@ fun PlaybackOverlay(
                                 },
                             onChangeState = onChangeState,
                             onClickPerson = onClickPerson,
+                            focusPersonId = returnToPersonId,
+                            onFocusedPerson = onReturnedToPerson,
                             modifier =
                                 Modifier
                                     .padding(8.dp)

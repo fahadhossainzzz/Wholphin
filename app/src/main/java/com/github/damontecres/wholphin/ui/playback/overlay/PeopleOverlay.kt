@@ -1,5 +1,10 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import android.content.Context
 import android.view.Gravity
 import android.view.WindowManager
@@ -91,6 +96,8 @@ data class PersonPanelState(
     val loading: Boolean = true,
     val items: List<BaseItem> = emptyList(),
     val selected: BaseItem? = null,
+    /** The film to highlight when coming back to the list from its summary. */
+    val focusId: UUID? = null,
 )
 
 /**
@@ -110,6 +117,14 @@ class PlayerPeopleViewModel
 
         private val _panel = MutableStateFlow<PersonPanelState?>(null)
         val panel: StateFlow<PersonPanelState?> = _panel
+
+        /** Set when the panel closes, so the Cast & Crew row reopens on the same person. */
+        private val _returnTo = MutableStateFlow<UUID?>(null)
+        val returnTo: StateFlow<UUID?> = _returnTo
+
+        fun returnedToPerson() {
+            _returnTo.value = null
+        }
 
         private var loadedFor: UUID? = null
         private var playingId: UUID? = null
@@ -184,11 +199,16 @@ class PlayerPeopleViewModel
 
         fun select(item: BaseItem?) = _panel.update { it?.copy(selected = item) }
 
-        /** Back: from a film's summary to the list, from the list to the film playing. */
-        fun back() =
-            _panel.update {
-                if (it?.selected != null) it.copy(selected = null) else null
+        /** Back, one step: a film's summary -> the list -> the Cast & Crew row. */
+        fun back() {
+            val current = _panel.value ?: return
+            if (current.selected != null) {
+                _panel.value = current.copy(selected = null, focusId = current.selected.id)
+            } else {
+                _panel.value = null
+                _returnTo.value = current.person.id
             }
+        }
 
         fun close() {
             _panel.value = null
@@ -209,10 +229,17 @@ fun PeopleRowOverlay(
     onChangeState: (OverlayViewState) -> Unit,
     onClickPerson: (Person) -> Unit,
     modifier: Modifier = Modifier,
+    focusPersonId: UUID? = null,
+    onFocusedPerson: () -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
     val hiddenFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.tryRequestFocus() }
+    val focusIndex = remember { people.indexOfFirst { it.id == focusPersonId }.coerceAtLeast(0) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(focusIndex)
+    LaunchedEffect(Unit) {
+        focusRequester.tryRequestFocus()
+        onFocusedPerson()
+    }
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier,
@@ -225,6 +252,7 @@ fun PeopleRowOverlay(
             style = MaterialTheme.typography.titleLarge,
         )
         LazyRow(
+            state = listState,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier =
@@ -248,7 +276,7 @@ fun PeopleRowOverlay(
                     modifier =
                         Modifier
                             .width(personRowCardWidth)
-                            .ifElse(index == 0, Modifier.focusRequester(focusRequester)),
+                            .ifElse(index == focusIndex, Modifier.focusRequester(focusRequester)),
                 )
             }
         }
@@ -271,7 +299,8 @@ fun PersonPanel(
 ) {
     Dialog(
         onDismissRequest = onBack,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        // NoBars: Back is handled below, one step per press
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false),
     ) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         LaunchedEffect(window) {
@@ -287,6 +316,14 @@ fun PersonPanel(
                 Modifier
                     .width(440.dp)
                     .fillMaxHeight()
+                    .onPreviewKeyEvent {
+                        if (it.key == Key.Back || it.key == Key.ButtonB) {
+                            if (it.type == KeyEventType.KeyUp) onBack()
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     .background(Color.Black.copy(alpha = 0.82f))
                     .padding(horizontal = 20.dp, vertical = 24.dp),
         ) {
@@ -335,6 +372,8 @@ private fun FilmList(
     onOpenProfile: (Person) -> Unit,
 ) {
     val first = remember { FocusRequester() }
+    val focusIndex = remember(state.loading) { state.items.indexOfFirst { it.id == state.focusId }.coerceAtLeast(0) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(focusIndex)
     LaunchedEffect(state.loading) { if (!state.loading) first.tryRequestFocus() }
     Text(
         text =
@@ -348,6 +387,7 @@ private fun FilmList(
         color = Color.White.copy(alpha = 0.85f),
     )
     LazyColumn(
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -360,7 +400,7 @@ private fun FilmList(
                     Text(item.name.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
                 supportingContent = { Text(facts(item), fontSize = 12.sp, maxLines = 1) },
-                modifier = Modifier.ifElse(index == 0, Modifier.focusRequester(first)),
+                modifier = Modifier.ifElse(index == focusIndex, Modifier.focusRequester(first)),
             )
         }
         if (!state.loading) {

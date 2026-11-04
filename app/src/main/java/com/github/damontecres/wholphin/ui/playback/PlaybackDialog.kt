@@ -78,8 +78,6 @@ data class PlaybackSettings(
     val hasSubtitleDownloadPermission: Boolean,
     val playbackSpeedEnabled: Boolean,
     val maxBitrate: Long,
-    /** Picture aspect ratio from the item's Jellyfin "bars:" tag, if any */
-    val barsAspect: Float? = null,
     /** NoBars: current extra zoom (1 = automatic) */
     val zoom: Float = 1f,
 )
@@ -231,16 +229,7 @@ fun PlaybackDialog(
                         supporting = null,
                     )
                 }
-            val choices =
-                standardChoices +
-                    BottomDialogItem<ContentScale>(
-                        data = FullScreenContentScale(settings.barsAspect),
-                        headline = stringResource(R.string.content_scale_full_screen_auto),
-                        supporting =
-                            settings.barsAspect?.let {
-                                String.format(java.util.Locale.US, "Removing black bars (%.2f:1)", it)
-                            },
-                    )
+            val choices = standardChoices
             BottomDialog(
                 choices = choices,
                 currentChoice = choices.firstOrNull { it.data == settings.contentScale },

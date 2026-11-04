@@ -194,23 +194,14 @@ fun PlaybackPageContent(
     LaunchedEffect(currentItemId) { zoom = 1f }
     val onChangeZoom: (Float) -> Unit = { value ->
         zoom = value.coerceIn(ZoomPolicy.MIN_ZOOM, ZoomPolicy.MAX_ZOOM)
-        if (contentScale !is FullScreenContentScale) {
-            contentScale = FullScreenContentScale(state.barsAspect, zoom)
-        }
     }
-
-    // Full screen (auto) follows the current item's Jellyfin "bars:" tag and the remote zoom
-    LaunchedEffect(state.barsAspect, zoom, contentScale is FullScreenContentScale) {
-        if (contentScale is FullScreenContentScale) {
-            contentScale = FullScreenContentScale(state.barsAspect, zoom)
-        }
-    }
+    // NoBars: zoom sits on top of whichever scale is chosen (Crop + 105% stays Crop, 5% bigger)
+    val zooming = kotlin.math.abs(zoom - 1f) > 0.001f
+    val displayScale =
+        remember(contentScale, zoom) { if (zooming) ZoomedContentScale(contentScale, zoom) else contentScale }
 
     // NoBars: Dolby Vision can't be zoomed on some TVs, so switch to the HDR10 decoder when zooming is needed
-    val needsZoom =
-        playerBackend != PlayerBackend.MPV &&
-            contentScale is FullScreenContentScale &&
-            (state.barsAspect != null || zoom > 1.001f)
+    val needsZoom = playerBackend != PlayerBackend.MPV && zooming
     LaunchedEffect(needsZoom, currentItemId) {
         if (needsZoom && !ZoomPolicy.avoidDolbyVision) {
             ZoomPolicy.avoidDolbyVision = true
@@ -237,11 +228,7 @@ fun PlaybackPageContent(
             add(QuickSetting(PlaybackDialogType.PLAYBACK_SPEED, "${playbackSpeed}×", playbackSpeedEnabled))
             if (player !is MpvPlayer) {
                 val scaleLabel =
-                    if (contentScale is FullScreenContentScale) {
-                        stringResource(R.string.content_scale_full_screen_auto)
-                    } else {
-                        playbackScaleOptions[contentScale]?.let { stringResource(it) } ?: stringResource(R.string.video_scale)
-                    }
+                    playbackScaleOptions[contentScale]?.let { stringResource(it) } ?: stringResource(R.string.video_scale)
                 add(QuickSetting(PlaybackDialogType.VIDEO_SCALE, scaleLabel))
                 add(QuickSetting(PlaybackDialogType.ZOOM, "Zoom ${kotlin.math.round(zoom * 100).toInt()}%"))
             }
@@ -252,6 +239,8 @@ fun PlaybackPageContent(
     LaunchedEffect(currentItemId) { peopleViewModel.load(state.currentPlayback?.item) }
     val people by peopleViewModel.people.collectAsState()
     val personPanel by peopleViewModel.panel.collectAsState()
+    val returnToPerson by peopleViewModel.returnTo.collectAsState()
+    LaunchedEffect(returnToPerson) { if (returnToPerson != null) viewModel.controllerViewState.showControls() }
     val navigationManager = viewModel.navigationManager
     // Leaving the player for another page: it shuts down (freeing its memory) and Back restarts the film here
     val restartHereAfter: (Destination) -> Unit = { next ->
@@ -282,7 +271,7 @@ fun PlaybackPageContent(
         }
     }
     val scaledModifier =
-        Modifier.resizeWithContentScale(contentScale, presentationState.videoSizeDp)
+        Modifier.resizeWithContentScale(displayScale, presentationState.videoSizeDp)
     val focusRequester = remember { FocusRequester() }
     val playPauseState = rememberPlayPauseButtonState(player)
     val seekBarState = rememberSeekBarState(player, scope)
@@ -577,6 +566,8 @@ fun PlaybackPageContent(
                 quickSettings = quickSettings,
                 people = people,
                 onClickPerson = peopleViewModel::openPerson,
+                returnToPersonId = returnToPerson,
+                onReturnedToPerson = peopleViewModel::returnedToPerson,
                 currentSegment = state.currentSegment?.segment,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
                 analyticsState = state.analyticsState,
@@ -838,7 +829,6 @@ fun PlaybackPageContent(
                     // See https://github.com/damontecres/Wholphin/issues/164
                     playbackSpeedEnabled = playbackSpeedEnabled,
                     maxBitrate = state.maxBitrate,
-                    barsAspect = state.barsAspect,
                     zoom = zoom,
                 ),
             onDismissRequest = {

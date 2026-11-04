@@ -25,8 +25,6 @@ data class PlaybackState(
     val playlistIndex: Int = 0,
     val playlist: Playlist = Playlist(emptyList()),
     val maxBitrate: Long = -1L,
-    /** Picture aspect ratio from the current item's Jellyfin "bars:" tag, if any */
-    val barsAspect: Float? = null,
 ) {
     val hasNext: Boolean get() = (playlistIndex + 1) < playlist.items.size
     val hasPrevious: Boolean get() = playlistIndex > 0

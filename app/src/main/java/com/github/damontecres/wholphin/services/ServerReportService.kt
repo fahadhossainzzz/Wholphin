@@ -103,14 +103,20 @@ class ServerReportService
         }
 
         suspend fun sendAppLogs() {
-            val logcat = getLogCatLines().joinToString("\n") { it.text }
+            // NoBars: Jellyfin accepts about 1 MB per upload, so send the most recent part only:
+            // ~250 KB of the system log and ~600 KB of the NoBars log (several evenings of films)
+            val logcat = getLogCatLines().joinToString("\n") { it.text }.takeLast(250_000)
             val header = buildLogHeader("Send App Logs")
             Timber.w(header)
-            // NoBars: include the TV's own log file (whole evening of diagnostics and film reports)
-            val noBars = NoBarsLog.tail(1_500_000)
+            val noBars = NoBarsLog.tail(600_000)
             val body = header + "\n\n" + logcat + "\n\n=== NoBars log (most recent part) ===\n" + noBars
-            val response by api.clientLogApi.logFile(body)
-            showToast(context, "Sent! Filename=${response.fileName}")
+            try {
+                val response by api.clientLogApi.logFile(body)
+                showToast(context, "Logs sent (${body.length / 1024} KB): ${response.fileName}")
+            } catch (e: Exception) {
+                Timber.e(e, "NoBars: sending app logs failed")
+                showToast(context, "Couldn't send logs: ${e.message ?: e.javaClass.simpleName}")
+            }
         }
 
         /**

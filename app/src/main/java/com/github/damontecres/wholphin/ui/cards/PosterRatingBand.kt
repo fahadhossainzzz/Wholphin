@@ -1,5 +1,9 @@
 package com.github.damontecres.wholphin.ui.cards
 
+import com.github.damontecres.wholphin.services.forItem
+import com.github.damontecres.wholphin.services.LocalImdbVotes
+import com.github.damontecres.wholphin.services.ImdbVotesStore
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -43,21 +47,33 @@ fun PosterRatingBand(
     val stars = dto.communityRating?.takeIf { it > 0f }
     val tomatoes = dto.criticRating?.takeIf { it >= 0f }
     if (stars == null && tomatoes == null) return
+    val votes = LocalImdbVotes.current.forItem(dto.id)?.votes
     val style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+    val showVotes = votes != null && maxWidth >= 112.dp
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier =
-            modifier
+            Modifier
                 .fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.62f))
                 .padding(horizontal = 6.dp, vertical = 3.dp),
     ) {
         if (stars != null) {
-            Text(
-                text = "★ " + String.format(Locale.US, "%.1f", stars),
-                style = style.copy(color = FilledStarColor),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "★ " + String.format(Locale.US, "%.1f", stars),
+                    style = style.copy(color = FilledStarColor),
+                )
+                if (showVotes) {
+                    Text(
+                        text = " · " + ImdbVotesStore.short(votes!!),
+                        style = style.copy(fontSize = 9.sp, fontWeight = FontWeight.Normal, color = Color.White.copy(alpha = 0.7f)),
+                        maxLines = 1,
+                    )
+                }
+            }
         } else {
             Spacer(Modifier.size(1.dp))
         }
@@ -77,5 +93,6 @@ fun PosterRatingBand(
                 Text(text = "${tomatoes.toInt()}%", style = style)
             }
         }
+    }
     }
 }

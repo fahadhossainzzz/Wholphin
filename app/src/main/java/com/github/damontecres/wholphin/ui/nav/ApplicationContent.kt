@@ -1,5 +1,12 @@
 package com.github.damontecres.wholphin.ui.nav
 
+import org.jellyfin.sdk.api.client.ApiClient
+import com.github.damontecres.wholphin.services.LocalImdbVotes
+import com.github.damontecres.wholphin.services.ImdbVotesStore
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -33,7 +40,13 @@ class ApplicationContentViewModel
     @Inject
     constructor(
         val backdropService: BackdropService,
+        private val api: ApiClient,
     ) : ViewModel() {
+        // NoBars: IMDb vote counts for the whole library, fetched once per session (about 30 KB)
+        fun loadImdbVotes() {
+            viewModelScope.launchIO { ImdbVotesStore.load(api.baseUrl, api.accessToken) }
+        }
+
         fun clearBackdrop() {
             viewModelScope.launchIO { backdropService.clearBackdrop() }
         }
@@ -55,6 +68,9 @@ fun ApplicationContent(
     viewModel: ApplicationContentViewModel = hiltViewModel(),
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    LaunchedEffect(server.id, user.id) { viewModel.loadImdbVotes() }
+    val imdbVotes by ImdbVotesStore.votes.collectAsState()
+    CompositionLocalProvider(LocalImdbVotes provides imdbVotes) {
     Box(
         modifier = modifier,
     ) {
@@ -102,5 +118,6 @@ fun ApplicationContent(
                 }
             },
         )
+    }
     }
 }

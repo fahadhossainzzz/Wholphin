@@ -1,5 +1,8 @@
 package com.github.damontecres.wholphin.ui.components
 
+import com.github.damontecres.wholphin.services.forItem
+import com.github.damontecres.wholphin.services.LocalImdbVotes
+import com.github.damontecres.wholphin.services.ImdbVotesStore
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.InlineTextContent
@@ -49,7 +52,20 @@ fun QuickDetails(
                 QuickDetailsText(details.officialRating, Modifier, textStyle, inlineContentMap)
             }
             if (DisplayToggle.COMMUNITY_RATING in enabled) {
-                QuickDetailsText(details.communityRating, Modifier, textStyle, inlineContentMap)
+                // NoBars: "7.8★ (1,234,567 votes)"
+                val votes = LocalImdbVotes.current.forItem(details.itemId)?.votes
+                val rating =
+                    details.communityRating?.let {
+                        if (votes != null) {
+                            androidx.compose.ui.text.buildAnnotatedString {
+                                append(it)
+                                append(" (${ImdbVotesStore.full(votes)} votes)")
+                            }
+                        } else {
+                            it
+                        }
+                    }
+                QuickDetailsText(rating, Modifier, textStyle, inlineContentMap)
             }
             if (DisplayToggle.CRITIC_RATING in enabled) {
                 QuickDetailsText(details.criticRating, Modifier, textStyle, inlineContentMap)

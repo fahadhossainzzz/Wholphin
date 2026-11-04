@@ -489,7 +489,10 @@ private fun facts(
     buildList {
         item.data.productionYear?.let { add(it.toString()) }
         if (item.type == BaseItemKind.SERIES) add("TV show")
-        item.data.communityRating?.takeIf { it > 0f }?.let { add("★ " + String.format(Locale.US, "%.1f", it)) }
+        item.data.communityRating?.takeIf { it > 0f }?.let {
+            val votes = com.github.damontecres.wholphin.services.ImdbVotesStore.get(item.id)?.votes
+            add("★ " + String.format(Locale.US, "%.1f", it) + (votes?.let { v -> " (" + com.github.damontecres.wholphin.services.ImdbVotesStore.short(v) + ")" } ?: ""))
+        }
         item.data.criticRating?.takeIf { it >= 0f }?.let { add("🍅 ${it.toInt()}%") }
         if (withRuntime) {
             item.data.runTimeTicks?.let { ticks ->

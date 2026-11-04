@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import com.github.damontecres.wholphin.services.LocalImdbVotes
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
@@ -72,6 +73,7 @@ fun PlaybackController(
     ) {
         Controller(
             title = item?.title,
+            ratingLine = remember(item?.id, LocalImdbVotes.current.size) { item?.let(::playerRatingLine) },
             subtitle = item?.subtitleLong,
             player = player,
             controllerViewState = controllerViewState,
@@ -148,6 +150,7 @@ internal val subtitleTextSize = 18.sp
 @Composable
 fun Controller(
     title: String?,
+    ratingLine: String? = null,
     player: Player,
     controllerViewState: ControllerViewState,
     showPlay: Boolean,
@@ -189,14 +192,30 @@ fun Controller(
                     .offset(y = verticalOffset),
         ) {
             title?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontSize = titleTextSize,
-                    maxLines = 1,
-                    overflow = TextOverflow.MiddleEllipsis,
-                    modifier = Modifier.fillMaxWidth(.75f),
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    modifier = Modifier.fillMaxWidth(.9f),
+                ) {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontSize = titleTextSize,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    // NoBars: "★ 7.8 · 1.2M votes   🍅 93%"
+                    ratingLine?.let { line ->
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontSize = subtitleTextSize,
+                            color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -262,4 +281,17 @@ fun Controller(
             quickSettings = quickSettings,
         )
     }
+}
+
+/** NoBars: the rating shown next to the film's name in the player. */
+private fun playerRatingLine(item: com.github.damontecres.wholphin.data.model.BaseItem): String? {
+    val stars = item.data.communityRating?.takeIf { it > 0f }
+    val tomatoes = item.data.criticRating?.takeIf { it >= 0f }
+    val votes = com.github.damontecres.wholphin.services.ImdbVotesStore.get(item.id)?.votes
+    return buildList {
+        stars?.let {
+            add("★ " + String.format(java.util.Locale.US, "%.1f", it) + (votes?.let { v -> " · " + com.github.damontecres.wholphin.services.ImdbVotesStore.short(v) + " votes" } ?: ""))
+        }
+        tomatoes?.let { add("🍅 ${it.toInt()}%") }
+    }.takeIf { it.isNotEmpty() }?.joinToString("   ")
 }

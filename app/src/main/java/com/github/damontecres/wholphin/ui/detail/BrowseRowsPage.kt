@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail
 
+import com.github.damontecres.wholphin.services.ImdbVotesStore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -180,25 +181,52 @@ class BrowseRowsViewModel
         ) {
             val state =
                 try {
+                    // NoBars: "Highest rated" uses IMDb's weighted rating, so a film rated 8.6 by 300
+                    // people no longer sits above a classic rated 8.5 by two million
+                    val weighted = order == BrowseOrder.BROWSE_HIGHEST_RATED && ImdbVotesStore.votes.value.isNotEmpty()
+                    val request =
+                        group.filter.asGetItemsRequest().copy(
+                            userId = userId,
+                            limit = ROW_LIMIT,
+                            fields = HomeItemFields + listOf(ItemFields.CHILD_COUNT),
+                            enableTotalRecordCount = true,
+                        )
                     val result =
-                        GetItemsRequestHandler
-                            .execute(
-                                api,
-                                group.filter.asGetItemsRequest().copy(
-                                    userId = userId,
-                                    limit = ROW_LIMIT,
-                                    fields = HomeItemFields + listOf(ItemFields.CHILD_COUNT),
-                                    enableTotalRecordCount = true,
-                                ),
-                            ).content
+                        if (weighted) {
+                            // Light pass: ids and ratings only, then full details for the best 24
+                            val pool =
+                                GetItemsRequestHandler
+                                    .execute(
+                                        api,
+                                        request.copy(limit = WEIGHTED_POOL, fields = emptyList(), enableImages = false, enableUserData = false),
+                                    ).content
+                            val best =
+                                pool.items
+                                    .sortedByDescending { ImdbVotesStore.weighted(it.communityRating, ImdbVotesStore.get(it.id)?.votes) }
+                                    .take(ROW_LIMIT)
+                                    .map { it.id }
+                            val full =
+                                if (best.isEmpty()) {
+                                    emptyList()
+                                } else {
+                                    GetItemsRequestHandler
+                                        .execute(api, request.copy(ids = best, limit = null, enableTotalRecordCount = false))
+                                        .content.items
+                                        .sortedBy { best.indexOf(it.id) }
+                                }
+                            pool.copy(items = full)
+                        } else {
+                            GetItemsRequestHandler.execute(api, request).content
+                        }
+                    val rowItems = result.items
                     val total = result.totalRecordCount
                     val title = if (total > 0) "${group.name} · $total ${if (total == 1) "film" else "films"}" else group.name
                     HomeRowLoadingState.Success(
                         title = StringStringProvider(title),
-                        items = result.items.map { BaseItem(it, true) },
+                        items = rowItems.map { BaseItem(it, true) },
                         viewOptions = group.viewOptions,
                         rowType = group,
-                        showViewMore = result.items.size >= ROW_LIMIT,
+                        showViewMore = total > ROW_LIMIT,
                     )
                 } catch (e: Exception) {
                     Timber.w(e, "NoBars browse row %s failed", group.name)
@@ -271,5 +299,8 @@ class BrowseRowsViewModel
 
         companion object {
             private const val ROW_LIMIT = 24
+
+            /** Films fetched per row to pick the best 24 by weighted rating (titles only, a few KB). */
+            private const val WEIGHTED_POOL = 300
         }
     }

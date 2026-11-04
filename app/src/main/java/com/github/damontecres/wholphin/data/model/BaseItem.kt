@@ -141,6 +141,7 @@ data class BaseItem(
                 },
             quickDetails =
                 QuickDetailsData(
+                    itemId = data.id,
                     basic =
                         buildAnnotatedString {
                             val details =
@@ -369,6 +370,8 @@ data class BaseItemUi(
 
 data class QuickDetailsData(
     val basic: AnnotatedString,
+    /** NoBars: lets the header add the IMDb votes once they have loaded */
+    val itemId: java.util.UUID? = null,
     val officialRating: AnnotatedString? = null,
     val criticRating: AnnotatedString? = null,
     val communityRating: AnnotatedString? = null,

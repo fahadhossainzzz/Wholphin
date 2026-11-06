@@ -129,9 +129,15 @@ object StreamingStore {
             note = o.optString("note").takeIf { it.isNotBlank() && it != "null" },
         )
 
-    /** A poster card for a catalogue title: a made-up item that the normal row cards can show. */
-    fun toBaseItem(e: Entry): BaseItem {
-        val id = UUID.nameUUIDFromBytes("tmdb-${if (e.series) "tv" else "movie"}-${e.tmdb}".toByteArray())
+    /**
+     * A poster card for a catalogue title: a made-up item that the normal row cards can show. The id
+     * includes the row, so the same title in two rows keeps each row's own rank and note.
+     */
+    fun toBaseItem(
+        e: Entry,
+        row: String = "",
+    ): BaseItem {
+        val id = UUID.nameUUIDFromBytes("tmdb-${if (e.series) "tv" else "movie"}-${e.tmdb}-$row".toByteArray())
         entries[id] = e
         return BaseItem(
             BaseItemDto(

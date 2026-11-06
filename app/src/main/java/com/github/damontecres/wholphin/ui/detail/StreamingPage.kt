@@ -87,7 +87,7 @@ fun StreamingPage(
             loaded.orEmpty().map { row ->
                 HomeRowLoadingState.Success(
                     title = StringStringProvider(row.title),
-                    items = row.items.map(StreamingStore::toBaseItem),
+                    items = row.items.map { StreamingStore.toBaseItem(it, row.title) },
                     showViewMore = false,
                 )
             }

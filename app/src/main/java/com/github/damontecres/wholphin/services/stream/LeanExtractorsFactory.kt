@@ -10,6 +10,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.extractor.Extractor
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.ForwardingExtractorsFactory
+import androidx.media3.extractor.mkv.MatroskaExtractor
+import androidx.media3.extractor.mkv.SeekableMatroskaExtractor
 import androidx.media3.extractor.mp4.LeanMp4Extractor
 import androidx.media3.extractor.mp4.Mp4Extractor
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
@@ -67,7 +69,14 @@ class LeanExtractorsFactory(
 
     private fun lean(extractor: Extractor): Extractor =
         extractor.let {
-            if (it is Mp4Extractor) {
+            if (it is MatroskaExtractor) {
+                // NoBars: finds the time index itself when the file's table of contents doesn't list it
+                SeekableMatroskaExtractor(
+                    subtitleParserFactory,
+                    (if (textTrackTranscodingEnabled) 0 else SeekableMatroskaExtractor.FLAG_EMIT_RAW_SUBTITLE_DATA) or
+                        (if (parseHagcMetadata) 0 else SeekableMatroskaExtractor.FLAG_DISABLE_HAGC_METADATA),
+                )
+            } else if (it is Mp4Extractor) {
                 LeanMp4Extractor(
                     subtitleParserFactory,
                     LeanMp4Extractor.codecsToParseWithinGopSampleDependenciesAsFlags(codecsToParseWithinGop) or

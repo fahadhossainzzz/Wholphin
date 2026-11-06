@@ -1148,7 +1148,41 @@ class PlaybackViewModel
                 )
             }
 
+        /** NoBars: the film already switched to server re-packaging because it can't be skipped through. */
+        private var unseekableFallbackFor: UUID? = null
+
+        /**
+         * NoBars: a file our player still can't skip in (it has no time index at all, or another format
+         * without one): restart it at the same second through the server, which re-packages it with the
+         * picture and sound copied untouched, and skipping works there. Normal files never get here.
+         */
+        private fun maybeFallBackForSeeking() {
+            val playback = state.value.currentPlayback ?: return
+            if (playback.playMethod != PlayMethod.DIRECT_PLAY || player is MpvPlayer) return
+            if (player.isCurrentMediaItemSeekable || player.isCurrentMediaItemLive || player.duration == C.TIME_UNSET) return
+            if (unseekableFallbackFor == playback.item.id) return
+            unseekableFallbackFor = playback.item.id
+            val position = player.currentPosition
+            StreamHealth.event("this file has no time index, so skipping can't work when playing it directly; switching to the server's re-packaging (picture and sound untouched)")
+            viewModelScope.launchIO {
+                changeStreams(
+                    item = playback.item,
+                    sourceId = playback.mediaSourceInfo.id,
+                    audioIndex = playback.audioIndex,
+                    subtitleIndex = playback.subtitleIndex,
+                    positionMs = position,
+                    enableDirectPlay = false,
+                    enableDirectStream = true,
+                )
+                withContext(WholphinDispatchers.Main) {
+                    player.prepare()
+                    player.play()
+                }
+            }
+        }
+
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) maybeFallBackForSeeking()
             if (playbackState == Player.STATE_ENDED) {
                 Timber.v("Playback state is STATE_ENDED")
                 viewModelScope.launchDefault {

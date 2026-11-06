@@ -362,6 +362,14 @@ fun DestinationContent(
             )
         }
 
+        is Destination.Streaming -> {
+            com.github.damontecres.wholphin.ui.detail.StreamingPage(
+                service = destination.service,
+                preferences = preferences,
+                modifier = modifier,
+            )
+        }
+
         Destination.BrowseGenres -> {
             com.github.damontecres.wholphin.ui.detail.BrowseRowsPage(
                 mode = com.github.damontecres.wholphin.ui.detail.BrowseMode.GENRES,

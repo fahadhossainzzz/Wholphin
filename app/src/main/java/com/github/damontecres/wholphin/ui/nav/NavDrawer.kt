@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.nav
 
+import androidx.compose.ui.draw.clip
+import com.github.damontecres.wholphin.services.StreamingStore
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -142,6 +144,16 @@ class NavDrawerViewModel
                     navigationManager.navigateToFromDrawer(Destination.BrowseGenres)
                 }
 
+                NavDrawerItem.Netflix -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.NETFLIX))
+                }
+
+                NavDrawerItem.Prime -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.PRIME))
+                }
+
                 NavDrawerItem.Discover -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -182,6 +194,8 @@ class NavDrawerViewModel
                             is NavDrawerItem.Discover -> Destination.Discover
                             is NavDrawerItem.Years -> Destination.BrowseYears
                             is NavDrawerItem.Genres -> Destination.BrowseGenres
+                            is NavDrawerItem.Netflix -> Destination.Streaming(StreamingStore.NETFLIX)
+                            is NavDrawerItem.Prime -> Destination.Streaming(StreamingStore.PRIME)
                             else -> null
                         }
                     }
@@ -271,6 +285,22 @@ sealed interface NavDrawerItem {
             get() = "a_genres"
 
         override fun name(context: Context): String = "Genres"
+    }
+
+    /** NoBars: Netflix page (subscription titles) */
+    object Netflix : NavDrawerItem {
+        override val id: String
+            get() = "a_netflix"
+
+        override fun name(context: Context): String = "Netflix"
+    }
+
+    /** NoBars: Prime Video page (subscription titles) */
+    object Prime : NavDrawerItem {
+        override val id: String
+            get() = "a_prime"
+
+        override fun name(context: Context): String = "Prime Video"
     }
 }
 
@@ -712,6 +742,10 @@ fun NavigationDrawerScope.NavItem(
                     R.string.fa_tag
                 }
 
+                NavDrawerItem.Netflix, NavDrawerItem.Prime -> {
+                    R.string.fa_tv
+                }
+
                 is ServerNavDrawerItem -> {
                     when (library.type) {
                         CollectionType.MOVIES -> R.string.fa_film
@@ -738,7 +772,23 @@ fun NavigationDrawerScope.NavItem(
         leadingContent = {
             val color = navItemColor(selected, focused, drawerOpen)
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (useFont) {
+                // NoBars: the services' own small logos
+                val serviceLogo =
+                    when (library) {
+                        NavDrawerItem.Netflix -> StreamingStore.logos[StreamingStore.NETFLIX]
+                        NavDrawerItem.Prime -> StreamingStore.logos[StreamingStore.PRIME]
+                        else -> null
+                    }
+                if (serviceLogo != null) {
+                    coil3.compose.AsyncImage(
+                        model = serviceLogo,
+                        contentDescription = null,
+                        modifier =
+                            Modifier
+                                .size(DrawerIconSize)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+                    )
+                } else if (useFont) {
                     Text(
                         text = stringResource(icon),
                         textAlign = TextAlign.Center,

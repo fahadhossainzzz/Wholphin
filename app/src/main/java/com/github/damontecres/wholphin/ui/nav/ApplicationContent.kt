@@ -47,6 +47,7 @@ class ApplicationContentViewModel
             com.github.damontecres.wholphin.services.ServerAccess.baseUrl = api.baseUrl
             com.github.damontecres.wholphin.services.ServerAccess.token = api.accessToken
             viewModelScope.launchIO { ImdbVotesStore.load(api.baseUrl, api.accessToken) }
+            viewModelScope.launchIO { com.github.damontecres.wholphin.services.StreamingStore.loadLibrary() }
         }
 
         fun clearBackdrop() {

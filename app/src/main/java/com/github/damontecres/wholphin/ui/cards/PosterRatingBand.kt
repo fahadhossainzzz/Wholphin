@@ -47,7 +47,7 @@ fun PosterRatingBand(
     val stars = dto.communityRating?.takeIf { it > 0f }
     val tomatoes = dto.criticRating?.takeIf { it >= 0f }
     if (stars == null && tomatoes == null) return
-    val votes = LocalImdbVotes.current.forItem(dto.id)?.votes
+    val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.services.StreamingStore.votes(dto.id)
     val style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
     val showVotes = votes != null && maxWidth >= 112.dp

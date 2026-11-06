@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -189,6 +190,23 @@ fun BannerCard(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = if (playPercent > 0 && playPercent < 100) Cards.playedPercentHeight else 0.dp),
             )
+            // NoBars: Netflix Top 10 rank, or ✓ for a streaming title you already have
+            com.github.damontecres.wholphin.services.StreamingStore.badge(item?.id)?.let { badge ->
+                Text(
+                    text = badge,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                if (badge == "✓") Color(0xFF2E7D32) else Color(0xFFE50914),
+                                androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                            ).padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
             if (playPercent > 0 && playPercent < 100) {
                 Box(
                     modifier =

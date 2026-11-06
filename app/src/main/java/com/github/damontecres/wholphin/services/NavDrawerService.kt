@@ -197,6 +197,8 @@ class NavDrawerService
                     add(NavDrawerItem.Favorites)
                     add(NavDrawerItem.Years)
                     add(NavDrawerItem.Genres)
+                    add(NavDrawerItem.Netflix)
+                    add(NavDrawerItem.Prime)
                     if (discoverActive) add(NavDrawerItem.Discover)
                 }
             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)

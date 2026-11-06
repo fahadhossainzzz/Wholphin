@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,25 +25,21 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.services.StreamingStore
 import com.github.damontecres.wholphin.services.WatchProviders
-import org.jellyfin.sdk.model.api.BaseItemKind
 
 /**
- * NoBars: "Also on  [N] [prime]  (India)" under a film's or show's details. Each logo opens that
- * service's app on the TV. Nothing is shown when the title isn't on any streaming service.
+ * NoBars: "Also on  [N] [prime]" under a film's or show's details (subscription titles only, from the
+ * daily list). Each logo opens that service's app. Nothing is shown when it's on neither.
  */
 @Composable
 fun WatchProvidersLine(
     item: BaseItem,
     modifier: Modifier = Modifier,
 ) {
-    val tv = item.type == BaseItemKind.SERIES
-    if (item.type != BaseItemKind.MOVIE && !tv) return
-    val tmdbId = item.data.providerIds?.get("Tmdb") ?: return
-    val providers by produceState(emptyList<WatchProviders.Provider>(), tmdbId) {
-        value = WatchProviders.forTmdb(tmdbId, tv)
-    }
-    if (providers.isEmpty()) return
+    val library by StreamingStore.library.collectAsState()
+    val services = library[item.id.toString().replace("-", "")].orEmpty()
+    if (services.isEmpty()) return
     val context = LocalContext.current
     Row(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -55,9 +51,10 @@ fun WatchProvidersLine(
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
         )
-        providers.forEach { provider ->
+        services.forEach { service ->
+            val name = StreamingStore.displayName(service)
             Surface(
-                onClick = { WatchProviders.open(context, provider, item.name ?: "") },
+                onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), item.name ?: "") },
                 shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
                 colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White),
                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1.15f),
@@ -72,18 +69,13 @@ fun WatchProvidersLine(
                             .background(Color.White.copy(alpha = 0.1f)),
                 ) {
                     AsyncImage(
-                        model = provider.logoUrl,
-                        contentDescription = provider.name,
+                        model = StreamingStore.logos[service],
+                        contentDescription = name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
         }
-        Text(
-            text = "(${WatchProviders.REGION_NAME})",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-        )
     }
 }

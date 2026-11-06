@@ -153,6 +153,12 @@ sealed class Destination(
     @Serializable
     data object BrowseGenres : Destination(false)
 
+    /** NoBars: the Netflix or Prime Video page */
+    @Serializable
+    data class Streaming(
+        val service: String,
+    ) : Destination(false)
+
     @Serializable
     data object Discover : Destination(false)
 

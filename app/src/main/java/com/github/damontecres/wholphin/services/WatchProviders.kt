@@ -7,13 +7,11 @@ import android.net.Uri
 import android.widget.Toast
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import timber.log.Timber
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 /** NoBars: how to reach this Jellyfin server from outside the SDK (set once the user is signed in). */
 object ServerAccess {
@@ -44,76 +42,13 @@ internal fun httpGet(
     }
 }
 
-/**
- * NoBars: which streaming services carry a title ("where to watch" data from TMDB / JustWatch).
- * TMDB has no Bangladesh data, so India's catalogue is used. The TMDB key lives in Jellyfin's
- * per-user settings, never in the app's public code.
- */
+/** NoBars: hands a title over to the Netflix or Prime Video app on the TV. */
 object WatchProviders {
-    const val REGION = "IN"
-    const val REGION_NAME = "India"
-
     data class Provider(
         val id: Int,
         val name: String,
         val logoUrl: String?,
     )
-
-    private val cache = ConcurrentHashMap<String, List<Provider>>()
-
-    @Volatile private var key: String? = null
-
-    @Volatile private var keyCheckedAt = 0L
-
-    private fun tmdbKey(): String? {
-        key?.let { return it }
-        if (System.currentTimeMillis() - keyCheckedAt < 10 * 60_000) return null
-        keyCheckedAt = System.currentTimeMillis()
-        val user = ServerAccess.userId ?: return null
-        val json = ServerAccess.get("/DisplayPreferences/nobars?userId=$user&client=nobars") ?: return null
-        key =
-            JSONObject(json)
-                .optJSONObject("CustomPrefs")
-                ?.optString("tmdbKey")
-                ?.takeIf { it.isNotBlank() }
-        return key
-    }
-
-    suspend fun forTmdb(
-        tmdbId: String,
-        tv: Boolean,
-    ): List<Provider> {
-        val cacheKey = (if (tv) "tv" else "movie") + tmdbId
-        cache[cacheKey]?.let { return it }
-        return withContext(WholphinDispatchers.IO) {
-            try {
-                val k = tmdbKey() ?: return@withContext emptyList()
-                val json =
-                    httpGet("https://api.themoviedb.org/3/${if (tv) "tv" else "movie"}/$tmdbId/watch/providers?api_key=$k")
-                        ?: return@withContext emptyList()
-                val region = JSONObject(json).optJSONObject("results")?.optJSONObject(REGION)
-                val providers = LinkedHashMap<Int, Provider>()
-                // Subscription first, then free / with ads; renting and buying is left out
-                for (kind in listOf("flatrate", "free", "ads")) {
-                    val arr = region?.optJSONArray(kind) ?: continue
-                    for (i in 0 until arr.length()) {
-                        val o = arr.getJSONObject(i)
-                        val id = o.optInt("provider_id")
-                        val name = o.optString("provider_name")
-                        // "Netflix Standard with Ads" and the like duplicate the main service
-                        if (name.contains("with Ads", ignoreCase = true) && providers.values.any { name.startsWith(it.name) }) continue
-                        providers.getOrPut(id) {
-                            Provider(id, name, o.optString("logo_path").takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/w92$it" })
-                        }
-                    }
-                }
-                providers.values.take(6).also { cache[cacheKey] = it }
-            } catch (e: Exception) {
-                Timber.w(e, "NoBars: where-to-watch lookup failed")
-                emptyList()
-            }
-        }
-    }
 
     /** Android TV app packages for the services we can hand over to. */
     private fun packagesFor(name: String): List<String> {

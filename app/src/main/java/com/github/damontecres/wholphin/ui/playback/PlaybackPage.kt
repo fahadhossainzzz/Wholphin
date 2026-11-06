@@ -2,7 +2,6 @@ package com.github.damontecres.wholphin.ui.playback
 
 import com.github.damontecres.wholphin.R
 import androidx.compose.ui.res.stringResource
-import org.jellyfin.sdk.model.api.BaseItemKind
 import com.github.damontecres.wholphin.ui.playback.overlay.QuickSetting
 import com.github.damontecres.wholphin.ui.playback.overlay.PlayerPeopleViewModel
 import com.github.damontecres.wholphin.ui.playback.overlay.PersonPanel
@@ -867,7 +866,8 @@ fun PlaybackPageContent(
                 navigationManager.navigateTo(Destination.Playback(film))
             },
             onOpenItem = { restartHereAfter(it.destination()) },
-            onOpenProfile = { restartHereAfter(Destination.MediaItem(it.id, BaseItemKind.PERSON)) },
+            onOpenProfile = { peopleViewModel.openProfile() },
+            onToggleBio = peopleViewModel::toggleBio,
         )
     }
 }

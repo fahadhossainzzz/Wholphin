@@ -98,6 +98,19 @@ data class PersonPanelState(
     val selected: BaseItem? = null,
     /** The film to highlight when coming back to the list from its summary. */
     val focusId: UUID? = null,
+    /** NoBars: the profile (bio, dates, guest episodes) shown inside the panel instead of leaving the film. */
+    val profileOpen: Boolean = false,
+    val profileLoading: Boolean = false,
+    val profile: PersonProfile? = null,
+    val episodes: List<BaseItem> = emptyList(),
+    val bioExpanded: Boolean = false,
+)
+
+data class PersonProfile(
+    val overview: String?,
+    val born: java.time.LocalDate?,
+    val died: java.time.LocalDate?,
+    val place: String?,
 )
 
 /**
@@ -199,11 +212,69 @@ class PlayerPeopleViewModel
 
         fun select(item: BaseItem?) = _panel.update { it?.copy(selected = item) }
 
-        /** Back, one step: a film's summary -> the list -> the Cast & Crew row. */
+        /** NoBars: the full profile, inside the panel. Bio and dates come from one small request. */
+        fun openProfile() {
+            val current = _panel.value ?: return
+            _panel.value = current.copy(profileOpen = true, selected = null, focusId = null, bioExpanded = false)
+            if (current.profile != null || current.profileLoading) return
+            val personId = current.person.id
+            _panel.update { it?.copy(profileLoading = true) }
+            viewModelScope.launchIO {
+                val info =
+                    try {
+                        val p = api.userLibraryApi.getItem(personId).content
+                        PersonProfile(
+                            overview = p.overview?.trim()?.takeIf { it.isNotEmpty() },
+                            born = p.premiereDate?.toLocalDate(),
+                            died = p.endDate?.toLocalDate(),
+                            place = p.productionLocations?.firstOrNull(),
+                        )
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars: could not load profile")
+                        PersonProfile(null, null, null, null)
+                    }
+                val episodes =
+                    try {
+                        api.itemsApi
+                            .getItems(
+                                userId = serverRepository.currentUser?.id,
+                                personIds = listOf(personId),
+                                includeItemTypes = listOf(BaseItemKind.EPISODE),
+                                recursive = true,
+                                sortBy = listOf(ItemSortBy.PREMIERE_DATE),
+                                sortOrder = listOf(SortOrder.DESCENDING),
+                                fields = listOf(ItemFields.OVERVIEW),
+                                enableImageTypes = listOf(ImageType.PRIMARY),
+                                imageTypeLimit = 1,
+                                limit = 30,
+                            ).content.items
+                            .filter { it.id != playingId }
+                            .map { BaseItem(it, false) }
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars: could not load episodes")
+                        emptyList()
+                    }
+                _panel.update {
+                    if (it != null && it.person.id == personId) {
+                        it.copy(profile = info, episodes = episodes, profileLoading = false)
+                    } else {
+                        it
+                    }
+                }
+            }
+        }
+
+        fun toggleBio() = _panel.update { it?.copy(bioExpanded = !it.bioExpanded) }
+
+        /** Back, one step: summary -> full bio -> profile -> the list -> the Cast & Crew row. */
         fun back() {
             val current = _panel.value ?: return
             if (current.selected != null) {
                 _panel.value = current.copy(selected = null, focusId = current.selected.id)
+            } else if (current.profileOpen && current.bioExpanded) {
+                _panel.value = current.copy(bioExpanded = false, focusId = null)
+            } else if (current.profileOpen) {
+                _panel.value = current.copy(profileOpen = false, focusId = current.person.id)
             } else {
                 _panel.value = null
                 _returnTo.value = current.person.id
@@ -217,6 +288,8 @@ class PlayerPeopleViewModel
         fun thumbUrl(item: BaseItem): String? =
             item.data.imageTags?.get(ImageType.PRIMARY)?.let {
                 api.imageApi.getItemImageUrl(item.id, ImageType.PRIMARY, tag = it, maxHeight = THUMB_HEIGHT)
+            } ?: item.data.seriesPrimaryImageTag?.let { tag ->
+                item.data.seriesId?.let { api.imageApi.getItemImageUrl(it, ImageType.PRIMARY, tag = tag, maxHeight = THUMB_HEIGHT) }
             }
     }
 
@@ -284,8 +357,8 @@ fun PeopleRowOverlay(
 }
 
 /**
- * NoBars: a see-through panel on the right with the person's films in the library. The film keeps
- * playing behind it; Back closes it.
+ * NoBars: a see-through panel on the right with the person's films in the library, and their full
+ * profile (bio, dates, guest episodes). The film keeps playing behind it; Back goes one step at a time.
  */
 @Composable
 fun PersonPanel(
@@ -296,6 +369,7 @@ fun PersonPanel(
     onPlay: (BaseItem) -> Unit,
     onOpenItem: (BaseItem) -> Unit,
     onOpenProfile: (Person) -> Unit,
+    onToggleBio: () -> Unit = {},
 ) {
     Dialog(
         onDismissRequest = onBack,
@@ -310,11 +384,12 @@ fun PersonPanel(
                 it.setDimAmount(0.25f)
             }
         }
+        val profileMode = state.profileOpen && state.selected == null
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier =
                 Modifier
-                    .width(440.dp)
+                    .width(if (state.profileOpen) 500.dp else 440.dp)
                     .fillMaxHeight()
                     .onPreviewKeyEvent {
                         if (it.key == Key.Back || it.key == Key.ButtonB) {
@@ -337,11 +412,11 @@ fun PersonPanel(
                     contentScale = ContentScale.Crop,
                     modifier =
                         Modifier
-                            .size(72.dp)
+                            .size(if (profileMode) 104.dp else 72.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                 )
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = state.person.name.orEmpty(),
                         style = MaterialTheme.typography.titleLarge,
@@ -352,13 +427,18 @@ fun PersonPanel(
                     state.person.role?.let {
                         Text(text = it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f), maxLines = 2)
                     }
+                    if (profileMode) {
+                        state.profile?.let { lifeLine(it) }?.let {
+                            Text(text = it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2)
+                        }
+                    }
                 }
             }
             val selected = state.selected
-            if (selected != null) {
-                FilmSummary(selected, thumbUrl, onPlay, onOpenItem, onBack)
-            } else {
-                FilmList(state, thumbUrl, onSelect, onOpenProfile)
+            when {
+                selected != null -> FilmSummary(selected, thumbUrl, onPlay, onOpenItem, onBack)
+                state.profileOpen -> ProfileView(state, thumbUrl, onSelect, onToggleBio)
+                else -> FilmList(state, thumbUrl, onSelect, onOpenProfile)
             }
         }
     }
@@ -372,8 +452,10 @@ private fun FilmList(
     onOpenProfile: (Person) -> Unit,
 ) {
     val first = remember { FocusRequester() }
+    val onButton = state.focusId == state.person.id
     val focusIndex = remember(state.loading) { state.items.indexOfFirst { it.id == state.focusId }.coerceAtLeast(0) }
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState(focusIndex)
+    // +1: the Full profile button sits above the films
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(if (onButton) 0 else focusIndex + 1)
     LaunchedEffect(state.loading) { if (!state.loading) first.tryRequestFocus() }
     Text(
         text =
@@ -391,32 +473,223 @@ private fun FilmList(
         verticalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        itemsIndexed(state.items, key = { _, it -> it.id }) { index, item ->
-            ListItem(
-                selected = false,
-                onClick = { onSelect(item) },
-                leadingContent = { Thumb(thumbUrl(item)) },
-                headlineContent = {
-                    Text(item.name.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                supportingContent = { Text(facts(item), fontSize = 12.sp, maxLines = 1) },
-                modifier = Modifier.ifElse(index == focusIndex, Modifier.focusRequester(first)),
-            )
-        }
         if (!state.loading) {
-            item {
+            item(key = "profile") {
                 Button(
                     onClick = { onOpenProfile(state.person) },
                     modifier =
                         Modifier
-                            .padding(top = 12.dp)
-                            .ifElse(state.items.isEmpty(), Modifier.focusRequester(first)),
+                            .padding(bottom = 8.dp)
+                            .ifElse(onButton || state.items.isEmpty(), Modifier.focusRequester(first)),
                 ) {
-                    Text("Open full profile")
+                    Text("Full profile")
                 }
             }
         }
+        itemsIndexed(state.items, key = { _, it -> it.id }) { index, item ->
+            FilmRow(item, thumbUrl, onSelect, Modifier.ifElse(!onButton && index == focusIndex, Modifier.focusRequester(first)))
+        }
     }
+}
+
+@Composable
+private fun FilmRow(
+    item: BaseItem,
+    thumbUrl: (BaseItem) -> String?,
+    onSelect: (BaseItem?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ListItem(
+        selected = false,
+        onClick = { onSelect(item) },
+        leadingContent = { Thumb(thumbUrl(item)) },
+        headlineContent = {
+            Text(title(item), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = { Text(facts(item), fontSize = 12.sp, maxLines = 1) },
+        modifier = modifier,
+    )
+}
+
+private sealed interface ProfileRow {
+    val key: Any
+
+    data class Header(
+        val text: String,
+    ) : ProfileRow {
+        override val key: Any get() = "h:$text"
+    }
+
+    data class Bio(
+        val index: Int,
+        val text: String,
+        val short: Boolean,
+    ) : ProfileRow {
+        override val key: Any get() = "bio:$index"
+    }
+
+    data class Film(
+        val item: BaseItem,
+    ) : ProfileRow {
+        override val key: Any get() = item.id
+    }
+
+    data class Note(
+        val text: String,
+    ) : ProfileRow {
+        override val key: Any get() = "n:$text"
+    }
+}
+
+/** NoBars: the person's profile inside the panel: bio, then films, shows and guest episodes. */
+@Composable
+private fun ProfileView(
+    state: PersonPanelState,
+    thumbUrl: (BaseItem) -> String?,
+    onSelect: (BaseItem?) -> Unit,
+    onToggleBio: () -> Unit,
+) {
+    val rows =
+        remember(state.profile, state.items, state.episodes, state.bioExpanded, state.profileLoading) {
+            buildList {
+                val bio = state.profile?.overview
+                when {
+                    state.profileLoading -> add(ProfileRow.Note("Loading profile…"))
+                    bio == null -> add(ProfileRow.Note("No biography on the server"))
+                    state.bioExpanded -> bioChunks(bio).forEachIndexed { i, t -> add(ProfileRow.Bio(i, t, false)) }
+                    else -> add(ProfileRow.Bio(0, bio, true))
+                }
+                val films = state.items.filter { it.type == BaseItemKind.MOVIE }
+                val shows = state.items.filter { it.type == BaseItemKind.SERIES }
+                if (films.isNotEmpty()) {
+                    add(ProfileRow.Header("Films (${films.size})"))
+                    films.forEach { add(ProfileRow.Film(it)) }
+                }
+                if (shows.isNotEmpty()) {
+                    add(ProfileRow.Header("Shows (${shows.size})"))
+                    shows.forEach { add(ProfileRow.Film(it)) }
+                }
+                if (state.episodes.isNotEmpty()) {
+                    add(ProfileRow.Header("Guest episodes (${state.episodes.size})"))
+                    state.episodes.forEach { add(ProfileRow.Film(it)) }
+                }
+            }
+        }
+    val target =
+        remember(rows, state.focusId) {
+            rows.indexOfFirst { it is ProfileRow.Film && it.item.id == state.focusId }.takeIf { it >= 0 }
+                ?: rows.indexOfFirst { it is ProfileRow.Bio || it is ProfileRow.Film }
+        }
+    val first = remember { FocusRequester() }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(target.coerceAtLeast(0))
+    LaunchedEffect(target, state.bioExpanded) {
+        if (target >= 0) {
+            listState.scrollToItem(target)
+            first.tryRequestFocus()
+        }
+    }
+    LazyColumn(
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        itemsIndexed(rows, key = { _, r -> r.key }) { index, row ->
+            val focusMod = Modifier.ifElse(index == target, Modifier.focusRequester(first))
+            when (row) {
+                is ProfileRow.Header ->
+                    Text(
+                        text = row.text,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
+                    )
+                is ProfileRow.Note ->
+                    Text(text = row.text, fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f))
+                is ProfileRow.Bio ->
+                    androidx.tv.material3.Surface(
+                        onClick = onToggleBio,
+                        colors =
+                            androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                                containerColor = Color.Transparent,
+                                focusedContainerColor = Color.White.copy(alpha = 0.10f),
+                                contentColor = Color.White.copy(alpha = 0.88f),
+                                focusedContentColor = Color.White,
+                            ),
+                        scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                        modifier = focusMod.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Text(
+                                text = row.text,
+                                fontSize = 14.sp,
+                                maxLines = if (row.short) 8 else Int.MAX_VALUE,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (row.short) {
+                                Text("More ▾", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+                is ProfileRow.Film -> FilmRow(row.item, thumbUrl, onSelect, focusMod)
+            }
+        }
+    }
+}
+
+/** NoBars: the whole bio in focusable pieces of a few sentences, so the remote can scroll through it. */
+private fun bioChunks(text: String): List<String> {
+    val out = mutableListOf<String>()
+    text.split(Regex("\\n\\s*\\n|\\n")).map { it.trim() }.filter { it.isNotEmpty() }.forEach { para ->
+        val sentences = para.split(Regex("(?<=[.!?])\\s+"))
+        val sb = StringBuilder()
+        for (s in sentences) {
+            if (sb.isNotEmpty() && sb.length + s.length > 360) {
+                out += sb.toString()
+                sb.clear()
+            }
+            if (sb.isNotEmpty()) sb.append(' ')
+            sb.append(s)
+        }
+        if (sb.isNotEmpty()) out += sb.toString()
+    }
+    return out
+}
+
+private val DAY = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
+
+/** NoBars: "Born 12 Mar 1975 (51) · London", or the years and age at death. */
+private fun lifeLine(p: PersonProfile): String? {
+    val parts = mutableListOf<String>()
+    val born = p.born
+    when {
+        born != null && p.died != null -> {
+            val age = java.time.Period.between(born, p.died).years
+            parts += "${born.year} – ${p.died.year} (aged $age)"
+        }
+        born != null -> {
+            val age = java.time.Period.between(born, java.time.LocalDate.now()).years
+            parts += "Born ${born.format(DAY)} ($age)"
+        }
+        p.died != null -> parts += "Died ${p.died.format(DAY)}"
+    }
+    p.place?.takeIf { it.isNotBlank() }?.let { parts += it }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString("  ·  ")
+}
+
+private fun title(item: BaseItem): String =
+    if (item.type == BaseItemKind.EPISODE) {
+        item.data.seriesName ?: item.name.orEmpty()
+    } else {
+        item.name.orEmpty()
+    }
+
+private fun episodeLabel(item: BaseItem): String? {
+    if (item.type != BaseItemKind.EPISODE) return null
+    val s = item.data.parentIndexNumber
+    val e = item.data.indexNumber
+    val code = if (s != null && e != null) "S$s·E$e" else null
+    return listOfNotNull(code, item.name).joinToString(" ").takeIf { it.isNotBlank() }
 }
 
 @Composable
@@ -432,7 +705,10 @@ private fun FilmSummary(
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Thumb(thumbUrl(item), large = true)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(item.name.orEmpty(), style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 3)
+            Text(title(item), style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 3)
+            episodeLabel(item)?.let {
+                Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.9f), maxLines = 2)
+            }
             Text(facts(item, withRuntime = true), fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f))
         }
     }
@@ -446,7 +722,7 @@ private fun FilmSummary(
         )
     }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (item.type == BaseItemKind.MOVIE) {
+        if (item.type == BaseItemKind.MOVIE || item.type == BaseItemKind.EPISODE) {
             Button(onClick = { onPlay(item) }, modifier = Modifier.focusRequester(first)) {
                 Text(if (item.resumeMs > 0) "Resume" else "Play")
             }
@@ -487,6 +763,7 @@ private fun facts(
     withRuntime: Boolean = false,
 ): String =
     buildList {
+        if (!withRuntime) episodeLabel(item)?.let { add(it) }
         item.data.productionYear?.let { add(it.toString()) }
         if (item.type == BaseItemKind.SERIES) add("TV show")
         item.data.communityRating?.takeIf { it > 0f }?.let {

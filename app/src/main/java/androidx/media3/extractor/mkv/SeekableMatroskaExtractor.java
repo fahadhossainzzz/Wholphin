@@ -85,9 +85,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.checkerframework.checker.nullness.qual.EnsuresNonNull;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
-import org.checkerframework.checker.nullness.qual.RequiresNonNull;
 
 /** Extracts data from the Matroska and WebM container formats. */
 @UnstableApi
@@ -479,7 +476,7 @@ public class SeekableMatroskaExtractor implements Extractor {
   private final ParsableByteArray encryptionInitializationVector;
   private final ParsableByteArray encryptionSubsampleData;
   private final ParsableByteArray supplementalData;
-  private @MonotonicNonNull ByteBuffer encryptionSubsampleDataBuffer;
+  private ByteBuffer encryptionSubsampleDataBuffer;
 
   private long segmentContentSize;
   private long segmentContentPosition = C.INDEX_UNSET;
@@ -559,7 +556,7 @@ public class SeekableMatroskaExtractor implements Extractor {
   private boolean sampleInitializationVectorRead;
 
   // Extractor outputs.
-  private @MonotonicNonNull ExtractorOutput extractorOutput;
+  private ExtractorOutput extractorOutput;
 
   /**
    * @deprecated Use {@link #SeekableMatroskaExtractor(SubtitleParser.Factory)} instead.
@@ -1755,7 +1752,6 @@ public class SeekableMatroskaExtractor implements Extractor {
     }
   }
 
-  @EnsuresNonNull("currentChapter")
   private void assertInEditionEntry(int id) throws ParserException {
     if (currentChapter == null) {
       throw ParserException.createForMalformedContainer(
@@ -1763,7 +1759,6 @@ public class SeekableMatroskaExtractor implements Extractor {
     }
   }
 
-  @EnsuresNonNull("currentTrack")
   private void assertInTrackEntry(int id) throws ParserException {
     if (currentTrack == null) {
       throw ParserException.createForMalformedContainer(
@@ -1798,7 +1793,6 @@ public class SeekableMatroskaExtractor implements Extractor {
     return currentTrack;
   }
 
-  @RequiresNonNull("#1.output")
   private void commitSampleToOutput(
       Track track, long timeUs, @C.BufferFlags int flags, int size, int offset) {
     if (track.trueHdSampleRechunker != null) {
@@ -1874,7 +1868,6 @@ public class SeekableMatroskaExtractor implements Extractor {
    * @return The final size of the written sample.
    * @throws IOException If an error occurs reading from the input.
    */
-  @RequiresNonNull("#2.output")
   private int writeSampleData(ExtractorInput input, Track track, int size, boolean isBlockGroup)
       throws IOException {
     if (CODEC_ID_SUBRIP.equals(track.codecId)) {
@@ -2314,7 +2307,6 @@ public class SeekableMatroskaExtractor implements Extractor {
     }
   }
 
-  @EnsuresNonNull("extractorOutput")
   private void assertInitialized() {
     checkNotNull(extractorOutput);
   }
@@ -2489,8 +2481,8 @@ public class SeekableMatroskaExtractor implements Extractor {
     public long timeEndNs;
     public boolean flagHidden;
     public long trackUid;
-    public @MonotonicNonNull String chapString;
-    public @MonotonicNonNull String chapLanguage;
+    public String chapString;
+    public String chapLanguage;
     @Nullable public String currentDisplayString;
     @Nullable public String currentDisplayLanguage;
 
@@ -2514,8 +2506,8 @@ public class SeekableMatroskaExtractor implements Extractor {
 
     // Common elements.
     public boolean isWebm;
-    public @MonotonicNonNull String name;
-    public @MonotonicNonNull String codecId;
+    public String name;
+    public String codecId;
     public int number;
     public long uid;
     public @C.TrackType int type;
@@ -2523,10 +2515,10 @@ public class SeekableMatroskaExtractor implements Extractor {
     public int maxBlockAdditionId;
     private int blockAddIdType;
     public boolean hasContentEncryption;
-    public byte @MonotonicNonNull [] sampleStrippedBytes;
-    public TrackOutput.@MonotonicNonNull CryptoData cryptoData;
-    public byte @MonotonicNonNull [] codecPrivate;
-    public @MonotonicNonNull DrmInitData drmInitData;
+    public byte[] sampleStrippedBytes;
+    public TrackOutput.CryptoData cryptoData;
+    public byte[] codecPrivate;
+    public DrmInitData drmInitData;
 
     // Video elements.
     public int width = Format.NO_VALUE;
@@ -2539,7 +2531,7 @@ public class SeekableMatroskaExtractor implements Extractor {
     public float projectionPoseYaw = 0f;
     public float projectionPosePitch = 0f;
     public float projectionPoseRoll = 0f;
-    public byte @MonotonicNonNull [] projectionData = null;
+    public byte[] projectionData = null;
     public @C.StereoMode int stereoMode = Format.NO_VALUE;
     public @C.ColorSpace int containerColorSpace = Format.NO_VALUE;
     public @C.ColorTransfer int containerColorTransfer = Format.NO_VALUE;
@@ -2556,7 +2548,7 @@ public class SeekableMatroskaExtractor implements Extractor {
     public float whitePointChromaticityY = Format.NO_VALUE;
     public float maxMasteringLuminance = Format.NO_VALUE;
     public float minMasteringLuminance = Format.NO_VALUE;
-    public byte @MonotonicNonNull [] dolbyVisionConfigBytes;
+    public byte[] dolbyVisionConfigBytes;
 
     // Audio elements. Initially set to their default values.
     public int channelCount = 1;
@@ -2565,7 +2557,7 @@ public class SeekableMatroskaExtractor implements Extractor {
     public int sampleRate = 8000;
     public long codecDelayNs = 0;
     public long seekPreRollNs = 0;
-    public @MonotonicNonNull TrueHdSampleRechunker trueHdSampleRechunker;
+    public TrueHdSampleRechunker trueHdSampleRechunker;
     public boolean waitingForDtsAnalysis = false;
     private boolean chaptersMetadataAdded;
     private boolean thumbnailMetadataAdded;
@@ -2578,12 +2570,11 @@ public class SeekableMatroskaExtractor implements Extractor {
     private String language = "eng";
 
     // Set when the output is initialized. nalUnitLengthFieldLength is only set for H264/H265.
-    public @MonotonicNonNull TrackOutput output;
-    public @MonotonicNonNull Format format;
+    public TrackOutput output;
+    public Format format;
     public int nalUnitLengthFieldLength;
 
     /** Builds the {@link Format} for the track. */
-    @RequiresNonNull("codecId")
     public void initializeFormat(int trackId) throws ParserException {
       String mimeType;
       int maxInputSize = Format.NO_VALUE;
@@ -2956,7 +2947,6 @@ public class SeekableMatroskaExtractor implements Extractor {
     }
 
     /** Forces any pending sample metadata to be flushed to the output. */
-    @RequiresNonNull("output")
     public void outputPendingSampleMetadata() {
       if (trueHdSampleRechunker != null) {
         trueHdSampleRechunker.outputPendingSampleMetadata(output, cryptoData);
@@ -3280,12 +3270,10 @@ public class SeekableMatroskaExtractor implements Extractor {
      * containing tracks with output with the nullness checker. This method is used to check that
      * fact at runtime.
      */
-    @EnsuresNonNull("output")
     private void assertOutputInitialized() {
       checkNotNull(output);
     }
 
-    @EnsuresNonNull("codecPrivate")
     private byte[] getCodecPrivate(String codecId) throws ParserException {
       if (codecPrivate == null) {
         throw ParserException.createForMalformedContainer(

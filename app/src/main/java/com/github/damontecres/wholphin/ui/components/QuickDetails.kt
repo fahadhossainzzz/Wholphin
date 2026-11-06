@@ -53,7 +53,9 @@ fun QuickDetails(
             }
             if (DisplayToggle.COMMUNITY_RATING in enabled) {
                 // NoBars: "7.8★ (1,234,567 votes)"
-                val votes = LocalImdbVotes.current.forItem(details.itemId)?.votes
+                val votes =
+                    LocalImdbVotes.current.forItem(details.itemId)?.votes
+                        ?: com.github.damontecres.wholphin.services.StreamingStore.votes(details.itemId)
                 val rating =
                     details.communityRating?.let {
                         if (votes != null) {

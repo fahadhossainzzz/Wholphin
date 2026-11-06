@@ -37,6 +37,10 @@ object StreamingStore {
         val imdbVotes: Int?,
         val libraryId: UUID?,
         val rank: Int?,
+        /** Rotten Tomatoes %, from OMDb */
+        val rt: Int? = null,
+        /** e.g. "#2 worldwide this week · 28.4M views" */
+        val note: String? = null,
     )
 
     data class Row(
@@ -121,6 +125,8 @@ object StreamingStore {
             imdbVotes = o.optInt("imdbVotes").takeIf { it > 0 },
             libraryId = o.optString("libraryId").takeIf { it.length == 32 }?.let(::uuidFromHex),
             rank = o.optInt("rank").takeIf { it > 0 },
+            rt = if (o.has("rt")) o.optInt("rt") else null,
+            note = o.optString("note").takeIf { it.isNotBlank() && it != "null" },
         )
 
     /** A poster card for a catalogue title: a made-up item that the normal row cards can show. */
@@ -134,6 +140,7 @@ object StreamingStore {
                 name = e.title,
                 productionYear = e.year,
                 communityRating = e.imdbRating,
+                criticRating = e.rt?.toFloat(),
                 overview = e.overview,
                 genres = e.genres,
                 runTimeTicks = e.runtime?.let { it * 600_000_000L },

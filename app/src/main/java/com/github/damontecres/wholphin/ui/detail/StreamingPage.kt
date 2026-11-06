@@ -197,15 +197,18 @@ private fun StreamingPanel(
                             if (entry.series) entry.seasons?.let { "$it season${if (it == 1) "" else "s"}" } else entry.runtime?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
                         ).joinToString("  ·  ")
                     if (facts.isNotEmpty()) Text(facts, fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
-                    entry.imdbRating?.let { r ->
-                        Text(
-                            "★ " + String.format(Locale.US, "%.1f", r) + (entry.imdbVotes?.let { " (${com.github.damontecres.wholphin.services.ImdbVotesStore.short(it)} votes)" } ?: ""),
-                            fontSize = 15.sp,
-                            color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        entry.imdbRating?.let { r ->
+                            Text(
+                                "★ " + String.format(Locale.US, "%.1f", r) + (entry.imdbVotes?.let { " (${com.github.damontecres.wholphin.services.ImdbVotesStore.short(it)} votes)" } ?: ""),
+                                fontSize = 15.sp,
+                                color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
+                            )
+                        }
+                        entry.rt?.let { Text("🍅 $it%", fontSize = 15.sp, color = Color.White) }
                     }
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
-                    entry.rank?.let { Text("#$it on $name in Bangladesh this week", fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f)) }
+                    entry.note?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f)) }
                 }
             }
             Text(entry.overview, fontSize = 14.sp, color = Color.White.copy(alpha = 0.88f), maxLines = 10, overflow = TextOverflow.Ellipsis)

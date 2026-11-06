@@ -44,6 +44,8 @@ class ApplicationContentViewModel
     ) : ViewModel() {
         // NoBars: IMDb vote counts for the whole library, fetched once per session (about 30 KB)
         fun loadImdbVotes() {
+            com.github.damontecres.wholphin.services.ServerAccess.baseUrl = api.baseUrl
+            com.github.damontecres.wholphin.services.ServerAccess.token = api.accessToken
             viewModelScope.launchIO { ImdbVotesStore.load(api.baseUrl, api.accessToken) }
         }
 
@@ -68,7 +70,10 @@ fun ApplicationContent(
     viewModel: ApplicationContentViewModel = hiltViewModel(),
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
-    LaunchedEffect(server.id, user.id) { viewModel.loadImdbVotes() }
+    LaunchedEffect(server.id, user.id) {
+        com.github.damontecres.wholphin.services.ServerAccess.userId = user.id
+        viewModel.loadImdbVotes()
+    }
     val imdbVotes by ImdbVotesStore.votes.collectAsState()
     CompositionLocalProvider(LocalImdbVotes provides imdbVotes) {
     Box(

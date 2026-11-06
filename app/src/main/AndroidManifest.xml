@@ -38,6 +38,20 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="video/*" />
         </intent>
+        <!-- NoBars: streaming apps "Also on" can open -->
+        <package android:name="com.netflix.ninja" />
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.amazon.amazonvideo.livingroom" />
+        <package android:name="com.amazon.avod.thirdpartyclient" />
+        <package android:name="in.startv.hotstar.dplus.tv" />
+        <package android:name="in.startv.hotstar" />
+        <package android:name="com.apple.atve.androidtv.appletv" />
+        <package android:name="com.google.android.youtube.tv" />
+        <package android:name="com.graymatrix.did" />
+        <package android:name="com.sonyliv" />
+        <package android:name="com.mubi" />
+        <package android:name="com.viewlift.hoichoi" />
+        <package android:name="com.crunchyroll.crunchyroid" />
     </queries>
 
     <application

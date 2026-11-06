@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail.series
 
+import com.github.damontecres.wholphin.ui.components.WatchProvidersLine
 import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -678,6 +679,7 @@ fun SeriesDetailsHeader(
                 null,
                 Modifier.padding(start = HeaderUtils.startPadding),
             )
+            WatchProvidersLine(series, Modifier.padding(start = HeaderUtils.startPadding))
             dto.studios?.let {
                 val studios = remember { series.studioNames }
                 GenreText(

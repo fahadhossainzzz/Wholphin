@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail.movie
 
+import com.github.damontecres.wholphin.ui.components.WatchProvidersLine
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,6 +69,7 @@ fun MovieDetailsHeader(
                 movie.timeRemainingOrRuntime,
                 Modifier.padding(start = HeaderUtils.startPadding),
             )
+            WatchProvidersLine(movie, Modifier.padding(start = HeaderUtils.startPadding))
 
             dto.genres?.letNotEmpty {
                 GenreText(it, Modifier.padding(start = HeaderUtils.startPadding))

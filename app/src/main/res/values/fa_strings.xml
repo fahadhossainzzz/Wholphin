@@ -35,6 +35,7 @@
     <string name="fa_house" translatable="false">&#xf015;</string>
     <string name="fa_closed_captioning" translatable="false">&#xf20a;</string>
     <string name="fa_tv" translatable="false">&#xf26c;</string>
+    <string name="fa_ticket" translatable="false">&#xf145;</string>
     <string name="fa_music" translatable="false">&#xf001;</string>
     <string name="fa_eye" translatable="false">&#xf06e;</string>
     <string name="fa_eye_slash" translatable="false">&#xf070;</string>

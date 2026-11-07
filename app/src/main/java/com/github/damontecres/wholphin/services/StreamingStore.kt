@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 object StreamingStore {
     const val NETFLIX = "netflix"
     const val PRIME = "prime"
+    const val CINEMA = "cinema"
 
     data class Entry(
         val tmdb: Int,
@@ -45,6 +46,16 @@ object StreamingStore {
         val gross: Long? = null,
         val budget: Long? = null,
         val grossToday: Long? = null,
+        /** Cinema page: "In cinemas since 24 Oct · Digital release 13 Dec" */
+        val date: String? = null,
+        /** Cinema page: date on the poster, e.g. "20 Nov" */
+        val badge: String? = null,
+        /** YouTube video key of the trailer */
+        val trailer: String? = null,
+        /** Top three cast */
+        val cast: String? = null,
+        /** Gross as published, e.g. "₹1,852.44 crore" */
+        val grossLocal: String? = null,
     )
 
     data class Row(
@@ -68,7 +79,19 @@ object StreamingStore {
     /** Catalogue entries by the made-up item id their poster cards use. */
     val entries = ConcurrentHashMap<UUID, Entry>()
 
-    fun displayName(service: String) = if (service == NETFLIX) "Netflix" else "Prime Video"
+    fun displayName(service: String) =
+        when (service) {
+            NETFLIX -> "Netflix"
+            CINEMA -> "Cinema"
+            else -> "Prime Video"
+        }
+
+    /** "movie:123" / "tv:456" (TMDB) -> Jellyfin item id, for everything in the library */
+    @Volatile var owned: Map<String, String> = emptyMap()
+        private set
+
+    /** The library copy of a catalogue title, if you have it (the daily list, or anything imported since). */
+    fun libraryId(e: Entry): UUID? = e.libraryId ?: owned["${if (e.series) "tv" else "movie"}:${e.tmdb}"]?.let(::uuidFromHex)
 
     suspend fun loadLibrary() =
         withContext(WholphinDispatchers.IO) {
@@ -80,6 +103,7 @@ object StreamingStore {
                 items.keys().forEach { k -> map[k] = items.optJSONArray(k)?.toStringList() ?: emptyList() }
                 _library.value = map
                 BoxOffice.load(json.optJSONObject("money"))
+                owned = json.optJSONObject("owned")?.toStringMap() ?: emptyMap()
                 Timber.i("NoBars: streaming library list loaded (%d titles)", map.size)
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: streaming library list unavailable")
@@ -135,7 +159,32 @@ object StreamingStore {
             gross = o.optLong("gross").takeIf { it > 0 },
             budget = o.optLong("budget").takeIf { it > 0 },
             grossToday = o.optLong("grossToday").takeIf { it > 0 },
+            date = o.str("date"),
+            badge = o.str("badge"),
+            trailer = o.str("trailer"),
+            cast = o.str("cast"),
+            grossLocal = o.str("grossLocal"),
         )
+
+    private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
+
+    /** For the "Want it" list: the fields needed to show the card again later. */
+    fun toJson(e: Entry): JSONObject =
+        JSONObject().apply {
+            put("tmdb", e.tmdb)
+            put("type", if (e.series) "series" else "movie")
+            put("title", e.title)
+            e.year?.let { put("year", it) }
+            e.poster?.let { put("poster", it) }
+            put("overview", e.overview)
+            e.date?.let { put("date", it) }
+            e.trailer?.let { put("trailer", it) }
+            e.cast?.let { put("cast", it) }
+            e.imdbRating?.let { put("imdbRating", it.toDouble()) }
+            e.imdbVotes?.let { put("imdbVotes", it) }
+        }
+
+    fun fromJson(o: JSONObject): Entry = parse(o)
 
     /**
      * A poster card for a catalogue title: a made-up item that the normal row cards can show. The id
@@ -168,8 +217,8 @@ object StreamingStore {
         val e = id?.let { entries[it] } ?: return null
         return when {
             e.rank != null -> "#${e.rank}"
-            e.libraryId != null -> "✓"
-            else -> null
+            libraryId(e) != null -> "✓"
+            else -> e.badge
         }
     }
 

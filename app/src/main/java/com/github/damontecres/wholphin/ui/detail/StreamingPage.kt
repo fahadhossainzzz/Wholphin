@@ -61,6 +61,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import org.jellyfin.sdk.model.api.BaseItemKind
 import java.util.Locale
 import javax.inject.Inject
+import com.github.damontecres.wholphin.ui.ifElse
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
 
 @HiltViewModel
 class StreamingViewModel
@@ -80,10 +83,11 @@ fun StreamingPage(
     modifier: Modifier = Modifier,
     viewModel: StreamingViewModel = hiltViewModel(),
 ) {
-    var rows by remember(service) { mutableStateOf<List<HomeRowLoadingState>?>(null) }
+    var loadedRows by remember(service) { mutableStateOf<List<HomeRowLoadingState>?>(null) }
     LaunchedEffect(service) {
+        if (service == StreamingStore.CINEMA) com.github.damontecres.wholphin.services.WantedStore.load()
         val loaded = StreamingStore.rows(service)
-        rows =
+        loadedRows =
             loaded.orEmpty().map { row ->
                 HomeRowLoadingState.Success(
                     title = StringStringProvider(row.title),
@@ -92,6 +96,24 @@ fun StreamingPage(
                 )
             }
     }
+    // NoBars: Cinema page opens with your "Want it" list (✓ once a film has arrived in the library)
+    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+    val rows =
+        remember(loadedRows, wanted, service) {
+            val base = loadedRows
+            if (base == null || service != StreamingStore.CINEMA || wanted.isEmpty()) {
+                base
+            } else {
+                val arrived = wanted.count { StreamingStore.libraryId(it) != null }
+                listOf(
+                    HomeRowLoadingState.Success(
+                        title = StringStringProvider("Your list · ${wanted.size}" + if (arrived > 0) " · $arrived arrived ✓" else ""),
+                        items = wanted.map { StreamingStore.toBaseItem(it, "wanted") },
+                        showViewMore = false,
+                    ),
+                ) + base
+            }
+        }
     var panel by remember { mutableStateOf<StreamingStore.Entry?>(null) }
     val current = rows
     when {
@@ -110,9 +132,10 @@ fun StreamingPage(
             val onClick = { clicked: RowColumn, item: com.github.damontecres.wholphin.data.model.BaseItem ->
                 position = clicked
                 val entry = StreamingStore.entries[item.id]
-                if (entry?.libraryId != null) {
+                val libraryId = entry?.let { StreamingStore.libraryId(it) }
+                if (entry != null && libraryId != null) {
                     viewModel.navigationManager.navigateTo(
-                        Destination.MediaItem(entry.libraryId, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
+                        Destination.MediaItem(libraryId, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
                     )
                 } else {
                     panel = entry
@@ -211,21 +234,60 @@ private fun StreamingPanel(
                         com.github.damontecres.wholphin.services.BoxOffice
                             .line(
                                 com.github.damontecres.wholphin.services.BoxOffice
-                                    .Money(entry.gross, entry.budget, entry.year, entry.grossToday),
+                                    .Money(entry.gross, entry.budget, entry.year, entry.grossToday, grossLocal = entry.grossLocal),
                             )?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2) }
                     }
+                    entry.date?.let { Text(it, fontSize = 13.sp, color = Color(0xFF90CAF9)) }
+                    entry.cast?.let { Text("With $it", fontSize = 13.sp, color = Color.White.copy(alpha = 0.75f), maxLines = 2) }
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
                     entry.note?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f)) }
                 }
             }
             Text(entry.overview, fontSize = 14.sp, color = Color.White.copy(alpha = 0.88f), maxLines = 10, overflow = TextOverflow.Ellipsis)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), entry.title) },
-                    modifier = Modifier.focusRequester(first),
-                ) { Text("▶  Open in $name") }
-                Button(onClick = onBack) { Text("Back") }
+            if (service == StreamingStore.CINEMA) {
+                // NoBars: trailer on YouTube, your copy if you have it, and the "Want it" list
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+                val onList = wanted.any { it.tmdb == entry.tmdb && it.series == entry.series }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (entry.trailer != null) {
+                        Button(onClick = { openTrailer(context, entry.trailer) }, modifier = Modifier.focusRequester(first)) {
+                            Text("▶  Trailer")
+                        }
+                    }
+                    Button(
+                        onClick = { scope.launch { com.github.damontecres.wholphin.services.WantedStore.toggle(entry) } },
+                        modifier = Modifier.ifElse(entry.trailer == null, Modifier.focusRequester(first)),
+                    ) { Text(if (onList) "✓  On your list" else "＋  Want it") }
+                    Button(onClick = onBack) { Text("Back") }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), entry.title) },
+                        modifier = Modifier.focusRequester(first),
+                    ) { Text("▶  Open in $name") }
+                    Button(onClick = onBack) { Text("Back") }
+                }
             }
+        }
+    }
+}
+
+/** NoBars: plays a YouTube trailer in the TV's YouTube app (or whatever handles YouTube links). */
+private fun openTrailer(
+    context: android.content.Context,
+    key: String,
+) {
+    val app = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:$key"))
+    val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$key"))
+    try {
+        context.startActivity(app.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (e: Exception) {
+        try {
+            context.startActivity(web.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e2: Exception) {
+            android.widget.Toast.makeText(context, "YouTube isn't installed", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 }

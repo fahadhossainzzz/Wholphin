@@ -202,7 +202,11 @@ fun BannerCard(
                             .align(Alignment.TopStart)
                             .padding(6.dp)
                             .background(
-                                if (badge == "✓") Color(0xFF2E7D32) else Color(0xFFE50914),
+                                when {
+                                    badge == "✓" -> Color(0xFF2E7D32)
+                                    badge.startsWith("#") -> Color(0xFFE50914)
+                                    else -> Color(0xFF1565C0)
+                                },
                                 androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
                             ).padding(horizontal = 6.dp, vertical = 2.dp),
                 )

@@ -154,6 +154,11 @@ class NavDrawerViewModel
                     navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.PRIME))
                 }
 
+                NavDrawerItem.Cinema -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.CINEMA))
+                }
+
                 NavDrawerItem.Discover -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -196,6 +201,7 @@ class NavDrawerViewModel
                             is NavDrawerItem.Genres -> Destination.BrowseGenres
                             is NavDrawerItem.Netflix -> Destination.Streaming(StreamingStore.NETFLIX)
                             is NavDrawerItem.Prime -> Destination.Streaming(StreamingStore.PRIME)
+                            is NavDrawerItem.Cinema -> Destination.Streaming(StreamingStore.CINEMA)
                             else -> null
                         }
                     }
@@ -301,6 +307,14 @@ sealed interface NavDrawerItem {
             get() = "a_prime"
 
         override fun name(context: Context): String = "Prime Video"
+    }
+
+    /** NoBars: in cinemas, coming soon and this year's box office */
+    object Cinema : NavDrawerItem {
+        override val id: String
+            get() = "a_cinema"
+
+        override fun name(context: Context): String = "Cinema"
     }
 }
 
@@ -744,6 +758,10 @@ fun NavigationDrawerScope.NavItem(
 
                 NavDrawerItem.Netflix, NavDrawerItem.Prime -> {
                     R.string.fa_tv
+                }
+
+                NavDrawerItem.Cinema -> {
+                    R.string.fa_ticket
                 }
 
                 is ServerNavDrawerItem -> {

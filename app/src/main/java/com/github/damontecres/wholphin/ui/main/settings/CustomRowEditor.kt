@@ -279,7 +279,7 @@ fun CustomRowEditor(
             val usable =
                 libraries.filter {
                     it.collectionType == CollectionType.MOVIES || it.collectionType == CollectionType.TVSHOWS ||
-                        it.collectionType == CollectionType.MIXED || it.collectionType == CollectionType.HOMEVIDEOS
+                        it.collectionType == CollectionType.HOMEVIDEOS
                 }
             val options = listOf("All libraries") + usable.map { it.name } + "A collection…"
             val selected =

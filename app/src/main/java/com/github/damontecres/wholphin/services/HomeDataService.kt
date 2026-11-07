@@ -440,6 +440,7 @@ class HomeDataService
                                 r
                             }
                         }
+                    val items: List<BaseItem?> =
                     if (NbQuery.needed(lib?.extra, sel?.sort)) {
                         val ids =
                             NbQuery.orderedIds(
@@ -476,7 +477,8 @@ class HomeDataService
                             .execute(api, request)
                             .content.items
                             .map { BaseItem(it, row.viewOptions.useSeries) }
-                    }.let {
+                    }
+                    items.let {
                         Success(
                             StringStringProvider(row.name),
                             it,

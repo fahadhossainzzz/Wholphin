@@ -56,6 +56,11 @@ object StreamingStore {
         val cast: String? = null,
         /** Gross as published, e.g. "₹1,852.44 crore" */
         val grossLocal: String? = null,
+        /** Audience (🍿) score when there's no critics' score */
+        val pop: Int? = null,
+        /** TMDB's own rating, for titles IMDb hasn't rated yet */
+        val tmdbRating: Float? = null,
+        val tmdbVotes: Int? = null,
     )
 
     data class Row(
@@ -104,6 +109,7 @@ object StreamingStore {
                 _library.value = map
                 BoxOffice.load(json.optJSONObject("money"))
                 owned = json.optJSONObject("owned")?.toStringMap() ?: emptyMap()
+                CriticFallback.load(json.optJSONObject("rt"), json.optJSONObject("pop"))
                 Timber.i("NoBars: streaming library list loaded (%d titles)", map.size)
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: streaming library list unavailable")
@@ -164,6 +170,9 @@ object StreamingStore {
             trailer = o.str("trailer"),
             cast = o.str("cast"),
             grossLocal = o.str("grossLocal"),
+            pop = if (o.has("pop")) o.optInt("pop") else null,
+            tmdbRating = o.optDouble("tmdbRating").takeIf { !it.isNaN() && it > 0 }?.toFloat(),
+            tmdbVotes = o.optInt("tmdbVotes").takeIf { it > 0 },
         )
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
@@ -202,7 +211,7 @@ object StreamingStore {
                 type = if (e.series) BaseItemKind.SERIES else BaseItemKind.MOVIE,
                 name = e.title,
                 productionYear = e.year,
-                communityRating = e.imdbRating,
+                communityRating = e.imdbRating ?: e.tmdbRating,
                 criticRating = e.rt?.toFloat(),
                 overview = e.overview,
                 genres = e.genres,
@@ -222,7 +231,7 @@ object StreamingStore {
         }
     }
 
-    fun votes(id: UUID?): Int? = id?.let { entries[it]?.imdbVotes }
+    fun votes(id: UUID?): Int? = id?.let { entries[it]?.let { e -> e.imdbVotes ?: e.tmdbVotes } }
 
     private fun uuidFromHex(hex: String): UUID =
         UUID.fromString("${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}")

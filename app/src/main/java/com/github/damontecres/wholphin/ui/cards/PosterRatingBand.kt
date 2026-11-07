@@ -45,7 +45,11 @@ fun PosterRatingBand(
     val dto = item?.data ?: return
     if (dto.type !in RATED_TYPES) return
     val stars = dto.communityRating?.takeIf { it > 0f }
-    val tomatoes = dto.criticRating?.takeIf { it >= 0f }
+    // NoBars: Jellyfin's own score, else the daily run's (OMDb / MDBList), else the audience 🍿 score
+    val tomatoes =
+        dto.criticRating?.takeIf { it >= 0f }
+            ?: com.github.damontecres.wholphin.services.CriticFallback.tomatoes(dto.id)?.toFloat()
+    val popcorn = if (tomatoes == null) com.github.damontecres.wholphin.services.CriticFallback.popcorn(dto.id) else null
     // NoBars: worldwide box office in the middle of the band, films only
     val money =
         if (dto.type == BaseItemKind.MOVIE) {
@@ -55,7 +59,7 @@ fun PosterRatingBand(
         } else {
             null
         }
-    if (stars == null && tomatoes == null && money == null) return
+    if (stars == null && tomatoes == null && popcorn == null && money == null) return
     val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.services.StreamingStore.votes(dto.id)
     val style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -93,6 +97,9 @@ fun PosterRatingBand(
                 style = style.copy(fontSize = 10.sp, color = Color(0xFF9BE59B)),
                 maxLines = 1,
             )
+        }
+        if (popcorn != null) {
+            Text(text = "🍿 $popcorn%", style = style)
         }
         if (tomatoes != null) {
             Row(

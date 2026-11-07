@@ -292,7 +292,11 @@ private fun playerRatingLine(item: com.github.damontecres.wholphin.data.model.Ba
         stars?.let {
             add("★ " + String.format(java.util.Locale.US, "%.1f", it) + (votes?.let { v -> " · " + com.github.damontecres.wholphin.services.ImdbVotesStore.short(v) + " votes" } ?: ""))
         }
-        tomatoes?.let { add("🍅 ${it.toInt()}%") }
+        if (tomatoes != null) {
+            add("🍅 ${tomatoes.toInt()}%")
+        } else {
+            com.github.damontecres.wholphin.services.CriticFallback.label(item.id)?.let { add(it) }
+        }
         com.github.damontecres.wholphin.services.BoxOffice.forItem(item.id)?.let { m ->
             com.github.damontecres.wholphin.services.BoxOffice.compact(m)?.let { add(it) }
         }

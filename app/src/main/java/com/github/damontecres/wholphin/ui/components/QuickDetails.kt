@@ -70,7 +70,13 @@ fun QuickDetails(
                 QuickDetailsText(rating, Modifier, textStyle, inlineContentMap)
             }
             if (DisplayToggle.CRITIC_RATING in enabled) {
-                QuickDetailsText(details.criticRating, Modifier, textStyle, inlineContentMap)
+                // NoBars: the daily run's 🍅 (or audience 🍿) when Jellyfin has no critics' score
+                val critic =
+                    details.criticRating
+                        ?: com.github.damontecres.wholphin.services.CriticFallback
+                            .label(details.itemId)
+                            ?.let { androidx.compose.ui.text.AnnotatedString(it) }
+                QuickDetailsText(critic, Modifier, textStyle, inlineContentMap)
             }
         }
         if (timeRemaining != null) {

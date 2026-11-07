@@ -36,6 +36,8 @@ object BoxOffice {
         /** US (domestic) gross */
         val us: Long? = null,
         val streamingOnly: Boolean = false,
+        /** A streaming service's film with only a limited cinema run: no box office is reported */
+        val streamingFilm: Boolean = false,
         val released: LocalDate? = null,
     )
 
@@ -62,6 +64,7 @@ object BoxOffice {
                     rank = o.optInt("r").takeIf { it > 0 },
                     us = o.optLong("us").takeIf { it > 0 },
                     streamingOnly = o.optInt("st") == 1,
+                    streamingFilm = o.optInt("st") == 2,
                     released = o.str("rd")?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
                 )
         }
@@ -135,9 +138,12 @@ object BoxOffice {
         services: List<String> = emptyList(),
     ): String? {
         if (m.gross == null && m.budget == null) {
-            if (!m.streamingOnly) return null
             val on = services.joinToString(" & ") { StreamingStore.displayName(it) }
-            return "📺 Straight to streaming" + if (on.isNotEmpty()) " · on $on" else " · no cinema release"
+            return when {
+                m.streamingOnly -> "📺 Straight to streaming" + if (on.isNotEmpty()) " · on $on" else " · no cinema release"
+                m.streamingFilm -> "📺 Streaming film · limited cinema run, no box office reported" + if (on.isNotEmpty()) " · on $on" else ""
+                else -> null
+            }
         }
         val parts = mutableListOf<String>()
         m.gross?.let { g -> parts += if (m.grossLocal != null) "${m.grossLocal} worldwide (≈ ${short(g)})" else "${full(g)} worldwide" }
@@ -163,7 +169,13 @@ object BoxOffice {
     /** Player and panels: "💰 $2.1B · Blockbuster", "💰 ₹146Cr · Hit", "📺 Straight to streaming". */
     fun compact(m: Money): String? {
         val amount = posterLabel(m) ?: m.budget?.let { "budget " + short(it) }
-        if (amount == null) return if (m.streamingOnly) "📺 Straight to streaming" else null
+        if (amount == null) {
+            return when {
+                m.streamingOnly -> "📺 Straight to streaming"
+                m.streamingFilm -> "📺 Streaming film"
+                else -> null
+            }
+        }
         return "💰 $amount" + (verdict(m)?.let { " · $it" } ?: "")
     }
 

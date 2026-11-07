@@ -227,8 +227,16 @@ private fun StreamingPanel(
                                 fontSize = 15.sp,
                                 color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
                             )
+                        } ?: entry.tmdbRating?.let { r ->
+                            // NoBars: IMDb hasn't rated it yet
+                            Text(
+                                "TMDB ★ " + String.format(Locale.US, "%.1f", r) + (entry.tmdbVotes?.let { " (${com.github.damontecres.wholphin.services.ImdbVotesStore.short(it)} votes)" } ?: ""),
+                                fontSize = 15.sp,
+                                color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
+                            )
                         }
                         entry.rt?.let { Text("🍅 $it%", fontSize = 15.sp, color = Color.White) }
+                            ?: entry.pop?.let { Text("🍿 $it% audience", fontSize = 15.sp, color = Color.White) }
                     }
                     if (entry.gross != null || entry.budget != null) {
                         com.github.damontecres.wholphin.services.BoxOffice

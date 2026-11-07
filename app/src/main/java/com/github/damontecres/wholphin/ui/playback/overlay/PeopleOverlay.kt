@@ -778,6 +778,7 @@ private fun facts(
             add("★ " + String.format(Locale.US, "%.1f", it) + (votes?.let { v -> " (" + com.github.damontecres.wholphin.services.ImdbVotesStore.short(v) + ")" } ?: ""))
         }
         item.data.criticRating?.takeIf { it >= 0f }?.let { add("🍅 ${it.toInt()}%") }
+            ?: com.github.damontecres.wholphin.services.CriticFallback.label(item.id)?.let { add(it) }
         if (withRuntime) {
             com.github.damontecres.wholphin.services.BoxOffice.forItem(item.id)?.let { m ->
                 com.github.damontecres.wholphin.services.BoxOffice.compact(m)?.let { add(it) }

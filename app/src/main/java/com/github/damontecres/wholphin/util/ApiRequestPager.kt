@@ -166,6 +166,89 @@ object GetItemsRequestHandler : RequestHandler<GetItemsRequest> {
     ): Response<BaseItemDtoQueryResult> = api.itemsApi.getItems(request)
 }
 
+/**
+ * NoBars: films in a money order (box office, today's money, budget, return on budget, rank in its year).
+ * Jellyfin has no such fields, so: one light request for the ids of every matching film (filters still apply),
+ * sorted here by the box office list; then each page of posters is fetched by id. Films with no figure come last.
+ */
+@Serializable
+object MoneySortRequestHandler : RequestHandler<GetItemsRequest> {
+    private val lock = kotlinx.coroutines.sync.Mutex()
+
+    private var cachedFor: Pair<GetItemsRequest, Any>? = null
+
+    private var cachedIds: List<UUID> = emptyList()
+
+    override fun prepare(
+        request: GetItemsRequest,
+        startIndex: Int,
+        limit: Int,
+        enableTotalRecordCount: Boolean,
+    ): GetItemsRequest =
+        request.copy(
+            startIndex = startIndex,
+            limit = limit,
+            enableTotalRecordCount = enableTotalRecordCount,
+        )
+
+    private suspend fun sortedIds(
+        api: ApiClient,
+        base: GetItemsRequest,
+        sort: com.github.damontecres.wholphin.services.MoneySort,
+        descending: Boolean,
+    ): List<UUID> =
+        lock.withLock {
+            val money = com.github.damontecres.wholphin.services.BoxOffice.library.value
+            val key = base to (money to (sort to descending))
+            if (cachedFor == key) return@withLock cachedIds
+            val all =
+                api.itemsApi
+                    .getItems(
+                        base.copy(
+                            sortBy = listOf(org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME),
+                            sortOrder = listOf(org.jellyfin.sdk.model.api.SortOrder.ASCENDING),
+                            fields = emptyList(),
+                            enableImages = false,
+                            enableUserData = false,
+                            enableTotalRecordCount = false,
+                        ),
+                    ).content.items
+                    .map { it.id }
+            val valued = all.map { it to com.github.damontecres.wholphin.services.BoxOffice.sortValue(sort, money[it.toString().replace("-", "")]) }
+            val (known, unknown) = valued.partition { it.second != null }
+            val ordered =
+                (if (descending) known.sortedByDescending { it.second!! } else known.sortedBy { it.second!! }) + unknown
+            cachedIds = ordered.map { it.first }
+            cachedFor = key
+            cachedIds
+        }
+
+    override suspend fun execute(
+        api: ApiClient,
+        request: GetItemsRequest,
+    ): Response<BaseItemDtoQueryResult> {
+        val sort =
+            com.github.damontecres.wholphin.ui.data.MoneySortCarrier.of(request.sortBy?.firstOrNull())
+                ?: return api.itemsApi.getItems(request)
+        val descending = request.sortOrder?.firstOrNull() != org.jellyfin.sdk.model.api.SortOrder.ASCENDING
+        val base = request.copy(startIndex = null, limit = null, enableTotalRecordCount = false)
+        val ids = sortedIds(api, base, sort, descending)
+        val start = request.startIndex ?: 0
+        val slice = ids.drop(start).take(request.limit ?: ids.size)
+        val items =
+            if (slice.isEmpty()) {
+                emptyList()
+            } else {
+                val order = slice.withIndex().associate { it.value to it.index }
+                api.itemsApi
+                    .getItems(base.copy(ids = slice, sortBy = null, sortOrder = null))
+                    .content.items
+                    .sortedBy { order[it.id] ?: Int.MAX_VALUE }
+            }
+        return Response(BaseItemDtoQueryResult(items = items, totalRecordCount = ids.size, startIndex = start), 200, emptyMap())
+    }
+}
+
 @Serializable
 object GetEpisodesRequestHandler : RequestHandler<GetEpisodesRequest> {
     override fun prepare(

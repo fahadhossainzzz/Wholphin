@@ -780,6 +780,11 @@
     <string name="in_app_screensaver">Use in-app screensaver</string>
     <string name="delete_item">Are you sure you want to delete this item?</string>
     <string name="show_media_management">Show media management options</string>
+    <string name="sort_by_box_office">Box office</string>
+    <string name="sort_by_box_office_today">Box office (today\'s money)</string>
+    <string name="sort_by_budget">Budget</string>
+    <string name="sort_by_return">Return on budget</string>
+    <string name="sort_by_year_rank">Rank in its year</string>
     <string-array name="browse_order_options">
         <item>Highest rated</item>
         <item>Newest first</item>

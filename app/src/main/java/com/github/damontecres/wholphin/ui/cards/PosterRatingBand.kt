@@ -49,7 +49,9 @@ fun PosterRatingBand(
     // NoBars: worldwide box office in the middle of the band, films only
     val money =
         if (dto.type == BaseItemKind.MOVIE) {
-            com.github.damontecres.wholphin.services.BoxOffice.forItem(dto.id)?.gross
+            com.github.damontecres.wholphin.services.BoxOffice.forItem(dto.id)?.let {
+                com.github.damontecres.wholphin.services.BoxOffice.posterLabel(it)
+            }
         } else {
             null
         }
@@ -87,7 +89,7 @@ fun PosterRatingBand(
         }
         if (showMoney) {
             Text(
-                text = com.github.damontecres.wholphin.services.BoxOffice.short(money!!),
+                text = money!!,
                 style = style.copy(fontSize = 10.sp, color = Color(0xFF9BE59B)),
                 maxLines = 1,
             )

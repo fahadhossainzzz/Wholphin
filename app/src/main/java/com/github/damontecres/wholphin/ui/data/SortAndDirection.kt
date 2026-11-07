@@ -42,6 +42,29 @@ val MovieSortOptions =
         ItemSortBy.RANDOM,
     )
 
+/**
+ * NoBars: the money orders ride on sort values Jellyfin never uses for films. The app never sends them to the
+ * server: [com.github.damontecres.wholphin.util.MoneySortRequestHandler] sorts these on the TV.
+ */
+object MoneySortCarrier {
+    private val map =
+        mapOf(
+            ItemSortBy.START_DATE to com.github.damontecres.wholphin.services.MoneySort.BOX_OFFICE,
+            ItemSortBy.AIR_TIME to com.github.damontecres.wholphin.services.MoneySort.TODAYS_MONEY,
+            ItemSortBy.VIDEO_BIT_RATE to com.github.damontecres.wholphin.services.MoneySort.BUDGET,
+            ItemSortBy.STUDIO to com.github.damontecres.wholphin.services.MoneySort.RETURN,
+            ItemSortBy.IS_FOLDER to com.github.damontecres.wholphin.services.MoneySort.YEAR_RANK,
+        )
+
+    fun of(sort: ItemSortBy?): com.github.damontecres.wholphin.services.MoneySort? = sort?.let { map[it] }
+
+    val options: List<ItemSortBy> = map.keys.toList()
+}
+
+/** NoBars: the Movies library's sort menu, with the money orders after the ratings. */
+val MovieLibrarySortOptions =
+    MovieSortOptions.flatMap { if (it == ItemSortBy.CRITIC_RATING) listOf(it) + MoneySortCarrier.options else listOf(it) }
+
 val SeriesSortOptions =
     listOf(
         ItemSortBy.SORT_NAME,
@@ -191,6 +214,17 @@ fun getStringRes(sort: ItemSortBy): Int =
         ItemSortBy.ALBUM_ARTIST -> R.string.album_artist
 
         ItemSortBy.ARTIST -> R.string.artist
+
+        // NoBars: money orders (see MoneySortCarrier)
+        ItemSortBy.START_DATE -> R.string.sort_by_box_office
+
+        ItemSortBy.AIR_TIME -> R.string.sort_by_box_office_today
+
+        ItemSortBy.VIDEO_BIT_RATE -> R.string.sort_by_budget
+
+        ItemSortBy.STUDIO -> R.string.sort_by_return
+
+        ItemSortBy.IS_FOLDER -> R.string.sort_by_year_rank
 
         else -> throw IllegalArgumentException("Unsupported sort option: $sort")
     }

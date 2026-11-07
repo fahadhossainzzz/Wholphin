@@ -427,6 +427,13 @@ fun PersonPanel(
                     state.person.role?.let {
                         Text(text = it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.7f), maxLines = 2)
                     }
+                    if (!state.loading) {
+                        androidx.compose.runtime.remember(state.items) {
+                            com.github.damontecres.wholphin.services.BoxOffice.totals(state.items)
+                        }?.let {
+                            Text(text = it, fontSize = 13.sp, color = Color(0xFF9BE59B), maxLines = 2)
+                        }
+                    }
                     if (profileMode) {
                         state.profile?.let { lifeLine(it) }?.let {
                             Text(text = it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2)

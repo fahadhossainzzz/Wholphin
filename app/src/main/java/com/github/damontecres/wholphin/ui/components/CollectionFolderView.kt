@@ -415,7 +415,12 @@ class CollectionFolderViewModel
                         ApiRequestPager(
                             api,
                             request,
-                            GetItemsRequestHandler,
+                            // NoBars: money orders are sorted on the TV
+                            if (com.github.damontecres.wholphin.ui.data.MoneySortCarrier.of(sortAndDirection.sort) != null) {
+                                com.github.damontecres.wholphin.util.MoneySortRequestHandler
+                            } else {
+                                GetItemsRequestHandler
+                            },
                             viewModelScope,
                             useSeriesForPrimary = useSeriesForPrimary,
                         )

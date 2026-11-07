@@ -8,6 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,10 +34,12 @@ import java.util.Locale
 private val RATED_TYPES = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES, BaseItemKind.SEASON, BaseItemKind.EPISODE)
 
 /**
- * NoBars: a thin band along the bottom of a film, show, season or episode poster with its star rating (left) and
- * Rotten Tomatoes score (right). Shows only what the item has; nothing when it has neither or when
- * turned off in settings.
+ * NoBars: a thin band along the bottom of a film, show, season or episode poster with three fixed slots:
+ * left ★ rating + vote count, middle box office, right 🍅 critics' score (or 🍿 audience score). A missing value
+ * leaves its slot empty and nothing moves, so the numbers line up across a row. One text size for every poster;
+ * when a band doesn't fit, its content is trimmed (money rounded, then the "%", then the votes), never its size.
  */
+
 @Composable
 fun PosterRatingBand(
     item: BaseItem?,
@@ -50,7 +54,7 @@ fun PosterRatingBand(
         dto.criticRating?.takeIf { it >= 0f }
             ?: com.github.damontecres.wholphin.services.CriticFallback.tomatoes(dto.id)?.toFloat()
     val popcorn = if (tomatoes == null) com.github.damontecres.wholphin.services.CriticFallback.popcorn(dto.id) else null
-    // NoBars: worldwide box office in the middle of the band, films only
+    // NoBars: worldwide box office in the middle slot, films only
     val money =
         if (dto.type == BaseItemKind.MOVIE) {
             com.github.damontecres.wholphin.services.BoxOffice.forItem(dto.id)?.let {
@@ -61,62 +65,133 @@ fun PosterRatingBand(
         }
     if (stars == null && tomatoes == null && popcorn == null && money == null) return
     val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.services.StreamingStore.votes(dto.id)
-    val style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+
+    val main = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+    val starStyle = main.copy(color = FilledStarColor)
+    val votesStyle = main.copy(fontSize = 9.sp, fontWeight = FontWeight.Normal, color = Color.White.copy(alpha = 0.65f))
+    val moneyStyle = main.copy(fontSize = 9.5.sp, color = Color(0xFF9BE59B))
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-    val showMoney = money != null && maxWidth >= 96.dp
-    val showVotes = votes != null && maxWidth >= (if (showMoney) 150.dp else 112.dp)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.62f))
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-    ) {
-        if (stars != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "★ " + String.format(Locale.US, "%.1f", stars),
-                    style = style.copy(color = FilledStarColor),
-                )
-                if (showVotes) {
+        val sidePad = 4.dp
+        val gap = 4.dp
+        val iconW = 11.dp
+        val iconGap = 2.dp
+        val avail = with(density) { (maxWidth - sidePad * 2).toPx() }
+        val gapPx = with(density) { gap.toPx() }
+
+        fun w(
+            text: String,
+            style: TextStyle,
+        ): Float = measurer.measure(text, style, maxLines = 1, softWrap = false).size.width.toFloat()
+
+        val starText = stars?.let { "★" + String.format(Locale.US, "%.1f", it) }
+        val votesText = votes?.let { ImdbVotesStore.short(it) }
+        val rounded = money?.let { roundMoney(it) }
+        val tomatoText = tomatoes?.let { "${it.toInt()}%" }
+        val popcornText = popcorn?.let { "🍿$it%" }
+
+        // The plan for this poster: the first variant that fits (same text size in every variant)
+        data class Plan(
+            val votes: Boolean,
+            val money: String?,
+            val percent: Boolean,
+        )
+        val plans =
+            listOf(
+                Plan(true, money, true),
+                Plan(true, rounded, true),
+                Plan(true, rounded, false),
+                Plan(false, rounded, false),
+            )
+
+        fun fits(p: Plan): Boolean {
+            val left =
+                (starText?.let { w(it, starStyle) } ?: 0f) +
+                    if (p.votes && votesText != null) gapPx * 0.75f + w(votesText, votesStyle) else 0f
+            val right =
+                when {
+                    tomatoText != null -> with(density) { (iconW + iconGap).toPx() } + w(if (p.percent) tomatoText else tomatoText.dropLast(1), main)
+                    popcornText != null -> w(if (p.percent) popcornText else popcornText.dropLast(1), main)
+                    else -> 0f
+                }
+            val middle = p.money?.let { w(it, moneyStyle) } ?: 0f
+            return if (middle > 0f) {
+                // the middle is centred: each side gets half of what the money leaves
+                2 * maxOf(left, right) + middle + 2 * gapPx <= avail
+            } else {
+                left + right + gapPx <= avail
+            }
+        }
+        val plan = remember(maxWidth, starText, votesText, money, tomatoText, popcornText) { plans.firstOrNull { fits(it) } ?: plans.last() }
+
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .padding(horizontal = sidePad, vertical = 3.dp),
+        ) {
+            // left: ★ rating + votes
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
+                if (starText != null) Text(text = starText, style = starStyle, maxLines = 1, softWrap = false)
+                if (plan.votes && votesText != null) {
                     Text(
-                        text = " · " + ImdbVotesStore.short(votes!!),
-                        style = style.copy(fontSize = 9.sp, fontWeight = FontWeight.Normal, color = Color.White.copy(alpha = 0.7f)),
+                        text = votesText,
+                        style = votesStyle,
                         maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(start = gap * 0.75f),
                     )
                 }
             }
-        } else {
-            Spacer(Modifier.size(1.dp))
-        }
-        if (showMoney) {
-            Text(
-                text = money!!,
-                style = style.copy(fontSize = 10.sp, color = Color(0xFF9BE59B)),
-                maxLines = 1,
-            )
-        }
-        if (popcorn != null) {
-            Text(text = "🍿 $popcorn%", style = style)
-        }
-        if (tomatoes != null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Image(
-                    painter =
-                        painterResource(
-                            if (tomatoes >= 60f) R.drawable.ic_rotten_tomatoes_fresh else R.drawable.ic_rotten_tomatoes_rotten,
-                        ),
-                    contentDescription = null,
-                    modifier = Modifier.size(12.dp),
+            // middle: box office
+            if (plan.money != null) {
+                Text(
+                    text = plan.money,
+                    style = moneyStyle,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.align(Alignment.Center),
                 )
-                Text(text = "${tomatoes.toInt()}%", style = style)
+            }
+            // right: 🍅 critics, or 🍿 audience
+            if (tomatoes != null && tomatoText != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(iconGap),
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                ) {
+                    Image(
+                        painter =
+                            painterResource(
+                                if (tomatoes >= 60f) R.drawable.ic_rotten_tomatoes_fresh else R.drawable.ic_rotten_tomatoes_rotten,
+                            ),
+                        contentDescription = null,
+                        modifier = Modifier.size(iconW),
+                    )
+                    Text(text = if (plan.percent) tomatoText else tomatoText.dropLast(1), style = main, maxLines = 1, softWrap = false)
+                }
+            } else if (popcornText != null) {
+                Text(
+                    text = if (plan.percent) popcornText else popcornText.dropLast(1),
+                    style = main,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                )
             }
         }
     }
-    }
+}
+
+/** "$2.07B" -> "$2B", "₹2.4Cr" -> "₹2Cr", "₹1,852Cr" -> "₹1852Cr": the shorter form when space is tight. */
+private fun roundMoney(label: String): String {
+    val m = Regex("""^([^\d]*)([\d.,]+)(.*)$""").find(label) ?: return label
+    val number = m.groupValues[2].replace(",", "").toDoubleOrNull() ?: return label
+    return m.groupValues[1] + String.format(Locale.US, "%.0f", number) + m.groupValues[3]
 }

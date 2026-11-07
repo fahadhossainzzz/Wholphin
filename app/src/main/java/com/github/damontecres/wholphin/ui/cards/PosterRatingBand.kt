@@ -117,27 +117,23 @@ fun PosterRatingBand(
                     else -> 0f
                 }
             val middle = p.money?.let { w(it, moneyStyle) } ?: 0f
-            return if (middle > 0f) {
-                // the middle is centred: each side gets half of what the money leaves
-                2 * maxOf(left, right) + middle + 2 * gapPx <= avail
-            } else {
-                left + right + gapPx <= avail
-            }
+            // the money sits in the space between the left and right groups (not the exact centre), so the
+            // vote count keeps its room
+            return left + middle + right + (if (middle > 0f) 2 else 1) * gapPx <= avail
         }
         val plan = remember(maxWidth, starText, votesText, money, tomatoText, popcornText) { plans.firstOrNull { fits(it) } ?: plans.last() }
 
-        Box(
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.62f))
                     .padding(horizontal = sidePad, vertical = 3.dp),
         ) {
-            // left: ★ rating + votes
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.align(Alignment.CenterStart),
-            ) {
+            // left: ★ rating + votes (an empty box keeps the other slots in place when there's no rating)
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (starText != null) Text(text = starText, style = starStyle, maxLines = 1, softWrap = false)
                 if (plan.votes && votesText != null) {
                     Text(
@@ -149,22 +145,15 @@ fun PosterRatingBand(
                     )
                 }
             }
-            // middle: box office
+            // middle: box office (or an empty spacer, so 🍅 stays on the right)
             if (plan.money != null) {
-                Text(
-                    text = plan.money,
-                    style = moneyStyle,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                Text(text = plan.money, style = moneyStyle, maxLines = 1, softWrap = false)
             }
             // right: 🍅 critics, or 🍿 audience
             if (tomatoes != null && tomatoText != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(iconGap),
-                    modifier = Modifier.align(Alignment.CenterEnd),
                 ) {
                     Image(
                         painter =
@@ -182,8 +171,9 @@ fun PosterRatingBand(
                     style = main,
                     maxLines = 1,
                     softWrap = false,
-                    modifier = Modifier.align(Alignment.CenterEnd),
                 )
+            } else {
+                Spacer(Modifier.size(1.dp))
             }
         }
     }

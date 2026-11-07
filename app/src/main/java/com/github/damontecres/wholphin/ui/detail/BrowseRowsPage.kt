@@ -210,11 +210,11 @@ class BrowseRowsViewModel
                                     ).content
                             val best =
                                 pool.items
-                                    .sortedByDescending {
+                                    .sortedByDescending<org.jellyfin.sdk.model.api.BaseItemDto, Double> {
                                         if (byMoney) {
                                             moneyOf(it.id).toDouble()
                                         } else {
-                                            ImdbVotesStore.weighted(it.communityRating, ImdbVotesStore.get(it.id)?.votes)
+                                            ImdbVotesStore.weighted(it.communityRating, ImdbVotesStore.get(it.id)?.votes).toDouble()
                                         }
                                     }
                                     .take(ROW_LIMIT)

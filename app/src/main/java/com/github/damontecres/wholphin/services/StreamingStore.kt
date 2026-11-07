@@ -41,6 +41,10 @@ object StreamingStore {
         val rt: Int? = null,
         /** e.g. "#2 worldwide this week · 28.4M views" */
         val note: String? = null,
+        /** Worldwide box office and budget, US dollars (films only) */
+        val gross: Long? = null,
+        val budget: Long? = null,
+        val grossToday: Long? = null,
     )
 
     data class Row(
@@ -75,6 +79,7 @@ object StreamingStore {
                 val map = HashMap<String, List<String>>()
                 items.keys().forEach { k -> map[k] = items.optJSONArray(k)?.toStringList() ?: emptyList() }
                 _library.value = map
+                BoxOffice.load(json.optJSONObject("money"))
                 Timber.i("NoBars: streaming library list loaded (%d titles)", map.size)
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: streaming library list unavailable")
@@ -127,6 +132,9 @@ object StreamingStore {
             rank = o.optInt("rank").takeIf { it > 0 },
             rt = if (o.has("rt")) o.optInt("rt") else null,
             note = o.optString("note").takeIf { it.isNotBlank() && it != "null" },
+            gross = o.optLong("gross").takeIf { it > 0 },
+            budget = o.optLong("budget").takeIf { it > 0 },
+            grossToday = o.optLong("grossToday").takeIf { it > 0 },
         )
 
     /**

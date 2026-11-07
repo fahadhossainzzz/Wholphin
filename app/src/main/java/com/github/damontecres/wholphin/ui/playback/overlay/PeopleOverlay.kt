@@ -772,6 +772,9 @@ private fun facts(
         }
         item.data.criticRating?.takeIf { it >= 0f }?.let { add("🍅 ${it.toInt()}%") }
         if (withRuntime) {
+            com.github.damontecres.wholphin.services.BoxOffice.forItem(item.id)?.let { m ->
+                com.github.damontecres.wholphin.services.BoxOffice.compact(m)?.let { add(it) }
+            }
             item.data.runTimeTicks?.let { ticks ->
                 val min = ticks / 600_000_000L
                 if (min > 0) add(if (min >= 60) "${min / 60} h ${min % 60} min" else "$min min")

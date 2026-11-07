@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail
 
+import com.github.damontecres.wholphin.services.BoxOffice
 import com.github.damontecres.wholphin.services.ImdbVotesStore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -153,14 +154,20 @@ class BrowseRowsViewModel
                 try {
                     val userId = serverRepository.currentUser?.id
                     val groups = if (mode == BrowseMode.YEARS) yearGroups(userId) else genreGroups(userId)
-                    _rows.value = groups.map { HomeRowLoadingState.Pending(StringStringProvider(it.name)) }
+                    // NoBars: Years page opens with the library's biggest box office hits
+                    val topRow = mode == BrowseMode.YEARS && BoxOffice.library.value.isNotEmpty()
+                    val offset = if (topRow) 1 else 0
+                    _rows.value =
+                        (if (topRow) listOf(HomeRowLoadingState.Pending(StringStringProvider(boxOfficeTitle()))) else emptyList()) +
+                        groups.map { HomeRowLoadingState.Pending(StringStringProvider(it.name)) }
                     _loading.value = LoadingState.Success
+                    if (topRow) viewModelScope.launchIO { loadBoxOfficeRow(userId) }
                     // Rows fill in from the top, a few at a time
                     val semaphore = Semaphore(3)
                     groups
                         .mapIndexed { index, group ->
                             viewModelScope.launchIO {
-                                semaphore.withPermit { loadRow(index, group, userId) }
+                                semaphore.withPermit { loadRow(index + offset, group, userId) }
                             }
                         }
                 } catch (e: Exception) {
@@ -184,6 +191,7 @@ class BrowseRowsViewModel
                     // NoBars: "Highest rated" uses IMDb's weighted rating, so a film rated 8.6 by 300
                     // people no longer sits above a classic rated 8.5 by two million
                     val weighted = order == BrowseOrder.BROWSE_HIGHEST_RATED && ImdbVotesStore.votes.value.isNotEmpty()
+                    val byMoney = boxOfficeOrder() && BoxOffice.library.value.isNotEmpty()
                     val request =
                         group.filter.asGetItemsRequest().copy(
                             userId = userId,
@@ -192,7 +200,7 @@ class BrowseRowsViewModel
                             enableTotalRecordCount = true,
                         )
                     val result =
-                        if (weighted) {
+                        if (weighted || byMoney) {
                             // Light pass: ids and ratings only, then full details for the best 24
                             val pool =
                                 GetItemsRequestHandler
@@ -202,7 +210,13 @@ class BrowseRowsViewModel
                                     ).content
                             val best =
                                 pool.items
-                                    .sortedByDescending { ImdbVotesStore.weighted(it.communityRating, ImdbVotesStore.get(it.id)?.votes) }
+                                    .sortedByDescending {
+                                        if (byMoney) {
+                                            moneyOf(it.id).toDouble()
+                                        } else {
+                                            ImdbVotesStore.weighted(it.communityRating, ImdbVotesStore.get(it.id)?.votes)
+                                        }
+                                    }
                                     .take(ROW_LIMIT)
                                     .map { it.id }
                             val full =
@@ -233,6 +247,57 @@ class BrowseRowsViewModel
                     HomeRowLoadingState.Error(StringStringProvider(group.name), exception = e)
                 }
             _rows.update { list -> list.toMutableList().also { if (index < it.size) it[index] = state } }
+        }
+
+        private fun boxOfficeOrder() = order == BrowseOrder.BROWSE_BOX_OFFICE || order == BrowseOrder.BROWSE_BOX_OFFICE_TODAY
+
+        private fun boxOfficeTitle() =
+            if (order == BrowseOrder.BROWSE_BOX_OFFICE_TODAY) "Biggest box office · in today's money" else "Biggest box office · all time"
+
+        /** Worldwide gross used for sorting: actual, or in today's money when that order is chosen. */
+        private fun moneyOf(id: java.util.UUID): Long {
+            val m = BoxOffice.library.value[id.toString().replace("-", "")] ?: return 0L
+            return (if (order == BrowseOrder.BROWSE_BOX_OFFICE_TODAY) m.today ?: m.gross else m.gross) ?: 0L
+        }
+
+        /** The 24 biggest earners in the library, straight from the box office list (no pool pass needed). */
+        private suspend fun loadBoxOfficeRow(userId: java.util.UUID?) {
+            val state =
+                try {
+                    val today = order == BrowseOrder.BROWSE_BOX_OFFICE_TODAY
+                    val best =
+                        BoxOffice.library.value.entries
+                            .mapNotNull { (k, m) -> ((if (today) m.today ?: m.gross else m.gross) ?: return@mapNotNull null) to k }
+                            .sortedByDescending { it.first }
+                            .take(ROW_LIMIT)
+                            .map { java.util.UUID.fromString(it.second.replaceFirst(Regex("(.{8})(.{4})(.{4})(.{4})(.{12})"), "$1-$2-$3-$4-$5")) }
+                    val items =
+                        if (best.isEmpty()) {
+                            emptyList()
+                        } else {
+                            GetItemsRequestHandler
+                                .execute(
+                                    api,
+                                    rowFor("", HomeGetItemsFilter()).filter.asGetItemsRequest().copy(
+                                        userId = userId,
+                                        ids = best,
+                                        fields = HomeItemFields + listOf(ItemFields.CHILD_COUNT),
+                                    ),
+                                ).content.items
+                                .sortedBy { best.indexOf(it.id) }
+                        }
+                    HomeRowLoadingState.Success(
+                        title = StringStringProvider(boxOfficeTitle()),
+                        items = items.map { BaseItem(it, true) },
+                        viewOptions = HomeRowViewOptions(),
+                        rowType = null,
+                        showViewMore = false,
+                    )
+                } catch (e: Exception) {
+                    Timber.w(e, "NoBars box office row failed")
+                    HomeRowLoadingState.Error(StringStringProvider(boxOfficeTitle()), exception = e)
+                }
+            _rows.update { list -> list.toMutableList().also { if (it.isNotEmpty()) it[0] = state } }
         }
 
         /** 2026, 2025 ... 2000, then the 1990s, 1980s ... */

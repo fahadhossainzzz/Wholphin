@@ -784,6 +784,8 @@
         <item>Highest rated</item>
         <item>Newest first</item>
         <item>Highest Rotten Tomatoes</item>
+        <item>Biggest box office</item>
+        <item>Biggest box office (today\'s money)</item>
     </string-array>
 
     <string-array name="backdrop_style_options">

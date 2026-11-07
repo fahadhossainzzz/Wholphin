@@ -46,11 +46,19 @@ fun PosterRatingBand(
     if (dto.type !in RATED_TYPES) return
     val stars = dto.communityRating?.takeIf { it > 0f }
     val tomatoes = dto.criticRating?.takeIf { it >= 0f }
-    if (stars == null && tomatoes == null) return
+    // NoBars: worldwide box office in the middle of the band, films only
+    val money =
+        if (dto.type == BaseItemKind.MOVIE) {
+            com.github.damontecres.wholphin.services.BoxOffice.forItem(dto.id)?.gross
+        } else {
+            null
+        }
+    if (stars == null && tomatoes == null && money == null) return
     val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.services.StreamingStore.votes(dto.id)
     val style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-    val showVotes = votes != null && maxWidth >= 112.dp
+    val showMoney = money != null && maxWidth >= 96.dp
+    val showVotes = votes != null && maxWidth >= (if (showMoney) 150.dp else 112.dp)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -76,6 +84,13 @@ fun PosterRatingBand(
             }
         } else {
             Spacer(Modifier.size(1.dp))
+        }
+        if (showMoney) {
+            Text(
+                text = com.github.damontecres.wholphin.services.BoxOffice.short(money!!),
+                style = style.copy(fontSize = 10.sp, color = Color(0xFF9BE59B)),
+                maxLines = 1,
+            )
         }
         if (tomatoes != null) {
             Row(

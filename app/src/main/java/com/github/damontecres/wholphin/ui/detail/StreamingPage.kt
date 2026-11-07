@@ -207,6 +207,13 @@ private fun StreamingPanel(
                         }
                         entry.rt?.let { Text("🍅 $it%", fontSize = 15.sp, color = Color.White) }
                     }
+                    if (entry.gross != null || entry.budget != null) {
+                        com.github.damontecres.wholphin.services.BoxOffice
+                            .line(
+                                com.github.damontecres.wholphin.services.BoxOffice
+                                    .Money(entry.gross, entry.budget, entry.year, entry.grossToday),
+                            )?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2) }
+                    }
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
                     entry.note?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f)) }
                 }

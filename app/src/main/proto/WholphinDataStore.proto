@@ -222,6 +222,8 @@ enum BrowseOrder {
   BROWSE_HIGHEST_RATED = 0;
   BROWSE_NEWEST = 1;
   BROWSE_TOMATOES = 2;
+  BROWSE_BOX_OFFICE = 3;
+  BROWSE_BOX_OFFICE_TODAY = 4;
 }
 
 message AdvancedPreferences {

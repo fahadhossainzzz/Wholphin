@@ -70,6 +70,7 @@ fun MovieDetailsHeader(
                 Modifier.padding(start = HeaderUtils.startPadding),
             )
             WatchProvidersLine(movie, Modifier.padding(start = HeaderUtils.startPadding))
+            com.github.damontecres.wholphin.ui.components.BoxOfficeLine(movie, Modifier.padding(start = HeaderUtils.startPadding))
 
             dto.genres?.letNotEmpty {
                 GenreText(it, Modifier.padding(start = HeaderUtils.startPadding))

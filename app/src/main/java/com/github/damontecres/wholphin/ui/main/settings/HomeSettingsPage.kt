@@ -131,7 +131,12 @@ fun HomeSettingsPage(
                                     onClickMove = viewModel::moveRow,
                                     onClickDelete = viewModel::deleteRow,
                                     onClick = { index, row ->
-                                        backStack.add(RowSettings(row.id))
+                                        // NoBars: custom rows open the builder (it links to the card look)
+                                        if (row.config is HomeRowConfig.GetItems) {
+                                            backStack.add(HomeSettingsDestination.CustomRow(row.id))
+                                        } else {
+                                            backStack.add(RowSettings(row.id))
+                                        }
                                         scope.launch(ExceptionHandler()) {
                                             Timber.v("Scroll to $index")
                                             listState.animateScrollToItem(index)
@@ -179,10 +184,40 @@ fun HomeSettingsPage(
                                             MetaRowType.PLAYLIST -> {
                                                 searchForDialog = BaseItemKind.PLAYLIST
                                             }
+
+                                            MetaRowType.CUSTOM -> {
+                                                val id = viewModel.addCustomRow()
+                                                while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+                                                backStack.add(HomeSettingsDestination.CustomRow(id))
+                                                scope.launch(ExceptionHandler()) {
+                                                    kotlinx.coroutines.delay(400)
+                                                    listState.animateScrollToItem(state.rows.lastIndex.coerceAtLeast(0))
+                                                }
+                                            }
                                         }
                                     },
                                     modifier = destModifier,
                                 )
+                            }
+
+                            is HomeSettingsDestination.CustomRow -> {
+                                val row = state.rows.firstOrNull { it.id == dest.rowId }
+                                if (row != null) {
+                                    CustomRowEditor(
+                                        row = row,
+                                        libraries = state.libraries,
+                                        viewModel = viewModel,
+                                        onOpenLook = { backStack.add(RowSettings(dest.rowId)) },
+                                        onDuplicate = {
+                                            viewModel.duplicateRow(dest.rowId)?.let {
+                                                backStack.removeAt(backStack.lastIndex)
+                                                backStack.add(HomeSettingsDestination.CustomRow(it))
+                                            }
+                                        },
+                                        onDone = { backStack.removeAt(backStack.lastIndex) },
+                                        modifier = destModifier,
+                                    )
+                                }
                             }
 
                             is ChooseRowType -> {

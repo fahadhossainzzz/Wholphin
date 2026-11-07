@@ -55,6 +55,11 @@ import com.github.damontecres.wholphin.data.filter.FavoriteFilter
 import com.github.damontecres.wholphin.data.filter.FilterValueOption
 import com.github.damontecres.wholphin.data.filter.FilterVideoType
 import com.github.damontecres.wholphin.data.filter.GenreFilter
+import com.github.damontecres.wholphin.data.filter.NbBoolFilter
+import com.github.damontecres.wholphin.data.filter.NbIntFilter
+import com.github.damontecres.wholphin.data.filter.NbStringFilter
+import com.github.damontecres.wholphin.data.filter.NbStringListFilter
+import com.github.damontecres.wholphin.data.filter.NbUuidListFilter
 import com.github.damontecres.wholphin.data.filter.ItemFilterBy
 import com.github.damontecres.wholphin.data.filter.OfficialRatingFilter
 import com.github.damontecres.wholphin.data.filter.PlayedFilter
@@ -224,6 +229,16 @@ fun FilterByButton(
                         val isSelected =
                             remember(currentValue) {
                                 when (filterOption) {
+                                    // NoBars: our filters, by kind
+                                    is NbIntFilter,
+                                    is NbStringFilter,
+                                    is NbBoolFilter,
+                                    -> currentValue == value.value
+
+                                    is NbUuidListFilter,
+                                    is NbStringListFilter,
+                                    -> (currentValue as? List<*>).orEmpty().contains(value.value)
+
                                     GenreFilter,
                                     StudioFilter,
                                     -> {
@@ -291,6 +306,19 @@ fun FilterByButton(
                             onClick = {
                                 val newFilter =
                                     when (filterOption) {
+                                        is NbIntFilter,
+                                        is NbStringFilter,
+                                        is NbBoolFilter,
+                                        -> filterOption.set(if (isSelected) null else value.value, current)
+
+                                        is NbUuidListFilter,
+                                        is NbStringListFilter,
+                                        -> {
+                                            val list = (currentValue as? List<Any?>).orEmpty().toMutableList()
+                                            if (isSelected) list.remove(value.value) else list.add(value.value)
+                                            filterOption.set(list.takeIf { it.isNotEmpty() }, current)
+                                        }
+
                                         GenreFilter,
                                         StudioFilter,
                                         -> {

@@ -33,6 +33,16 @@ fun HomeSettingsAddRow(
                     .fillMaxHeight()
                     .focusRestorer(firstFocus),
         ) {
+            // NoBars: a row made from any filters and any order
+            item {
+                HomeSettingsListItem(
+                    selected = false,
+                    headlineText = stringResource(MetaRowType.CUSTOM.stringId),
+                    supportingContent = { androidx.tv.material3.Text("Any filters: genre, people, quality, money, streaming, ratings…") },
+                    onClick = { onClickMeta.invoke(MetaRowType.CUSTOM) },
+                    modifier = Modifier.focusRequester(firstFocus),
+                )
+            }
             itemsIndexed(
                 listOf(
                     MetaRowType.CONTINUE_WATCHING,
@@ -44,7 +54,7 @@ fun HomeSettingsAddRow(
                     selected = false,
                     headlineText = stringResource(type.stringId),
                     onClick = { onClickMeta.invoke(type) },
-                    modifier = Modifier.ifElse(index == 0, Modifier.focusRequester(firstFocus)),
+                    modifier = Modifier,
                 )
             }
             item {
@@ -101,4 +111,7 @@ enum class MetaRowType(
     DISCOVER(R.string.discover),
     COLLECTION(R.string.collection),
     PLAYLIST(R.string.playlist),
+
+    /** NoBars: custom row from any filters */
+    CUSTOM(R.string.nb_custom_row),
 }

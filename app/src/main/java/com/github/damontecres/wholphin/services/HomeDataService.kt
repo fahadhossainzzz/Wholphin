@@ -419,13 +419,51 @@ class HomeDataService
                 }
 
                 is HomeRowConfig.GetItems -> {
-                    val request =
+                    val rowLimit = row.filter.maxItems ?: limit
+                    val base =
                         row.filter.asGetItemsRequest().copy(
                             userId = userDto.id,
-                            limit = limit,
+                            limit = rowLimit,
                             fields = HomeItemFieldsBoxSets,
                         )
-                    if (usePaging) {
+                    // NoBars: a custom row: the library filter menu's filters (ours included) and any order
+                    val lib = row.filter.libraryFilter
+                    val sel = row.filter.sort
+                    val request =
+                        (lib?.applyTo(base, overwriteIncludeTypes = false) ?: base).let { r ->
+                            if (sel != null && NbQuery.clientSort(sel.sort) == null) {
+                                r.copy(
+                                    sortBy = listOf(sel.sort, org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME),
+                                    sortOrder = listOf(sel.direction, org.jellyfin.sdk.model.api.SortOrder.ASCENDING),
+                                )
+                            } else {
+                                r
+                            }
+                        }
+                    if (NbQuery.needed(lib?.extra, sel?.sort)) {
+                        val ids =
+                            NbQuery.orderedIds(
+                                api,
+                                request,
+                                lib?.extra,
+                                NbQuery.clientSort(sel?.sort),
+                                sel?.direction != org.jellyfin.sdk.model.api.SortOrder.ASCENDING,
+                            )
+                        if (usePaging) {
+                            ApiRequestPager(
+                                api,
+                                request.copy(ids = ids, sortBy = null, sortOrder = null),
+                                com.github.damontecres.wholphin.util.OrderedIdsRequestHandler,
+                                scope,
+                                useSeriesForPrimary = row.viewOptions.useSeries,
+                            ).init()
+                        } else {
+                            com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
+                                .execute(api, request.copy(ids = ids, startIndex = 0, limit = rowLimit))
+                                .content.items
+                                .map { BaseItem(it, row.viewOptions.useSeries) }
+                        }
+                    } else if (usePaging) {
                         ApiRequestPager(
                             api,
                             request,
@@ -444,7 +482,7 @@ class HomeDataService
                             it,
                             row.viewOptions,
                             rowType = row,
-                            showViewMore = it.size >= limit,
+                            showViewMore = it.size >= rowLimit,
                         )
                     }
                 }

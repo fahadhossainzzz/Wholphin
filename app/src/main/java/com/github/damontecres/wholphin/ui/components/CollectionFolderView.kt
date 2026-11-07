@@ -397,7 +397,7 @@ class CollectionFolderViewModel
             }
         }
 
-        private fun createPager(
+        private suspend fun createPager(
             sortAndDirection: SortAndDirection,
             recursive: Boolean,
             filter: GetItemsFilter,
@@ -411,20 +411,32 @@ class CollectionFolderViewModel
                             recursive = recursive,
                             filter = filter,
                         )
-                    val newPager =
+                    // NoBars: our own filters and orders (money, weighted IMDb, streaming…) are worked out on the TV
+                    if (com.github.damontecres.wholphin.services.NbQuery.needed(filter.extra, sortAndDirection.sort)) {
+                        val ids =
+                            com.github.damontecres.wholphin.services.NbQuery.orderedIds(
+                                api,
+                                request,
+                                filter.extra,
+                                com.github.damontecres.wholphin.services.NbQuery.clientSort(sortAndDirection.sort),
+                                sortAndDirection.direction != org.jellyfin.sdk.model.api.SortOrder.ASCENDING,
+                            )
                         ApiRequestPager(
                             api,
-                            request,
-                            // NoBars: money orders are sorted on the TV
-                            if (com.github.damontecres.wholphin.ui.data.MoneySortCarrier.of(sortAndDirection.sort) != null) {
-                                com.github.damontecres.wholphin.util.MoneySortRequestHandler
-                            } else {
-                                GetItemsRequestHandler
-                            },
+                            request.copy(ids = ids, sortBy = null, sortOrder = null),
+                            com.github.damontecres.wholphin.util.OrderedIdsRequestHandler,
                             viewModelScope,
                             useSeriesForPrimary = useSeriesForPrimary,
                         )
-                    newPager
+                    } else {
+                        ApiRequestPager(
+                            api,
+                            request,
+                            GetItemsRequestHandler,
+                            viewModelScope,
+                            useSeriesForPrimary = useSeriesForPrimary,
+                        )
+                    }
                 }
 
                 GetItemsFilterOverride.PERSON -> {

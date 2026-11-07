@@ -249,6 +249,40 @@ object MoneySortRequestHandler : RequestHandler<GetItemsRequest> {
     }
 }
 
+/**
+ * NoBars: pages through a list worked out on the TV ([com.github.damontecres.wholphin.services.NbQuery]). The
+ * request's ids are the whole list in order; each page fetches its slice by id and keeps that order.
+ */
+@Serializable
+object OrderedIdsRequestHandler : RequestHandler<GetItemsRequest> {
+    override fun prepare(
+        request: GetItemsRequest,
+        startIndex: Int,
+        limit: Int,
+        enableTotalRecordCount: Boolean,
+    ): GetItemsRequest = request.copy(startIndex = startIndex, limit = limit, enableTotalRecordCount = enableTotalRecordCount)
+
+    override suspend fun execute(
+        api: ApiClient,
+        request: GetItemsRequest,
+    ): Response<BaseItemDtoQueryResult> {
+        val ids = request.ids.orEmpty()
+        val start = request.startIndex ?: 0
+        val slice = ids.drop(start).take(request.limit ?: ids.size)
+        val items =
+            if (slice.isEmpty()) {
+                emptyList()
+            } else {
+                val order = slice.withIndex().associate { it.value to it.index }
+                api.itemsApi
+                    .getItems(request.copy(ids = slice, startIndex = null, limit = null, sortBy = null, sortOrder = null))
+                    .content.items
+                    .sortedBy { order[it.id] ?: Int.MAX_VALUE }
+            }
+        return Response(BaseItemDtoQueryResult(items = items, totalRecordCount = ids.size, startIndex = start), 200, emptyMap())
+    }
+}
+
 @Serializable
 object GetEpisodesRequestHandler : RequestHandler<GetEpisodesRequest> {
     override fun prepare(

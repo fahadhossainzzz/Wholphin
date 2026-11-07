@@ -38,4 +38,10 @@ sealed interface HomeSettingsDestination : NavKey {
 
     @Serializable
     data object Presets : HomeSettingsDestination
+
+    /** NoBars: the custom row builder */
+    @Serializable
+    data class CustomRow(
+        val rowId: Int,
+    ) : HomeSettingsDestination
 }

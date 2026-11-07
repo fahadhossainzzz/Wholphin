@@ -301,6 +301,12 @@ data class HomeGetItemsFilter(
     val genreIds: List<UUID>? = null,
     val minPremiereDate: LocalDateTime? = null,
     val maxPremiereDate: LocalDateTime? = null,
+    /** NoBars: a custom row's filters, the same ones as the library filter menu (incl. our own) */
+    val libraryFilter: GetItemsFilter? = null,
+    /** NoBars: a custom row's order, incl. the TV-side ones (box office, weighted IMDb…) */
+    val sort: SortAndDirection? = null,
+    /** NoBars: how many items a custom row shows */
+    val maxItems: Int? = null,
 ) {
     fun asGetItemsRequest() =
         GetItemsRequest(

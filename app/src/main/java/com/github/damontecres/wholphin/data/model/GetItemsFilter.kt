@@ -50,6 +50,8 @@ data class GetItemsFilter(
     val years: List<Int>? = null,
     val decades: List<Int>? = null,
     val override: GetItemsFilterOverride = GetItemsFilterOverride.NONE,
+    /** NoBars: tags-exclusions, money, streaming, votes, Tomatoes, runtime, dates… (see [NbExtraFilter]) */
+    val extra: NbExtraFilter? = null,
 ) {
     /**
      * Returns how many of filters are actually being used in this [GetItemsFilter]
@@ -132,6 +134,16 @@ data class GetItemsFilter(
                     }
                 }
             },
+        // NoBars: the parts of the extra filters Jellyfin can do itself
+        hasSubtitles = extra?.hasSubtitles ?: req.hasSubtitles,
+        filters =
+            if (extra?.inProgress == true) {
+                (req.filters.orEmpty() + org.jellyfin.sdk.model.api.ItemFilter.IS_RESUMABLE).distinct()
+            } else {
+                req.filters
+            },
+        minPremiereDate =
+            extra?.releasedWithinDays?.let { java.time.LocalDateTime.now().minusDays(it.toLong()) } ?: req.minPremiereDate,
     )
 
     fun applyTo(req: GetPersonsRequest) =

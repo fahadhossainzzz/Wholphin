@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.filterApi
 import org.jellyfin.sdk.api.client.extensions.genresApi
+import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.localizationApi
 import org.jellyfin.sdk.api.client.extensions.studiosApi
 import org.jellyfin.sdk.api.client.extensions.yearsApi
@@ -109,7 +110,6 @@ class FilterOptionCache
                     .getStudios(
                         parentId = parentId,
                         userId = userId,
-                        includeItemTypes = listOf(BaseItemKind.SERIES),
                     ).content.items
                     .map { FilterValueOption(it.name ?: "", it.id) }
             }
@@ -188,6 +188,64 @@ class FilterOptionCache
 
             is DiscoverFilterBy -> {
                 getDiscoverFilterOptionValues(filterOption)
+            }
+
+            is com.github.damontecres.wholphin.data.filter.NbFilterBy<*> -> {
+                nbFilterOptionValues(userId, parentId, filterOption)
+            }
+        }
+
+        /** NoBars: the options of our own filters */
+        private suspend fun nbFilterOptionValues(
+            userId: UUID?,
+            parentId: UUID?,
+            filterOption: com.github.damontecres.wholphin.data.filter.NbFilterBy<*>,
+        ): List<FilterValueOption> {
+            val c = com.github.damontecres.wholphin.data.filter.NbFilterChoices
+            fun <T> List<Pair<T, String>>.options() = map { FilterValueOption(it.second, it.first) }
+            return when (filterOption) {
+                com.github.damontecres.wholphin.data.filter.TagFilter,
+                com.github.damontecres.wholphin.data.filter.ExcludeTagFilter,
+                ->
+                    api.filterApi
+                        .getQueryFiltersLegacy(parentId = parentId, userId = userId)
+                        .content.tags
+                        .orEmpty()
+                        .sorted()
+                        .map { FilterValueOption(it, it) }
+
+                com.github.damontecres.wholphin.data.filter.ExcludeGenreFilter ->
+                    api.genresApi
+                        .getGenres(parentId = parentId, userId = userId)
+                        .content.items
+                        .map { FilterValueOption(it.name ?: "", it.id) }
+
+                com.github.damontecres.wholphin.data.filter.CollectionMembershipFilter ->
+                    api.itemsApi
+                        .getItems(
+                            userId = userId,
+                            includeItemTypes = listOf(BaseItemKind.BOX_SET),
+                            recursive = true,
+                            sortBy = listOf(ItemSortBy.SORT_NAME),
+                            enableImages = false,
+                        ).content.items
+                        .map { FilterValueOption(it.name ?: "", it.id) }
+
+                com.github.damontecres.wholphin.data.filter.MinVotesFilter -> c.minVotes.options()
+                com.github.damontecres.wholphin.data.filter.MinTomatoesFilter -> c.minTomatoes.options()
+                com.github.damontecres.wholphin.data.filter.MinBoxOfficeFilter -> c.boxOffice.options()
+                com.github.damontecres.wholphin.data.filter.VerdictFilter -> c.verdict.options()
+                com.github.damontecres.wholphin.data.filter.YearRankFilter -> c.yearRank.options()
+                com.github.damontecres.wholphin.data.filter.StreamingReleaseFilter -> c.streamingRelease.options()
+                com.github.damontecres.wholphin.data.filter.OnServiceFilter -> c.onService.options()
+                com.github.damontecres.wholphin.data.filter.RuntimeFilter -> c.runtime.options()
+                com.github.damontecres.wholphin.data.filter.AddedWithinFilter -> c.addedWithin.options()
+                com.github.damontecres.wholphin.data.filter.ReleasedWithinFilter -> c.releasedWithin.options()
+                com.github.damontecres.wholphin.data.filter.SubtitlesFilter ->
+                    listOf(FilterValueOption("With subtitles", true), FilterValueOption("Without subtitles", false))
+                com.github.damontecres.wholphin.data.filter.InProgressFilter,
+                com.github.damontecres.wholphin.data.filter.WantedFilter,
+                -> listOf(FilterValueOption("Yes", true))
             }
         }
 

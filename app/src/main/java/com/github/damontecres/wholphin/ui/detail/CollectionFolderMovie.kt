@@ -88,6 +88,7 @@ fun CollectionFolderMovie(
                     showTitle = false,
                     recursive = true,
                     sortOptions = com.github.damontecres.wholphin.ui.data.MovieLibrarySortOptions,
+                    filterOptions = com.github.damontecres.wholphin.data.filter.NbMovieFilterOptions,
                     defaultViewOptions = ViewOptionsPoster,
                     modifier =
                         Modifier

@@ -65,6 +65,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.personsApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CollectionType
@@ -88,6 +89,7 @@ class HomeSettingsViewModel
         private val backdropService: BackdropService,
         private val seerrServerRepository: SeerrServerRepository,
         private val serverPluginApi: ServerPluginApi,
+        private val filterOptionCache: com.github.damontecres.wholphin.services.FilterOptionCache,
         val preferencesDataStore: DataStore<AppPreferences>,
         val navigationManager: NavigationManager,
     ) : ViewModel() {
@@ -276,6 +278,7 @@ class HomeSettingsViewModel
                         MetaRowType.FAVORITES,
                         MetaRowType.COLLECTION,
                         MetaRowType.PLAYLIST,
+                        MetaRowType.CUSTOM,
                         -> {
                             throw IllegalArgumentException("Should use a different addRow() instead")
                         }
@@ -935,6 +938,108 @@ class HomeSettingsViewModel
         }
 
         fun discardChanges(): Job = Job().apply { complete() }
+
+        // ---- NoBars: custom rows (any filters, any order) -----------------------------------------------------
+
+        /** Adds an empty custom row (newest films first) and returns its id, so the builder can open on it. */
+        fun addCustomRow(): Int {
+            val id = idCounter++
+            val config =
+                HomeRowConfig.GetItems(
+                    name = NEW_CUSTOM_ROW,
+                    filter =
+                        com.github.damontecres.wholphin.data.model.HomeGetItemsFilter(
+                            includeItemTypes = listOf(BaseItemKind.MOVIE),
+                            recursive = true,
+                            libraryFilter = com.github.damontecres.wholphin.data.model.GetItemsFilter(),
+                            sort =
+                                com.github.damontecres.wholphin.ui.data.SortAndDirection(
+                                    org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED,
+                                    org.jellyfin.sdk.model.api.SortOrder.DESCENDING,
+                                ),
+                            maxItems = 24,
+                        ),
+                )
+            viewModelScope.launchIO {
+                updateState {
+                    it.copy(
+                        loading = LoadingState.Loading,
+                        rows = it.rows + HomeRowConfigDisplay(id, StringStringProvider(config.name), config),
+                    )
+                }
+                fetchRowData()
+            }
+            return id
+        }
+
+        /** Replaces a custom row's settings (name, filters, order…) and reloads the preview. */
+        fun updateCustomRow(
+            rowId: Int,
+            config: HomeRowConfig.GetItems,
+        ) {
+            viewModelScope.launchIO {
+                updateState { st ->
+                    val index = st.rows.indexOfFirst { it.id == rowId }
+                    if (index < 0) {
+                        st
+                    } else {
+                        st.copy(
+                            loading = LoadingState.Loading,
+                            rows =
+                                st.rows.toMutableList().apply {
+                                    set(index, st.rows[index].copy(title = StringStringProvider(config.name), config = config))
+                                },
+                        )
+                    }
+                }
+                fetchRowData()
+            }
+        }
+
+        /** A copy of a row right after it; returns the copy's id. */
+        fun duplicateRow(rowId: Int): Int? {
+            val row = state.value.rows.firstOrNull { it.id == rowId } ?: return null
+            val id = idCounter++
+            val config =
+                when (val c = row.config) {
+                    is HomeRowConfig.GetItems -> c.copy(name = c.name + " (copy)")
+                    else -> c
+                }
+            viewModelScope.launchIO {
+                updateState { st ->
+                    val index = st.rows.indexOfFirst { it.id == rowId }
+                    st.copy(
+                        loading = LoadingState.Loading,
+                        rows =
+                            st.rows.toMutableList().apply {
+                                add(index + 1, HomeRowConfigDisplay(id, StringStringProvider((config as? HomeRowConfig.GetItems)?.name ?: ""), config))
+                            },
+                    )
+                }
+                fetchRowData()
+            }
+            return id
+        }
+
+        /** The choices of a filter, across all libraries. */
+        suspend fun filterValues(option: com.github.damontecres.wholphin.data.filter.ItemFilterBy<*>) =
+            filterOptionCache.getFilterOptionValues(null, option)
+
+        /** People (actors, directors…) whose name matches. */
+        suspend fun searchPeople(query: String): List<Pair<UUID, String>> =
+            try {
+                api.personsApi
+                    .getPersons(searchTerm = query, limit = 25, userId = serverRepository.currentUser?.id)
+                    .content.items
+                    .map { it.id to (it.name ?: "") }
+            } catch (e: Exception) {
+                Timber.w(e, "NoBars: person search failed")
+                emptyList()
+            }
+
+        companion object {
+            const val NEW_CUSTOM_ROW = "New custom row"
+        }
     }
 
 data class HomePageSettingsState(

@@ -61,9 +61,35 @@ object MoneySortCarrier {
     val options: List<ItemSortBy> = map.keys.toList()
 }
 
-/** NoBars: the Movies library's sort menu, with the money orders after the ratings. */
+/** NoBars: IMDb rating weighted by its number of votes (IMDb's Top 250 method), worked out on the TV */
+val WeightedImdbSort: ItemSortBy = ItemSortBy.NAME
+
+/** NoBars: the Movies library's sort menu, with the weighted IMDb order and the money orders after the ratings. */
 val MovieLibrarySortOptions =
-    MovieSortOptions.flatMap { if (it == ItemSortBy.CRITIC_RATING) listOf(it) + MoneySortCarrier.options else listOf(it) }
+    MovieSortOptions.flatMap {
+        when (it) {
+            ItemSortBy.COMMUNITY_RATING -> listOf(it, WeightedImdbSort)
+            ItemSortBy.CRITIC_RATING -> listOf(it) + MoneySortCarrier.options
+            else -> listOf(it)
+        }
+    }
+
+/** NoBars: the custom row builder's sorts (films and shows alike). */
+val CustomRowSortOptions =
+    listOf(
+        ItemSortBy.DATE_CREATED,
+        ItemSortBy.PREMIERE_DATE,
+        ItemSortBy.COMMUNITY_RATING,
+        WeightedImdbSort,
+        ItemSortBy.CRITIC_RATING,
+    ) + MoneySortCarrier.options +
+        listOf(
+            ItemSortBy.RUNTIME,
+            ItemSortBy.SORT_NAME,
+            ItemSortBy.DATE_PLAYED,
+            ItemSortBy.PLAY_COUNT,
+            ItemSortBy.RANDOM,
+        )
 
 val SeriesSortOptions =
     listOf(
@@ -215,7 +241,9 @@ fun getStringRes(sort: ItemSortBy): Int =
 
         ItemSortBy.ARTIST -> R.string.artist
 
-        // NoBars: money orders (see MoneySortCarrier)
+        // NoBars: TV-side orders (see MoneySortCarrier, WeightedImdbSort)
+        ItemSortBy.NAME -> R.string.sort_by_weighted_imdb
+
         ItemSortBy.START_DATE -> R.string.sort_by_box_office
 
         ItemSortBy.AIR_TIME -> R.string.sort_by_box_office_today

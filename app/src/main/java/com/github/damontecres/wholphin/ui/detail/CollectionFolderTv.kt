@@ -102,7 +102,7 @@ fun CollectionFolderTv(
                     showTitle = false,
                     recursive = true,
                     sortOptions = SeriesSortOptions,
-                    filterOptions = DefaultTvFilterOptions,
+                    filterOptions = com.github.damontecres.wholphin.data.filter.NbTvFilterOptions,
                     defaultViewOptions = ViewOptionsPoster,
                     modifier =
                         Modifier

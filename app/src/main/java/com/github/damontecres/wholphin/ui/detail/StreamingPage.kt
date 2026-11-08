@@ -285,7 +285,7 @@ private fun StreamingPanel(
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
-                        onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), entry.title) },
+                        onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), entry.title, netflixId = entry.netflixId) },
                         modifier = Modifier.focusRequester(first),
                     ) { Text("▶  Open in $name") }
                     Button(onClick = onBack) { Text("Back") }
@@ -295,20 +295,32 @@ private fun StreamingPanel(
     }
 }
 
-/** NoBars: plays a YouTube trailer in the TV's YouTube app (or whatever handles YouTube links). */
+/** NoBars: plays a YouTube trailer in the TV's YouTube app. The TV app wants a normal watch link addressed to it by
+ * name (a "vnd.youtube:" link just opens its home screen). */
 private fun openTrailer(
     context: android.content.Context,
     key: String,
 ) {
-    val app = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:$key"))
-    val web = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$key"))
-    try {
-        context.startActivity(app.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-    } catch (e: Exception) {
+    val watch = android.net.Uri.parse("https://www.youtube.com/watch?v=$key")
+    val tries =
+        listOf(
+            android.content.Intent(android.content.Intent.ACTION_VIEW, watch).setPackage("com.google.android.youtube.tv"),
+            android.content.Intent(android.content.Intent.ACTION_VIEW, watch).setPackage("com.google.android.youtube"),
+            android.content.Intent(android.content.Intent.ACTION_VIEW, watch),
+        )
+    for (intent in tries) {
         try {
-            context.startActivity(web.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e2: Exception) {
-            android.widget.Toast.makeText(context, "YouTube isn't installed", android.widget.Toast.LENGTH_SHORT).show()
+            context.startActivity(
+                intent
+                    .putExtra("force_fullscreen", true)
+                    .putExtra("finish_on_ended", true)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            return
+        } catch (_: android.content.ActivityNotFoundException) {
+        } catch (e: Exception) {
+            timber.log.Timber.w(e, "NoBars: trailer hand-off failed")
         }
     }
+    android.widget.Toast.makeText(context, "Couldn't open YouTube for this trailer", android.widget.Toast.LENGTH_LONG).show()
 }

@@ -54,7 +54,14 @@ fun WatchProvidersLine(
         services.forEach { service ->
             val name = StreamingStore.displayName(service)
             Surface(
-                onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), item.name ?: "") },
+                onClick = {
+                    WatchProviders.open(
+                        context,
+                        WatchProviders.Provider(0, name, null),
+                        item.name ?: "",
+                        netflixId = StreamingStore.netflixIds[item.id.toString().replace("-", "")],
+                    )
+                },
                 shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
                 colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White),
                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1.15f),

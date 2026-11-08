@@ -87,8 +87,45 @@ object WatchProviders {
         context: Context,
         provider: Provider,
         title: String,
+        netflixId: String? = null,
     ) {
         val packages = packagesFor(provider.name)
+        val isNetflix = provider.name.lowercase().startsWith("netflix")
+        if (isNetflix) {
+            // Netflix's TV app takes links to a title (by Netflix's own number) but no searches
+            if (netflixId != null) {
+                for (pkg in packages) {
+                    try {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.netflix.com/title/$netflixId"))
+                                .setPackage(pkg)
+                                .putExtra("source", "30")
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                        return
+                    } catch (_: ActivityNotFoundException) {
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars: Netflix title hand-off to %s failed", pkg)
+                    }
+                }
+            }
+            for (pkg in packages) {
+                val launch =
+                    context.packageManager.getLeanbackLaunchIntentForPackage(pkg)
+                        ?: context.packageManager.getLaunchIntentForPackage(pkg)
+                if (launch != null) {
+                    try {
+                        context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        Toast.makeText(context, "In Netflix, search for: $title", Toast.LENGTH_LONG).show()
+                        return
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars: opening %s failed", pkg)
+                    }
+                }
+            }
+            Toast.makeText(context, "Netflix isn't installed on this TV", Toast.LENGTH_LONG).show()
+            return
+        }
         for (pkg in packages) {
             searchUri(provider.name, title)?.let { uri ->
                 try {

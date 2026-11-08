@@ -63,6 +63,8 @@ object StreamingStore {
         val tmdbVotes: Int? = null,
         /** Theatre page: "+$48M this week ▲ · day 12 in cinemas" */
         val facts: String? = null,
+        /** Netflix's own title number (from Wikidata), to open the title itself in the Netflix app */
+        val netflixId: String? = null,
     )
 
     data class Row(
@@ -95,6 +97,9 @@ object StreamingStore {
 
     /** "movie:123" / "tv:456" (TMDB) -> Jellyfin item id, for everything in the library */
     @Volatile var owned: Map<String, String> = emptyMap()
+
+    /** Library item id (no dashes) -> Netflix's title number, for titles in the library that are on Netflix */
+    @Volatile var netflixIds: Map<String, String> = emptyMap()
         private set
 
     /** The library copy of a catalogue title, if you have it (the daily list, or anything imported since). */
@@ -111,6 +116,7 @@ object StreamingStore {
                 _library.value = map
                 BoxOffice.load(json.optJSONObject("money"))
                 owned = json.optJSONObject("owned")?.toStringMap() ?: emptyMap()
+                netflixIds = json.optJSONObject("netflix")?.toStringMap() ?: emptyMap()
                 CriticFallback.load(json.optJSONObject("rt"), json.optJSONObject("pop"))
                 Timber.i("NoBars: streaming library list loaded (%d titles)", map.size)
             } catch (e: Exception) {
@@ -176,6 +182,7 @@ object StreamingStore {
             tmdbRating = o.optDouble("tmdbRating").takeIf { !it.isNaN() && it > 0 }?.toFloat(),
             tmdbVotes = o.optInt("tmdbVotes").takeIf { it > 0 },
             facts = o.str("facts"),
+            netflixId = o.str("nf"),
         )
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }

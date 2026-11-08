@@ -72,6 +72,8 @@ object StreamingStore {
         val freeOn: String? = null,
         /** "Apple TV, Google Play, Amazon" */
         val rentBuy: String? = null,
+        /** How many more streaming / free platforms besides the poster's one logo */
+        val ottMore: Int = 0,
         /** Streaming / free platforms, most countries first (for the Open button) */
         val services: List<String> = emptyList(),
         /** Background picture for the banner at the top of the page */
@@ -203,6 +205,7 @@ object StreamingStore {
             streamOn = o.str("streamOn"),
             freeOn = o.str("freeOn"),
             rentBuy = o.str("rentBuy"),
+            ottMore = o.optInt("ottMore"),
             services = o.optJSONArray("svc")?.toStringList() ?: emptyList(),
             backdrop = o.str("backdrop"),
         )
@@ -265,6 +268,8 @@ object StreamingStore {
 
     /** Streaming-service logos for a Theatre poster (empty elsewhere). */
     fun ottLogos(id: UUID?): List<String> = id?.let { entries[it]?.ott?.map { p -> p.second } }.orEmpty()
+
+    fun ottMore(id: UUID?): Int = id?.let { entries[it]?.ottMore } ?: 0
 
     fun votes(id: UUID?): Int? = id?.let { entries[it]?.let { e -> e.imdbVotes ?: e.tmdbVotes } }
 

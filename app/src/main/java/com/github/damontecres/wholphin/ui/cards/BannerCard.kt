@@ -190,21 +190,33 @@ fun BannerCard(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = if (playPercent > 0 && playPercent < 100) Cards.playedPercentHeight else 0.dp),
             )
-            // NoBars: where a Theatre film is streaming (India), small service logos in the top right corner
-            val ottLogos = com.github.damontecres.wholphin.services.StreamingStore.ottLogos(item?.id)
-            if (ottLogos.isNotEmpty()) {
-                androidx.compose.foundation.layout.Column(
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
+            // NoBars: where a Theatre film is out on digital: one platform logo (+N more, listed in the panel)
+            com.github.damontecres.wholphin.services.StreamingStore.ottLogos(item?.id).firstOrNull()?.let { logo ->
+                val more = com.github.damontecres.wholphin.services.StreamingStore.ottMore(item?.id)
+                androidx.compose.foundation.layout.Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(5.dp)
+                            .background(Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                            .padding(2.dp),
                 ) {
-                    ottLogos.forEach { logo ->
-                        coil3.compose.AsyncImage(
-                            model = logo,
-                            contentDescription = null,
-                            modifier =
-                                Modifier
-                                    .size(22.dp)
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp)),
+                    coil3.compose.AsyncImage(
+                        model = logo,
+                        contentDescription = null,
+                        modifier =
+                            Modifier
+                                .size(22.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp)),
+                    )
+                    if (more > 0) {
+                        Text(
+                            text = "+$more",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp),
                         )
                     }
                 }

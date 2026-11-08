@@ -64,6 +64,9 @@ enum class PlaybackDialogType {
     SUBTITLE_DELAY,
     BITRATE,
     ZOOM,
+
+    /** NoBars: send the app's logs to the server, as Settings does */
+    SEND_LOGS,
 }
 
 data class PlaybackSettings(
@@ -161,6 +164,13 @@ fun PlaybackDialog(
                     )
                     add(
                         BottomDialogItem(
+                            data = PlaybackDialogType.SEND_LOGS,
+                            headline = "Send logs to the server",
+                            supporting = "Same as Settings → Send app logs; playback carries on",
+                        ),
+                    )
+                    add(
+                        BottomDialogItem(
                             data = PlaybackDialogType.DEBUG,
                             headline = stringResource(if (settings.showDebugInfo) R.string.hide_debug_info else R.string.show_debug_info),
                             supporting = null,
@@ -174,6 +184,9 @@ fun PlaybackDialog(
                 onSelectChoice = { _, choice ->
                     if (choice.data == PlaybackDialogType.DEBUG) {
                         onPlaybackActionClick.invoke(PlaybackAction.ShowDebug)
+                    } else if (choice.data == PlaybackDialogType.SEND_LOGS) {
+                        onPlaybackActionClick.invoke(PlaybackAction.SendLogs)
+                        onDismissRequest()
                     } else {
                         onClickPlaybackDialogType(choice.data)
                     }
@@ -269,6 +282,8 @@ fun PlaybackDialog(
                 }
             }
         }
+
+        PlaybackDialogType.SEND_LOGS -> {}
 
         PlaybackDialogType.ZOOM -> {
             Dialog(

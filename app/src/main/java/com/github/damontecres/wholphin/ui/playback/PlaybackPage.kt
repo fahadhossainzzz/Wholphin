@@ -354,6 +354,10 @@ fun PlaybackPageContent(
                 showDebugInfo = !showDebugInfo
             }
 
+            PlaybackAction.SendLogs -> {
+                viewModel.sendAppLogs()
+            }
+
             PlaybackAction.ShowPlaylist -> {
                 TODO()
             }

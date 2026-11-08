@@ -171,6 +171,11 @@ class PlaybackViewModel
             fun create(destination: Destination): PlaybackViewModel
         }
 
+        /** NoBars: the player's "Send logs to the server" (the same as Settings → Send app logs). */
+        fun sendAppLogs() {
+            viewModelScope.launchIO { serverReportService.sendAppLogs() }
+        }
+
         val currentPlayer = MutableStateFlow<PlayerInstance?>(null)
 
         internal lateinit var player: Player

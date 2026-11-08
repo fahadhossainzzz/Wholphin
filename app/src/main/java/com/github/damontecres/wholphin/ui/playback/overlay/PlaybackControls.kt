@@ -99,6 +99,9 @@ import kotlin.time.Duration.Companion.seconds
 sealed interface PlaybackAction {
     data object ShowDebug : PlaybackAction
 
+    /** NoBars: send the app's logs to the server from the player */
+    data object SendLogs : PlaybackAction
+
     data object ShowPlaylist : PlaybackAction
 
     data object ShowVideoFilterDialog : PlaybackAction

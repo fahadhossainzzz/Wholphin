@@ -62,6 +62,7 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import java.util.Locale
 import javax.inject.Inject
 import com.github.damontecres.wholphin.ui.ifElse
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 
@@ -70,7 +71,18 @@ class StreamingViewModel
     @Inject
     constructor(
         val navigationManager: NavigationManager,
-    ) : ViewModel()
+        private val backdropService: com.github.damontecres.wholphin.services.BackdropService,
+    ) : ViewModel() {
+        init {
+            viewModelScope.launch { backdropService.clearBackdrop() }
+        }
+
+        /** NoBars: the banner follows the selected poster, as in the library (TMDB's background picture). */
+        fun updateBackdrop(item: com.github.damontecres.wholphin.data.model.BaseItem) {
+            val url = StreamingStore.entries[item.id]?.backdrop ?: return
+            viewModelScope.launch { backdropService.submit(item.id.toString(), url) }
+        }
+    }
 
 /**
  * NoBars: the Netflix or Prime Video page. Rows come from the daily list on the Mac. Titles you have
@@ -162,7 +174,7 @@ fun StreamingPage(
                 onLongClickItem = { _, _ -> },
                 onClickPlay = onClick,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
-                onUpdateBackdrop = {},
+                onUpdateBackdrop = viewModel::updateBackdrop,
                 showLogo = false,
                 showViewMore = false,
                 modifier = modifier,
@@ -258,6 +270,10 @@ private fun StreamingPanel(
                             )?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2) }
                     }
                     entry.facts?.let { Text(it, fontSize = 13.sp, color = Color(0xFFA5D6A7)) }
+                    if (entry.ott.isNotEmpty()) {
+                        Text("Streaming in India on " + entry.ott.joinToString(", ") { it.first }, fontSize = 13.sp, color = Color(0xFFFFE082))
+                    }
+                    entry.ottUs?.let { Text("In the US on $it", fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f)) }
                     entry.date?.let { Text(it, fontSize = 13.sp, color = Color(0xFF90CAF9)) }
                     entry.cast?.let { Text("With $it", fontSize = 13.sp, color = Color.White.copy(alpha = 0.75f), maxLines = 2) }
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
@@ -276,9 +292,26 @@ private fun StreamingPanel(
                             Text("▶  Trailer")
                         }
                     }
+                    entry.ott.firstOrNull { WatchProviders.canOpen(it.first) }?.let { (svc, _) ->
+                        Button(
+                            onClick = {
+                                WatchProviders.open(
+                                    context,
+                                    WatchProviders.Provider(0, svc, null),
+                                    entry.title,
+                                    netflixId = entry.netflixId,
+                                )
+                            },
+                            modifier = Modifier.ifElse(entry.trailer == null, Modifier.focusRequester(first)),
+                        ) { Text("▶  Open in $svc") }
+                    }
                     Button(
                         onClick = { scope.launch { com.github.damontecres.wholphin.services.WantedStore.toggle(entry) } },
-                        modifier = Modifier.ifElse(entry.trailer == null, Modifier.focusRequester(first)),
+                        modifier =
+                            Modifier.ifElse(
+                                entry.trailer == null && entry.ott.none { WatchProviders.canOpen(it.first) },
+                                Modifier.focusRequester(first),
+                            ),
                     ) { Text(if (onList) "✓  On your list" else "＋  Want it") }
                     Button(onClick = onBack) { Text("Back") }
                 }

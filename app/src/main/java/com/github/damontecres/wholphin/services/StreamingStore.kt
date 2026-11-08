@@ -65,6 +65,12 @@ object StreamingStore {
         val facts: String? = null,
         /** Netflix's own title number (from Wikidata), to open the title itself in the Netflix app */
         val netflixId: String? = null,
+        /** Theatre page: subscription services streaming it in India (name, logo url), up to 3 */
+        val ott: List<Pair<String, String>> = emptyList(),
+        /** Theatre page: the same in the US, e.g. "HBO Max, Netflix" */
+        val ottUs: String? = null,
+        /** Background picture for the banner at the top of the page */
+        val backdrop: String? = null,
     )
 
     data class Row(
@@ -183,6 +189,14 @@ object StreamingStore {
             tmdbVotes = o.optInt("tmdbVotes").takeIf { it > 0 },
             facts = o.str("facts"),
             netflixId = o.str("nf"),
+            ott =
+                o.optJSONArray("ott")?.let { a ->
+                    (0 until a.length()).mapNotNull { i ->
+                        a.optJSONObject(i)?.let { p -> p.optString("n").takeIf { it.isNotBlank() }?.let { n -> n to p.optString("l") } }
+                    }
+                } ?: emptyList(),
+            ottUs = o.str("ottUs"),
+            backdrop = o.str("backdrop"),
         )
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
@@ -240,6 +254,9 @@ object StreamingStore {
             else -> e.badge
         }
     }
+
+    /** Streaming-service logos for a Theatre poster (empty elsewhere). */
+    fun ottLogos(id: UUID?): List<String> = id?.let { entries[it]?.ott?.map { p -> p.second } }.orEmpty()
 
     fun votes(id: UUID?): Int? = id?.let { entries[it]?.let { e -> e.imdbVotes ?: e.tmdbVotes } }
 

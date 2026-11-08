@@ -190,6 +190,25 @@ fun BannerCard(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = if (playPercent > 0 && playPercent < 100) Cards.playedPercentHeight else 0.dp),
             )
+            // NoBars: where a Theatre film is streaming (India), small service logos in the top right corner
+            val ottLogos = com.github.damontecres.wholphin.services.StreamingStore.ottLogos(item?.id)
+            if (ottLogos.isNotEmpty()) {
+                androidx.compose.foundation.layout.Column(
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
+                ) {
+                    ottLogos.forEach { logo ->
+                        coil3.compose.AsyncImage(
+                            model = logo,
+                            contentDescription = null,
+                            modifier =
+                                Modifier
+                                    .size(22.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp)),
+                        )
+                    }
+                }
+            }
             // NoBars: Netflix Top 10 rank, or ✓ for a streaming title you already have
             com.github.damontecres.wholphin.services.StreamingStore.badge(item?.id)?.let { badge ->
                 Text(

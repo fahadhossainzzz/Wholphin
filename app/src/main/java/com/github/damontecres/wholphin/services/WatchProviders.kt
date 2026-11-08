@@ -82,6 +82,9 @@ object WatchProviders {
         }
     }
 
+    /** True when there's a TV app we know how to hand over to for this service. */
+    fun canOpen(name: String): Boolean = packagesFor(name).isNotEmpty()
+
     /** Opens the service's app, searching for the title where the app supports it. */
     fun open(
         context: Context,

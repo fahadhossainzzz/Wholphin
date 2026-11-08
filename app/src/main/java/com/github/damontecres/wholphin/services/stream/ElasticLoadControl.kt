@@ -142,12 +142,12 @@ class ElasticLoadControl private constructor(
     companion object {
         const val GOAL_MS = 180_000L
         const val FLOOR_MS = 15_000L
-        const val MAX_BUDGET_BYTES = 400L * 1024 * 1024
+        const val MAX_BUDGET_BYTES = 300L * 1024 * 1024
         const val MIN_BUDGET_BYTES = 48L * 1024 * 1024
         const val RESUME_SHARE = 0.85
 
         /** Share of the app's memory limit the buffer may use (the rest of the app needs about 60 MB) */
-        const val HEAP_SHARE = 0.70
+        const val HEAP_SHARE = 0.60
         const val HEAP_BRAKE = 0.85f
         const val SYSTEM_BRAKE_MB = 150L
         const val SYSTEM_KEEP_MB = 200L

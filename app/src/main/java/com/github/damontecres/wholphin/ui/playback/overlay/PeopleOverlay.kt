@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -719,15 +723,6 @@ private fun FilmSummary(
             Text(facts(item, withRuntime = true), fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f))
         }
     }
-    item.data.overview?.let {
-        Text(
-            text = it,
-            fontSize = 14.sp,
-            color = Color.White.copy(alpha = 0.85f),
-            maxLines = 9,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (item.type == BaseItemKind.MOVIE || item.type == BaseItemKind.EPISODE) {
             Button(onClick = { onPlay(item) }, modifier = Modifier.focusRequester(first)) {
@@ -739,6 +734,45 @@ private fun FilmSummary(
             }
         }
         Button(onClick = onBack) { Text("Back") }
+    }
+    // NoBars: the full description below the buttons, scrolled with ▼ / ▲ (▲ at the top goes back to the buttons)
+    item.data.overview?.takeIf { it.isNotBlank() }?.let {
+        val scroll = androidx.compose.foundation.rememberScrollState()
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        Box(
+            modifier =
+                Modifier
+                    .heightIn(max = 300.dp)
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (e.key) {
+                            androidx.compose.ui.input.key.Key.DirectionDown -> {
+                                scope.launch { scroll.animateScrollTo((scroll.value + 220).coerceAtMost(scroll.maxValue)) }
+                                true
+                            }
+
+                            androidx.compose.ui.input.key.Key.DirectionUp -> {
+                                if (scroll.value > 0) {
+                                    scope.launch { scroll.animateScrollTo((scroll.value - 220).coerceAtLeast(0)) }
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+
+                            else -> {
+                                false
+                            }
+                        }
+                    }.focusable(),
+        ) {
+            Text(
+                text = it,
+                fontSize = 14.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.verticalScroll(scroll),
+            )
+        }
     }
 }
 

@@ -3,18 +3,22 @@ package com.github.damontecres.wholphin.ui.detail
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -41,6 +46,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -51,6 +57,7 @@ import com.github.damontecres.wholphin.services.StreamingStore
 import com.github.damontecres.wholphin.services.WatchProviders
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.data.RowColumn
+import com.github.damontecres.wholphin.ui.ifElse
 import com.github.damontecres.wholphin.ui.main.HomePageContent
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.ui.rememberPosition
@@ -58,13 +65,10 @@ import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.ui.util.StringStringProvider
 import com.github.damontecres.wholphin.util.HomeRowLoadingState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import org.jellyfin.sdk.model.api.BaseItemKind
 import java.util.Locale
 import javax.inject.Inject
-import com.github.damontecres.wholphin.ui.ifElse
-import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.collectAsState
+import org.jellyfin.sdk.model.api.BaseItemKind
 
 @HiltViewModel
 class StreamingViewModel
@@ -212,10 +216,10 @@ private fun StreamingPanel(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier =
                 Modifier
-                    .width(460.dp)
+                    .width(520.dp)
                     .fillMaxHeight()
                     .background(Color.Black.copy(alpha = 0.88f))
-                    .padding(horizontal = 22.dp, vertical = 26.dp)
+                    .padding(horizontal = 22.dp, vertical = 22.dp)
                     .onPreviewKeyEvent {
                         if (it.key == Key.Back || it.key == Key.ButtonB) {
                             if (it.type == KeyEventType.KeyUp) onBack()
@@ -225,6 +229,7 @@ private fun StreamingPanel(
                         }
                     },
         ) {
+            // 1. poster, title, ratings
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 AsyncImage(
                     model = entry.poster,
@@ -232,7 +237,7 @@ private fun StreamingPanel(
                     contentScale = ContentScale.Crop,
                     modifier =
                         Modifier
-                            .size(110.dp, 165.dp)
+                            .size(96.dp, 144.dp)
                             .clip(RoundedCornerShape(6.dp))
                             .background(Color.White.copy(alpha = 0.08f)),
                 )
@@ -262,71 +267,115 @@ private fun StreamingPanel(
                         entry.rt?.let { Text("🍅 $it%", fontSize = 15.sp, color = Color.White) }
                             ?: entry.pop?.let { Text("🍿 $it% audience", fontSize = 15.sp, color = Color.White) }
                     }
-                    if (entry.gross != null || entry.budget != null) {
-                        com.github.damontecres.wholphin.services.BoxOffice
-                            .line(
-                                com.github.damontecres.wholphin.services.BoxOffice
-                                    .Money(entry.gross, entry.budget, entry.year, entry.grossToday, grossLocal = entry.grossLocal),
-                            )?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2) }
-                    }
-                    entry.facts?.let { Text(it, fontSize = 13.sp, color = Color(0xFFA5D6A7)) }
-                    if (entry.ott.isNotEmpty()) {
-                        Text("Streaming in India on " + entry.ott.joinToString(", ") { it.first }, fontSize = 13.sp, color = Color(0xFFFFE082))
-                    }
-                    entry.ottUs?.let { Text("In the US on $it", fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f)) }
-                    entry.date?.let { Text(it, fontSize = 13.sp, color = Color(0xFF90CAF9)) }
-                    entry.cast?.let { Text("With $it", fontSize = 13.sp, color = Color.White.copy(alpha = 0.75f), maxLines = 2) }
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
-                    entry.note?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f)) }
                 }
             }
-            Text(entry.overview, fontSize = 14.sp, color = Color.White.copy(alpha = 0.88f), maxLines = 10, overflow = TextOverflow.Ellipsis)
-            if (service == StreamingStore.CINEMA) {
-                // NoBars: trailer on YouTube, your copy if you have it, and the "Want it" list
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
-                val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
-                val onList = wanted.any { it.tmdb == entry.tmdb && it.series == entry.series }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 2. the buttons, always on screen (they wrap onto a second line rather than run off the edge)
+            val openSvc = (entry.services + entry.ott.map { it.first }).firstOrNull { WatchProviders.canOpen(it) }
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (service == StreamingStore.CINEMA) {
+                    val scope = androidx.compose.runtime.rememberCoroutineScope()
+                    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+                    val onList = wanted.any { it.tmdb == entry.tmdb && it.series == entry.series }
                     if (entry.trailer != null) {
                         Button(onClick = { openTrailer(context, entry.trailer) }, modifier = Modifier.focusRequester(first)) {
                             Text("▶  Trailer")
                         }
                     }
-                    entry.ott.firstOrNull { WatchProviders.canOpen(it.first) }?.let { (svc, _) ->
+                    openSvc?.let { svc ->
                         Button(
-                            onClick = {
-                                WatchProviders.open(
-                                    context,
-                                    WatchProviders.Provider(0, svc, null),
-                                    entry.title,
-                                    netflixId = entry.netflixId,
-                                )
-                            },
+                            onClick = { WatchProviders.open(context, WatchProviders.Provider(0, svc, null), entry.title, netflixId = entry.netflixId) },
                             modifier = Modifier.ifElse(entry.trailer == null, Modifier.focusRequester(first)),
-                        ) { Text("▶  Open in $svc") }
+                        ) { Text("▶  " + shortService(svc)) }
                     }
                     Button(
                         onClick = { scope.launch { com.github.damontecres.wholphin.services.WantedStore.toggle(entry) } },
-                        modifier =
-                            Modifier.ifElse(
-                                entry.trailer == null && entry.ott.none { WatchProviders.canOpen(it.first) },
-                                Modifier.focusRequester(first),
-                            ),
+                        modifier = Modifier.ifElse(entry.trailer == null && openSvc == null, Modifier.focusRequester(first)),
                     ) { Text(if (onList) "✓  On your list" else "＋  Want it") }
-                    Button(onClick = onBack) { Text("Back") }
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                } else {
                     Button(
                         onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), entry.title, netflixId = entry.netflixId) },
                         modifier = Modifier.focusRequester(first),
                     ) { Text("▶  Open in $name") }
-                    Button(onClick = onBack) { Text("Back") }
+                }
+                Button(onClick = onBack) { Text("Back") }
+            }
+            // 3. everything else, scrolled with ▼ / ▲ (▲ at the top goes back to the buttons)
+            val scroll = androidx.compose.foundation.rememberScrollState()
+            val scrollScope = androidx.compose.runtime.rememberCoroutineScope()
+            var detailsFocused by remember { mutableStateOf(false) }
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .onFocusChanged { detailsFocused = it.isFocused }
+                        .onPreviewKeyEvent {
+                            if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (it.key) {
+                                Key.DirectionDown -> {
+                                    scrollScope.launch { scroll.animateScrollTo((scroll.value + 260).coerceAtMost(scroll.maxValue)) }
+                                    true
+                                }
+
+                                Key.DirectionUp -> {
+                                    if (scroll.value > 0) {
+                                        scrollScope.launch { scroll.animateScrollTo((scroll.value - 260).coerceAtLeast(0)) }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+
+                                else -> {
+                                    false
+                                }
+                            }
+                        }.focusable()
+                        .background(
+                            if (detailsFocused) Color.White.copy(alpha = 0.06f) else Color.Transparent,
+                            RoundedCornerShape(6.dp),
+                        ),
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.verticalScroll(scroll).padding(6.dp),
+                ) {
+                    entry.facts?.let { Text(it, fontSize = 14.sp, color = Color(0xFFA5D6A7)) }
+                    if (entry.gross != null || entry.budget != null) {
+                        com.github.damontecres.wholphin.services.BoxOffice
+                            .line(
+                                com.github.damontecres.wholphin.services.BoxOffice
+                                    .Money(entry.gross, entry.budget, entry.year, entry.grossToday, grossLocal = entry.grossLocal),
+                            )?.let { Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f)) }
+                    }
+                    entry.streamOn?.let { Text("Streaming on  $it", fontSize = 14.sp, color = Color(0xFFFFE082)) }
+                    entry.freeOn?.let { Text("Free on  $it", fontSize = 14.sp, color = Color(0xFFFFCC80)) }
+                    entry.rentBuy?.let { Text("Rent or buy  $it", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f)) }
+                    entry.date?.let { Text(it, fontSize = 14.sp, color = Color(0xFF90CAF9)) }
+                    entry.note?.let { Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f)) }
+                    entry.cast?.let { Text("With $it", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f)) }
+                    if (entry.overview.isNotBlank()) Text(entry.overview, fontSize = 15.sp, color = Color.White.copy(alpha = 0.9f))
+                }
+                if (scroll.maxValue > 0 && scroll.value < scroll.maxValue) {
+                    Text(
+                        "▼ more",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.align(Alignment.BottomEnd).background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 6.dp),
+                    )
                 }
             }
         }
     }
 }
+
+/** NoBars: short platform names for buttons ("Prime Video", not "Amazon Prime Video") */
+private fun shortService(name: String): String = name.removePrefix("Amazon ").removeSuffix(" Plus").take(22)
 
 /** NoBars: plays a YouTube trailer in the TV's YouTube app. The TV app wants a normal watch link addressed to it by
  * name (a "vnd.youtube:" link just opens its home screen). */

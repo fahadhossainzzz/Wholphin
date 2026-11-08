@@ -65,10 +65,15 @@ object StreamingStore {
         val facts: String? = null,
         /** Netflix's own title number (from Wikidata), to open the title itself in the Netflix app */
         val netflixId: String? = null,
-        /** Theatre page: subscription services streaming it in India (name, logo url), up to 3 */
+        /** Theatre page: where it's out on digital, anywhere in the world (name, logo url), up to 4 for the poster */
         val ott: List<Pair<String, String>> = emptyList(),
-        /** Theatre page: the same in the US, e.g. "HBO Max, Netflix" */
-        val ottUs: String? = null,
+        /** "Netflix (US, UK, Japan +80) · Hulu (US)" */
+        val streamOn: String? = null,
+        val freeOn: String? = null,
+        /** "Apple TV, Google Play, Amazon" */
+        val rentBuy: String? = null,
+        /** Streaming / free platforms, most countries first (for the Open button) */
+        val services: List<String> = emptyList(),
         /** Background picture for the banner at the top of the page */
         val backdrop: String? = null,
     )
@@ -195,7 +200,10 @@ object StreamingStore {
                         a.optJSONObject(i)?.let { p -> p.optString("n").takeIf { it.isNotBlank() }?.let { n -> n to p.optString("l") } }
                     }
                 } ?: emptyList(),
-            ottUs = o.str("ottUs"),
+            streamOn = o.str("streamOn"),
+            freeOn = o.str("freeOn"),
+            rentBuy = o.str("rentBuy"),
+            services = o.optJSONArray("svc")?.toStringList() ?: emptyList(),
             backdrop = o.str("backdrop"),
         )
 

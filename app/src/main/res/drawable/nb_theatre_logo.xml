@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NoBars: the Theatre page's logo (red stage, gold curtains, lit screen), shown beside the Netflix and Prime logos -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- red square -->
+    <path android:fillColor="#B71C2C" android:pathData="M8,0H40A8,8 0,0 1,48 8V40A8,8 0,0 1,40 48H8A8,8 0,0 1,0 40V8A8,8 0,0 1,8 0Z" />
+    <!-- darker stage floor -->
+    <path android:fillColor="#6E0A16" android:pathData="M0,38H48V40A8,8 0,0 1,40 48H8A8,8 0,0 1,0 40Z" />
+    <!-- lit screen -->
+    <path android:fillColor="#FFF4D2" android:pathData="M15,14H33V33H15Z" />
+    <path android:fillColor="#FFE08A" android:pathData="M15,28H33V33H15Z" />
+    <!-- curtains -->
+    <path android:fillColor="#F5B800" android:pathData="M4,10H21C19.5,20 17,30 10,38H4Z" />
+    <path android:fillColor="#F5B800" android:pathData="M44,10H27C28.5,20 31,30 38,38H44Z" />
+    <!-- folds -->
+    <path android:fillColor="#C98A00" android:pathData="M8,11H10.2C10.2,22 9.6,31 7.8,38H6.2C7.6,31 8.2,22 8,11Z" />
+    <path android:fillColor="#C98A00" android:pathData="M13.5,11H15.5C15,21 13.8,29 11.6,36.5L10.4,37.4C12.4,29.5 13.6,21 13.5,11Z" />
+    <path android:fillColor="#C98A00" android:pathData="M40,11H37.8C37.8,22 38.4,31 40.2,38H41.8C40.4,31 39.8,22 40,11Z" />
+    <path android:fillColor="#C98A00" android:pathData="M34.5,11H32.5C33,21 34.2,29 36.4,36.5L37.6,37.4C35.6,29.5 34.4,21 34.5,11Z" />
+    <!-- valance with scallops -->
+    <path android:fillColor="#F5B800" android:pathData="M3,5H45V11H3Z" />
+    <path android:fillColor="#F5B800" android:pathData="M3,11A3.5,3.5 0,0 0,10 11ZM10,11A3.5,3.5 0,0 0,17 11ZM17,11A3.5,3.5 0,0 0,24 11ZM24,11A3.5,3.5 0,0 0,31 11ZM31,11A3.5,3.5 0,0 0,38 11ZM38,11A3.5,3.5 0,0 0,45 11Z" />
+    <path android:fillColor="#C98A00" android:pathData="M3,8.6H45V9.6H3Z" />
+</vector>

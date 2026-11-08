@@ -309,12 +309,12 @@ sealed interface NavDrawerItem {
         override fun name(context: Context): String = "Prime Video"
     }
 
-    /** NoBars: in cinemas, coming soon and this year's box office */
+    /** NoBars: the Theatre page: in cinemas, coming soon, box office and records */
     object Cinema : NavDrawerItem {
         override val id: String
             get() = "a_cinema"
 
-        override fun name(context: Context): String = "Cinema"
+        override fun name(context: Context): String = "Theatre"
     }
 }
 
@@ -797,7 +797,16 @@ fun NavigationDrawerScope.NavItem(
                         NavDrawerItem.Prime -> StreamingStore.logos[StreamingStore.PRIME]
                         else -> null
                     }
-                if (serviceLogo != null) {
+                if (library == NavDrawerItem.Cinema) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(R.drawable.nb_theatre_logo),
+                        contentDescription = null,
+                        modifier =
+                            Modifier
+                                .size(DrawerIconSize)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+                    )
+                } else if (serviceLogo != null) {
                     coil3.compose.AsyncImage(
                         model = serviceLogo,
                         contentDescription = null,

@@ -61,6 +61,8 @@ object StreamingStore {
         /** TMDB's own rating, for titles IMDb hasn't rated yet */
         val tmdbRating: Float? = null,
         val tmdbVotes: Int? = null,
+        /** Theatre page: "+$48M this week ▲ · day 12 in cinemas" */
+        val facts: String? = null,
     )
 
     data class Row(
@@ -87,7 +89,7 @@ object StreamingStore {
     fun displayName(service: String) =
         when (service) {
             NETFLIX -> "Netflix"
-            CINEMA -> "Cinema"
+            CINEMA -> "Theatre"
             else -> "Prime Video"
         }
 
@@ -173,6 +175,7 @@ object StreamingStore {
             pop = if (o.has("pop")) o.optInt("pop") else null,
             tmdbRating = o.optDouble("tmdbRating").takeIf { !it.isNaN() && it > 0 }?.toFloat(),
             tmdbVotes = o.optInt("tmdbVotes").takeIf { it > 0 },
+            facts = o.str("facts"),
         )
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
@@ -225,7 +228,7 @@ object StreamingStore {
     fun badge(id: UUID?): String? {
         val e = id?.let { entries[it] } ?: return null
         return when {
-            e.rank != null -> "#${e.rank}"
+            e.rank != null -> "#${e.rank}" + if (libraryId(e) != null) " ✓" else ""
             libraryId(e) != null -> "✓"
             else -> e.badge
         }

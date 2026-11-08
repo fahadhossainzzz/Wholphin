@@ -84,9 +84,11 @@ fun StreamingPage(
     viewModel: StreamingViewModel = hiltViewModel(),
 ) {
     var loadedRows by remember(service) { mutableStateOf<List<HomeRowLoadingState>?>(null) }
+    var rawRows by remember(service) { mutableStateOf<List<StreamingStore.Row>?>(null) }
     LaunchedEffect(service) {
         if (service == StreamingStore.CINEMA) com.github.damontecres.wholphin.services.WantedStore.load()
         val loaded = StreamingStore.rows(service)
+        rawRows = loaded
         loadedRows =
             loaded.orEmpty().map { row ->
                 HomeRowLoadingState.Success(
@@ -96,10 +98,10 @@ fun StreamingPage(
                 )
             }
     }
-    // NoBars: Cinema page opens with your "Want it" list (✓ once a film has arrived in the library)
+    // NoBars: the Theatre page opens with your "Want it" list (✓ once a film has arrived in the library)
     val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
     val rows =
-        remember(loadedRows, wanted, service) {
+        remember(loadedRows, rawRows, wanted, service) {
             val base = loadedRows
             if (base == null || service != StreamingStore.CINEMA || wanted.isEmpty()) {
                 base
@@ -108,7 +110,17 @@ fun StreamingPage(
                 listOf(
                     HomeRowLoadingState.Success(
                         title = StringStringProvider("Your list · ${wanted.size}" + if (arrived > 0) " · $arrived arrived ✓" else ""),
-                        items = wanted.map { StreamingStore.toBaseItem(it, "wanted") },
+                        // today's card for each film when the page has one (fresh dates, money, countdown badge)
+                        items =
+                            wanted.map { w ->
+                                val fresh =
+                                    rawRows
+                                        .orEmpty()
+                                        .asSequence()
+                                        .flatMap { it.items }
+                                        .firstOrNull { it.tmdb == w.tmdb && it.series == w.series }
+                                StreamingStore.toBaseItem(fresh?.copy(rank = null) ?: w, "wanted")
+                            },
                         showViewMore = false,
                     ),
                 ) + base
@@ -245,6 +257,7 @@ private fun StreamingPanel(
                                     .Money(entry.gross, entry.budget, entry.year, entry.grossToday, grossLocal = entry.grossLocal),
                             )?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2) }
                     }
+                    entry.facts?.let { Text(it, fontSize = 13.sp, color = Color(0xFFA5D6A7)) }
                     entry.date?.let { Text(it, fontSize = 13.sp, color = Color(0xFF90CAF9)) }
                     entry.cast?.let { Text("With $it", fontSize = 13.sp, color = Color.White.copy(alpha = 0.75f), maxLines = 2) }
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))

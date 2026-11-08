@@ -21,7 +21,7 @@ import timber.log.Timber
  *
  * - Aims for [GOAL_MS] of video ahead, and stops earlier when its own size (counted exactly by the
  *   allocator, not guessed from the app's memory) reaches the budget: at most [MAX_BUDGET_BYTES], half
- *   the app's limit, and always leaving [SYSTEM_KEEP_MB] of the TV's RAM spare.
+ *   [HEAP_SHARE] of the app's limit, and always leaving [SYSTEM_KEEP_MB] of the TV's RAM spare.
  * - Once full it tops up again as soon as it drops under [RESUME_SHARE] of the budget, so it stays
  *   near full instead of draining down to the floor.
  * - Below [FLOOR_MS] it always loads, so playback can never jam itself.
@@ -128,7 +128,7 @@ class ElasticLoadControl private constructor(
     }
 
     /**
-     * How many bytes the buffer may hold now: at most [MAX_BUDGET_BYTES] or half the app's limit, and
+     * How many bytes the buffer may hold now: at most [MAX_BUDGET_BYTES] or [HEAP_SHARE] of the app's limit, and
      * always leaving [SYSTEM_KEEP_MB] of the TV's RAM spare.
      */
     private fun budgetFor(
@@ -136,15 +136,18 @@ class ElasticLoadControl private constructor(
         spareMb: Long,
     ): Long {
         val bySystem = if (spareMb == Long.MAX_VALUE) Long.MAX_VALUE else bytes + ((spareMb - SYSTEM_KEEP_MB) shl 20)
-        return minOf(MAX_BUDGET_BYTES, StreamHealth.heapMax() / 2, bySystem).coerceAtLeast(MIN_BUDGET_BYTES)
+        return minOf(MAX_BUDGET_BYTES, (StreamHealth.heapMax() * HEAP_SHARE).toLong(), bySystem).coerceAtLeast(MIN_BUDGET_BYTES)
     }
 
     companion object {
-        const val GOAL_MS = 120_000L
+        const val GOAL_MS = 180_000L
         const val FLOOR_MS = 15_000L
-        const val MAX_BUDGET_BYTES = 250L * 1024 * 1024
+        const val MAX_BUDGET_BYTES = 400L * 1024 * 1024
         const val MIN_BUDGET_BYTES = 48L * 1024 * 1024
         const val RESUME_SHARE = 0.85
+
+        /** Share of the app's memory limit the buffer may use (the rest of the app needs about 60 MB) */
+        const val HEAP_SHARE = 0.70
         const val HEAP_BRAKE = 0.85f
         const val SYSTEM_BRAKE_MB = 150L
         const val SYSTEM_KEEP_MB = 200L

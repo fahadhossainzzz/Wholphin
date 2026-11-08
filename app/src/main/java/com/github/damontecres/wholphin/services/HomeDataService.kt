@@ -348,7 +348,9 @@ class HomeDataService
 
                 is HomeRowConfig.ByParent -> {
                     val library = libraries.firstOrNull { it.itemId == row.parentId }
-                    val request =
+                    // NoBars: weighted IMDb and the money orders are worked out on the TV
+                    val tvSort = NbQuery.clientSort(row.sort?.sort)
+                    val request0 =
                         GetItemsRequest(
                             userId = userDto.id,
                             parentId = row.parentId,
@@ -384,6 +386,22 @@ class HomeDataService
                             limit = limit,
                             fields = library.itemFields,
                         )
+                    val request =
+                        if (tvSort == null) {
+                            request0
+                        } else {
+                            val ids =
+                                NbQuery.orderedIds(
+                                    api,
+                                    request0,
+                                    null,
+                                    tvSort,
+                                    row.sort?.direction != org.jellyfin.sdk.model.api.SortOrder.ASCENDING,
+                                )
+                            request0.copy(ids = ids, sortBy = null, sortOrder = null)
+                        }
+                    val handler: com.github.damontecres.wholphin.util.RequestHandler<GetItemsRequest> =
+                        if (tvSort == null) GetItemsRequestHandler else com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
 
                     // Not using getItemName because we want to throw the 404
                     val title =
@@ -398,13 +416,13 @@ class HomeDataService
                         ApiRequestPager(
                             api,
                             request,
-                            GetItemsRequestHandler,
+                            handler,
                             scope,
                             useSeriesForPrimary = row.viewOptions.useSeries,
                         ).init()
                     } else {
-                        GetItemsRequestHandler
-                            .execute(api, request)
+                        handler
+                            .execute(api, if (tvSort == null) request else request.copy(startIndex = 0))
                             .content.items
                             .map { BaseItem(it, row.viewOptions.useSeries) }
                     }.let {

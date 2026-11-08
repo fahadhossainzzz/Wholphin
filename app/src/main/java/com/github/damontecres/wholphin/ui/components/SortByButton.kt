@@ -85,7 +85,7 @@ fun SortByButton(
                                 if (currentSort == sortOption) {
                                     currentDirection.flip()
                                 } else {
-                                    currentDirection
+                                    com.github.damontecres.wholphin.ui.data.defaultDirection(sortOption)
                                 }
                             onSortChange.invoke(
                                 SortAndDirection(

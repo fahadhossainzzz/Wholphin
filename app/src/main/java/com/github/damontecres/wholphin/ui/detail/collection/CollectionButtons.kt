@@ -27,7 +27,6 @@ import com.github.damontecres.wholphin.ui.components.ExpandableFaButton
 import com.github.damontecres.wholphin.ui.components.ExpandablePlayButton
 import com.github.damontecres.wholphin.ui.components.FilterByButton
 import com.github.damontecres.wholphin.ui.components.SortByButton
-import com.github.damontecres.wholphin.ui.data.MovieSortOptions
 import com.github.damontecres.wholphin.ui.data.SortAndDirection
 import kotlin.time.Duration
 
@@ -45,7 +44,7 @@ fun CollectionButtons(
     moreOnClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val sortOptions = MovieSortOptions
+    val sortOptions = com.github.damontecres.wholphin.ui.data.BoxSetSortOptions.filter { it != org.jellyfin.sdk.model.api.ItemSortBy.DEFAULT }
     val filterOptions = DefaultFilterOptions
     val firstFocus = remember { FocusRequester() }
     Row(

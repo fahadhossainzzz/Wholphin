@@ -148,6 +148,7 @@ val PlaylistSortOptions =
         ItemSortBy.RANDOM,
     )
 
+/** NoBars: collections get the weighted IMDb order and the money orders too (sorted on the TV, see NbQuery). */
 val BoxSetSortOptions =
     listOf(
         ItemSortBy.DEFAULT,
@@ -156,12 +157,35 @@ val BoxSetSortOptions =
         ItemSortBy.DATE_CREATED,
         ItemSortBy.DATE_PLAYED,
         ItemSortBy.COMMUNITY_RATING,
+        WeightedImdbSort,
         ItemSortBy.CRITIC_RATING,
-        ItemSortBy.OFFICIAL_RATING,
-        ItemSortBy.RUNTIME,
+    ) + MoneySortCarrier.options +
+        listOf(
+            ItemSortBy.OFFICIAL_RATING,
+            ItemSortBy.RUNTIME,
+            ItemSortBy.PLAY_COUNT,
+            ItemSortBy.RANDOM,
+        )
+
+/**
+ * NoBars: the direction an order starts in when it is picked: best rated, most money, newest, most played first;
+ * names (and the rest) A to Z. Picking the same order again flips it.
+ */
+fun defaultDirection(sort: ItemSortBy): SortOrder =
+    when (sort) {
+        ItemSortBy.COMMUNITY_RATING,
+        ItemSortBy.CRITIC_RATING,
+        WeightedImdbSort,
+        ItemSortBy.PREMIERE_DATE,
+        ItemSortBy.DATE_CREATED,
+        ItemSortBy.DATE_LAST_CONTENT_ADDED,
+        ItemSortBy.DATE_PLAYED,
+        ItemSortBy.SERIES_DATE_PLAYED,
         ItemSortBy.PLAY_COUNT,
-        ItemSortBy.RANDOM,
-    )
+        -> SortOrder.DESCENDING
+
+        else -> if (MoneySortCarrier.of(sort) != null) SortOrder.DESCENDING else SortOrder.ASCENDING
+    }
 
 val AlbumSortOptions =
     listOf(

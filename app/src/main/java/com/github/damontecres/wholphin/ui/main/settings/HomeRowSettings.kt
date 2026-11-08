@@ -199,7 +199,7 @@ private fun LazyListScope.addAdditionalConfig(
                                     } else if (it == ItemSortBy.DEFAULT) {
                                         null
                                     } else {
-                                        SortAndDirection(it, SortOrder.ASCENDING)
+                                        SortAndDirection(it, com.github.damontecres.wholphin.ui.data.defaultDirection(it))
                                     }
                                 onConfigChange.invoke(config.copy(sort = newSort))
                                 showDialog = false

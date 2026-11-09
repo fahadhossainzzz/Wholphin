@@ -114,7 +114,38 @@ object StreamHealth {
 
     @Volatile var reportStatus: String = "not sent yet"
 
+    /** Bitrate of the film's own data just loaded (Mbps): bytes in ÷ seconds of film they cover, ~10 s windows */
+    @Volatile var sceneMbps: Float = 0f
+
+    /** Highest [sceneMbps] over the last minute or so of loaded film */
+    @Volatile var scenePeakMbps: Float = 0f
+
+    /** What reaches the TV's audio output, e.g. "PCM 2.0 (decoded)" or "E-AC-3 passthrough" */
+    @Volatile var audioOut: String = ""
+
+    /** The audio decoder in use (empty when the sound is passed through untouched) */
+    @Volatile var audioDecoder: String = ""
+
+    /** "decoded by the TV's chip (OMX.MTK…) → PCM 2.0 (decoded)", "app's FFmpeg decoder → …", "passed through untouched → …" */
+    fun audioPath(
+        decoder: String,
+        out: String,
+    ): String {
+        val who =
+            when {
+                decoder.isBlank() -> if (out.contains("passthrough")) "not decoded" else "decoder not reported"
+                decoder.contains("ffmpeg", ignoreCase = true) -> "app's FFmpeg decoder"
+                decoder.startsWith("c2.android") || decoder.startsWith("OMX.google") -> "Android's own decoder ($decoder)"
+                else -> "TV's chip ($decoder)"
+            }
+        return "$who → ${out.ifBlank { "output not reported yet" }}"
+    }
+
     fun resetCounters() {
+        sceneMbps = 0f
+        scenePeakMbps = 0f
+        audioOut = ""
+        audioDecoder = ""
         reconnects = 0
         reloads = 0
         rebuilds = 0

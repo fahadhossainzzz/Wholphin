@@ -1111,7 +1111,7 @@ class PlaybackViewModel
                 audio?.displayTitle ?: "default",
                 subtitle?.displayTitle ?: "off",
                 playback?.playMethod?.serialName ?: "?",
-            )
+            ) + "\n" + com.github.damontecres.wholphin.ui.playback.overlay.PlaybackFacts.reportLines(playback).joinToString("\n") { "  $it" }
         }
 
         private suspend fun prefetchTrickplay(

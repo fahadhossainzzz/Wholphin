@@ -113,6 +113,12 @@ class StallGuard(
         var reconnects = 0
         var reloads = 0
         var rebuilds = 0
+        var sceneSum = 0.0
+        var sceneSamples = 0
+        var scenePeak = 0f
+        var scenePeakAtMs = 0L
+        var audioOut = ""
+        var audioDecoder = ""
     }
 
     private data class Wait(
@@ -181,6 +187,41 @@ class StallGuard(
                     session.dropBursts.add(player.currentPosition to droppedFrames)
                     StreamHealth.event("$droppedFrames frames dropped at ${clock(player.currentPosition)}")
                 }
+            }            }
+
+            override fun onAudioDecoderInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) {
+                session.audioDecoder = decoderName
+                StreamHealth.audioDecoder = decoderName
+            }
+
+            override fun onAudioTrackInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                audioTrackConfig: androidx.media3.exoplayer.audio.AudioSink.AudioTrackConfig,
+            ) {
+                val channels = Integer.bitCount(audioTrackConfig.channelConfig)
+                val layout =
+                    when (channels) {
+                        1 -> "1.0"
+                        2 -> "2.0"
+                        6 -> "5.1"
+                        8 -> "7.1"
+                        else -> "$channels ch"
+                    }
+                StreamHealth.audioOut =
+                    when (audioTrackConfig.encoding) {
+                        androidx.media3.common.C.ENCODING_AC3 -> "Dolby Digital passthrough"
+                        androidx.media3.common.C.ENCODING_E_AC3, androidx.media3.common.C.ENCODING_E_AC3_JOC -> "Dolby Digital Plus passthrough"
+                        androidx.media3.common.C.ENCODING_AC4 -> "AC-4 passthrough"
+                        androidx.media3.common.C.ENCODING_DTS, androidx.media3.common.C.ENCODING_DTS_HD -> "DTS passthrough"
+                        androidx.media3.common.C.ENCODING_DOLBY_TRUEHD -> "TrueHD passthrough"
+                        else -> "PCM $layout (decoded)"
+                    }
+                session.audioOut = StreamHealth.audioOut
             }
         }
 
@@ -274,6 +315,41 @@ class StallGuard(
         }
     }
 
+    /** (buffered position, bytes delivered) samples, to work out the film's own bitrate as it loads. */
+    private val sceneSamples = ArrayDeque<Pair<Long, Long>>()
+
+    /**
+     * The bitrate of the film's data being loaded: bytes delivered ÷ seconds of film they added to the buffer, over
+     * at least 8 s of film. Reset when the buffered position jumps (a skip). This is the part about to be played.
+     */
+    private fun measureScene(bytes: Long) {
+        val buffered = player.bufferedPosition
+        val last = sceneSamples.lastOrNull()
+        if (last != null && (buffered < last.first || buffered - last.first > 120_000)) sceneSamples.clear()
+        if (last == null || buffered > last.first) sceneSamples.addLast(buffered to bytes)
+        while (sceneSamples.size > 2 && buffered - sceneSamples.first().first > 60_000) sceneSamples.removeFirst()
+        // the newest window of >= 8 s of film
+        val newest = sceneSamples.lastOrNull() ?: return
+        val start = sceneSamples.lastOrNull { newest.first - it.first >= 8_000 } ?: return
+        val mbps = (newest.second - start.second) * 8f / 1000f / (newest.first - start.first)
+        if (mbps <= 0f || mbps > 1000f) return
+        StreamHealth.sceneMbps = mbps
+        // peak over the window still held
+        var peak = 0f
+        for (sample in sceneSamples) {
+            val from = sceneSamples.lastOrNull { sample.first - it.first >= 8_000 }
+            if (from != null) peak = maxOf(peak, (sample.second - from.second) * 8f / 1000f / (sample.first - from.first))
+        }
+        StreamHealth.scenePeakMbps = maxOf(peak, mbps)
+        val s = session
+        s.sceneSum += mbps
+        s.sceneSamples++
+        if (mbps > s.scenePeak) {
+            s.scenePeak = mbps
+            s.scenePeakAtMs = newest.first
+        }
+    }
+
     private fun trimImages() {
         try {
             context.imageLoader.memoryCache?.clear()
@@ -328,6 +404,7 @@ class StallGuard(
             rateOpens = opens
             rateAt = now
             updateRecent(now)
+            measureScene(bytes)
         }
 
         var ratio = StreamHealth.heapRatio()
@@ -496,7 +573,10 @@ class StallGuard(
                 if (s.waits.size > 300) s.waits.removeAt(0)
             }
             if (waited >= 1_500 || cause == "stall") {
-                StreamHealth.event("waited ${waited / 1000.0} s for data ($cause at ${clock(player.currentPosition)}, ${ahead / 1000} s now ahead)")
+                StreamHealth.event(
+                    "waited ${waited / 1000.0} s for data ($cause at ${clock(player.currentPosition)}, ${ahead / 1000} s now ahead, " +
+                        "film ${StreamHealth.sceneMbps.toInt()} Mbps here, connection ${StreamHealth.readMbps.toInt()} Mbps)",
+                )
             }
         }
     }
@@ -552,10 +632,11 @@ class StallGuard(
         ahead: Long,
     ) {
         Timber.e(
-            "NoBars health: pos %s, state %d, ahead %.1f s, buffer %d/%d MB (%s), app memory %d/%d MB (%d%%), TV free %d MB (spare %d), in %.1f Mbps, network %.0f Mbps (busy %d%%), opens/min %d, Wi-Fi %d dBm %d Mbps %d MHz, fixes %d/%d/%d, dropped %d",
+            "NoBars health: pos %s, state %d, ahead %.1f s, scene %.0f Mbps, buffer %d/%d MB (%s), app memory %d/%d MB (%d%%), TV free %d MB (spare %d), in %.1f Mbps, network %.0f Mbps (busy %d%%), opens/min %d, Wi-Fi %d dBm %d Mbps %d MHz, fixes %d/%d/%d, dropped %d",
             clock(player.currentPosition),
             player.playbackState,
             ahead / 1000f,
+            StreamHealth.sceneMbps,
             StreamHealth.bufferBytes shr 20,
             StreamHealth.bufferBudget shr 20,
             StreamHealth.bufferState,
@@ -611,6 +692,18 @@ class StallGuard(
             appendLine("When: ${stamp.format(Date(s.startedAt))} to ${wall(end)} ($minutes min, ${clock(s.playingMs)} playing)")
             appendLine("App: ${BuildConfig.VERSION_NAME} on ${Build.MODEL}")
             appendLine("Film: ${s.description}")
+            if (s.sceneSamples > 0) {
+                appendLine(
+                    String.format(
+                        Locale.US,
+                        "Film bitrate while loading: avg %.0f Mbps, peak %.0f Mbps around %s",
+                        s.sceneSum / s.sceneSamples,
+                        s.scenePeak,
+                        clock(s.scenePeakAtMs),
+                    ),
+                )
+            }
+            appendLine("Audio path: ${StreamHealth.audioPath(s.audioDecoder, s.audioOut)}")
             appendLine("Ended: $reason")
             appendLine(
                 String.format(

@@ -187,7 +187,7 @@ class StallGuard(
                     session.dropBursts.add(player.currentPosition to droppedFrames)
                     StreamHealth.event("$droppedFrames frames dropped at ${clock(player.currentPosition)}")
                 }
-            }            }
+            }
 
             override fun onAudioDecoderInitialized(
                 eventTime: AnalyticsListener.EventTime,

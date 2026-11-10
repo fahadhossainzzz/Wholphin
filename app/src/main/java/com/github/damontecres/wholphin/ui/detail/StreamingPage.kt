@@ -6,12 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -510,7 +510,9 @@ private fun MyListGrid(
     onToggle: (StreamingStore.Entry) -> Unit,
     onBack: () -> Unit,
     asDialog: Boolean = true,
+    onFocusItem: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit = {},
 ) {
+    var focused by remember { mutableStateOf<com.github.damontecres.wholphin.data.model.BaseItem?>(null) }
     var sort by remember { mutableStateOf(ListSort.ADDED) }
     var filter by remember { mutableStateOf(ListFilter.ALL) }
     val shown =
@@ -544,26 +546,38 @@ private fun MyListGrid(
                 Modifier
                     .fillMaxSize()
                     .ifElse(asDialog, Modifier.background(Color(0xF2101010)))
-                    .padding(horizontal = 40.dp, vertical = 24.dp),
+                    .padding(horizontal = 40.dp, vertical = 12.dp),
         ) {
-            Text(
-                "🔖  Watchlist · ${shown.size}" + if (shown.size != items.size) " of ${items.size}" else "",
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
+            // the focused title's details, as on the other pages (title, ratings, box office, story)
+            com.github.damontecres.wholphin.ui.main.HomePageHeader(
+                item = focused,
+                showLogo = false,
+                modifier = Modifier.height(150.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Sort", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    "🔖 Watchlist · ${shown.size}" + (if (shown.size != items.size) " of ${items.size}" else "") + "   Sort",
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                )
                 ListSort.entries.forEachIndexed { i, s ->
                     Button(
                         onClick = { sort = s },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier.ifElse(i == 0, Modifier.focusRequester(firstButton)),
-                    ) { Text((if (s == sort) "● " else "") + s.label, fontSize = 13.sp) }
+                    ) { Text((if (s == sort) "● " else "") + s.label, fontSize = 12.sp) }
                 }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Show", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+                Text("   Show", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.CenterVertically))
                 ListFilter.entries.forEach { f ->
-                    Button(onClick = { filter = f }) { Text((if (f == filter) "● " else "") + f.label, fontSize = 13.sp) }
+                    Button(
+                        onClick = { filter = f },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    ) { Text((if (f == filter) "● " else "") + f.label, fontSize = 12.sp) }
                 }
             }
             if (shown.isEmpty()) {
@@ -572,53 +586,29 @@ private fun MyListGrid(
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                 columns =
                     androidx.compose.foundation.lazy.grid.GridCells
-                        .Fixed(8),
+                        .Adaptive(((com.github.damontecres.wholphin.ui.Cards.HEIGHT_2X3_DP * 2) / 3 + 4).dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
                 items(shown.size, key = { i -> "${shown[i].series}-${shown[i].tmdb}" }) { i ->
                     val e = shown[i]
-                    val lib = StreamingStore.libraryId(e)
-                    val label =
-                        when {
-                            lib != null && lib in watched -> "Watched ✓"
-                            lib != null -> "✓"
-                            e.badge == "Gone" -> "Gone"
-                            else -> null
-                        }
-                    androidx.tv.material3.Card(
+                    // the same poster card as every row: ratings, votes, 🍅, box office, service logo, badges
+                    val item = remember(e) { StreamingStore.toBaseItem(e, "my-list") }
+                    com.github.damontecres.wholphin.ui.main.HomePageCardContent(
+                        index = i,
+                        item = item,
                         onClick = { onOpen(e) },
                         onLongClick = { onToggle(e) },
-                    ) {
-                        Box {
-                            AsyncImage(
-                                model = e.poster,
-                                contentDescription = e.title,
-                                contentScale = ContentScale.Crop,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .androidxAspect()
-                                        .background(Color.White.copy(alpha = 0.08f)),
-                            )
-                            label?.let {
-                                Text(
-                                    it,
-                                    fontSize = 12.sp,
-                                    color = Color.White,
-                                    modifier =
-                                        Modifier
-                                            .align(Alignment.TopStart)
-                                            .padding(4.dp)
-                                            .background(
-                                                if (it == "Gone") Color(0xFF616161) else Color(0xFF2E7D32),
-                                                RoundedCornerShape(4.dp),
-                                            ).padding(horizontal = 5.dp, vertical = 1.dp),
-                                )
-                            }
-                        }
-                    }
+                        viewOptions = com.github.damontecres.wholphin.data.model.HomeRowViewOptions(),
+                        modifier =
+                            Modifier.onFocusChanged {
+                                if (it.isFocused) {
+                                    focused = item
+                                    onFocusItem(item)
+                                }
+                            },
+                    )
                 }
             }
             if (items.isEmpty()) {
@@ -691,6 +681,7 @@ private fun WatchlistPage(
             onToggle = { toggle(it) },
             onBack = {},
             asDialog = false,
+            onFocusItem = viewModel::updateBackdrop,
         )
     }
     panel?.let { entry ->
@@ -698,4 +689,3 @@ private fun WatchlistPage(
     }
 }
 
-private fun Modifier.androidxAspect(): Modifier = this.then(Modifier.aspectRatio(2f / 3f))

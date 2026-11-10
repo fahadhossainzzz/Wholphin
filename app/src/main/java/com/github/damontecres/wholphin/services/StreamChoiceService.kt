@@ -339,6 +339,8 @@ class StreamChoiceService
                     candidates
                         .sortedWith(
                             compareByDescending<MediaStream> { it.isExternal }
+                                // NoBars: plain text (SRT) before pictures (PGS) and styled ASS, so your own subtitle style applies
+                                .thenByDescending { it.codec?.lowercase() in PLAIN_TEXT_SUBTITLES }
                                 .thenByDescending { it.isDefault }
                                 .thenByDescending {
                                     !it.isForced && it.language.equals(subtitleLanguage, true)
@@ -736,3 +738,6 @@ sealed interface StreamChoiceReason {
         private val SEASON_PROVIDER: StringProvider by lazy { ResStringProvider(R.string.tv_season) }
     }
 }
+
+/** NoBars: subtitle formats drawn with your own style (pictures and ASS bring their own looks) */
+private val PLAIN_TEXT_SUBTITLES = setOf("subrip", "srt", "mov_text", "webvtt", "vtt", "text")

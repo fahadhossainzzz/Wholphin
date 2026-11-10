@@ -234,7 +234,8 @@ fun BannerCard(
                             .padding(6.dp)
                             .background(
                                 when {
-                                    badge == "✓" -> Color(0xFF2E7D32)
+                                    badge == "✓" || badge.startsWith("Watched") -> Color(0xFF2E7D32)
+                                    badge == "Gone" -> Color(0xFF616161)
                                     badge.startsWith("#") -> Color(0xFFE50914)
                                     else -> Color(0xFF1565C0)
                                 },

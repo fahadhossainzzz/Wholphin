@@ -11,7 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * NoBars: the "Want it" list from the Cinema page. Kept on the Jellyfin server (the user's display
+ * NoBars: My list (titles saved from the Netflix, Prime Video and Theatre pages, kept until you remove them). Kept on the Jellyfin server (the user's display
  * preferences), so it survives reinstalls and every TV sees the same list. Once a film arrives in
  * the library its card shows ✓ and opens your copy.
  */
@@ -23,6 +23,11 @@ object WantedStore {
     val items: StateFlow<List<StreamingStore.Entry>> = _items
 
     @Volatile private var loaded = false
+
+    private val _watched = MutableStateFlow<Set<java.util.UUID>>(emptySet())
+
+    /** Library copies of My list titles that you've watched to the end (they stay on the list until you remove them) */
+    val watched: StateFlow<Set<java.util.UUID>> = _watched
 
     private fun path(): String? {
         val user = ServerAccess.userId ?: return null
@@ -44,15 +49,67 @@ object WantedStore {
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: wanted list unavailable")
             }
+            loadWatched()
         }
+
+    /** Asks Jellyfin which of the list's library copies you've finished (one small request). */
+    private fun loadWatched() {
+        try {
+            val user = ServerAccess.userId ?: return
+            val ids = _items.value.mapNotNull { StreamingStore.libraryId(it) }.distinct()
+            if (ids.isEmpty()) {
+                _watched.value = emptySet()
+                return
+            }
+            val json =
+                JSONObject(
+                    ServerAccess.get(
+                        "/Items?userId=$user&ids=${ids.joinToString(",") { it.toString().replace("-", "") }}&enableUserData=true&fields=",
+                    ) ?: return,
+                )
+            val items = json.optJSONArray("Items") ?: return
+            _watched.value =
+                (0 until items.length())
+                    .mapNotNull { i ->
+                        val o = items.getJSONObject(i)
+                        if (o.optJSONObject("UserData")?.optBoolean("Played") == true) {
+                            ids.firstOrNull { it.toString().replace("-", "") == o.optString("Id").replace("-", "") }
+                        } else {
+                            null
+                        }
+                    }.toSet()
+        } catch (e: Exception) {
+            Timber.w(e, "NoBars: watched marks unavailable")
+        }
+    }
 
     fun contains(e: StreamingStore.Entry): Boolean = _items.value.any { it.tmdb == e.tmdb && it.series == e.series }
 
-    suspend fun toggle(e: StreamingStore.Entry) {
+    /** Adds the title (newest first) or removes it. Returns true when it's now on the list. */
+    suspend fun toggle(
+        e: StreamingStore.Entry,
+        from: String? = null,
+    ): Boolean {
         if (!loaded) load()
         val now = _items.value
-        _items.value = if (contains(e)) now.filterNot { it.tmdb == e.tmdb && it.series == e.series } else listOf(e) + now
+        val adding = !contains(e)
+        _items.value =
+            if (adding) {
+                val saved =
+                    e.copy(
+                        rank = null,
+                        move = null,
+                        note = null,
+                        status = null,
+                        added = e.added ?: java.time.LocalDate.now().toString(),
+                        from = e.from ?: from,
+                    )
+                listOf(saved) + now
+            } else {
+                now.filterNot { it.tmdb == e.tmdb && it.series == e.series }
+            }
         save()
+        return adding
     }
 
     private suspend fun save() =

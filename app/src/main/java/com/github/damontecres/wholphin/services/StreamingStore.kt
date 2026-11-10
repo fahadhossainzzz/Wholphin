@@ -24,6 +24,9 @@ object StreamingStore {
     const val PRIME = "prime"
     const val CINEMA = "cinema"
 
+    /** Today's facts for every title on My list (the Mac checks the whole list each morning) */
+    const val LIST = "list"
+
     data class Entry(
         val tmdb: Int,
         val series: Boolean,
@@ -78,6 +81,13 @@ object StreamingStore {
         val services: List<String> = emptyList(),
         /** Background picture for the banner at the top of the page */
         val backdrop: String? = null,
+        /** Netflix Top 10: change from last week, "▲2", "▼1", "NEW" or "=" */
+        val move: String? = null,
+        /** My list: where the title is today, "In your library ✓ · On Netflix" or "No longer on Prime Video (since 3 Jan)" */
+        val status: String? = null,
+        /** My list: when it was added (yyyy-MM-dd) and from which page (netflix / prime / cinema) */
+        val added: String? = null,
+        val from: String? = null,
     )
 
     data class Row(
@@ -208,6 +218,10 @@ object StreamingStore {
             ottMore = o.optInt("ottMore"),
             services = o.optJSONArray("svc")?.toStringList() ?: emptyList(),
             backdrop = o.str("backdrop"),
+            move = o.str("move"),
+            status = o.str("status"),
+            added = o.str("added"),
+            from = o.str("from"),
         )
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
@@ -226,7 +240,50 @@ object StreamingStore {
             e.cast?.let { put("cast", it) }
             e.imdbRating?.let { put("imdbRating", it.toDouble()) }
             e.imdbVotes?.let { put("imdbVotes", it) }
+            // NoBars: enough to show the card and its panel months later, after it has left every row
+            if (e.genres.isNotEmpty()) put("genres", JSONArray(e.genres))
+            e.runtime?.let { put("runtime", it) }
+            e.seasons?.let { put("seasons", it) }
+            e.backdrop?.let { put("backdrop", it) }
+            e.netflixId?.let { put("nf", it) }
+            if (e.services.isNotEmpty()) put("svc", JSONArray(e.services))
+            if (e.ott.isNotEmpty()) put("ott", JSONArray(e.ott.map { JSONObject().put("n", it.first).put("l", it.second) }))
+            if (e.ottMore > 0) put("ottMore", e.ottMore)
+            e.streamOn?.let { put("streamOn", it) }
+            e.freeOn?.let { put("freeOn", it) }
+            e.rentBuy?.let { put("rentBuy", it) }
+            e.rt?.let { put("rt", it) }
+            e.pop?.let { put("pop", it) }
+            e.tmdbRating?.let { put("tmdbRating", it.toDouble()) }
+            e.tmdbVotes?.let { put("tmdbVotes", it) }
+            e.added?.let { put("added", it) }
+            e.from?.let { put("from", it) }
         }
+
+    /** Today's card for a My list title: the morning check, else today's rows, else the copy saved when it was added. */
+    suspend fun freshFor(
+        saved: Entry,
+        pageRows: List<Row>?,
+    ): Entry {
+        val list = rows(LIST)?.firstOrNull()?.items.orEmpty()
+        val fresh =
+            list.firstOrNull { it.tmdb == saved.tmdb && it.series == saved.series }
+                ?: pageRows.orEmpty().asSequence().flatMap { it.items }.firstOrNull { it.tmdb == saved.tmdb && it.series == saved.series }
+                ?: return saved
+        return fresh.copy(
+            rank = null,
+            move = null,
+            note = null,
+            added = saved.added,
+            from = saved.from,
+            netflixId = fresh.netflixId ?: saved.netflixId,
+            trailer = fresh.trailer ?: saved.trailer,
+            // the Netflix / Prime pages leave service logos off their posters; keep the saved ones for My list
+            ott = fresh.ott.ifEmpty { saved.ott },
+            ottMore = if (fresh.ott.isEmpty()) saved.ottMore else fresh.ottMore,
+            services = fresh.services.ifEmpty { saved.services },
+        )
+    }
 
     fun fromJson(o: JSONObject): Entry = parse(o)
 
@@ -259,9 +316,11 @@ object StreamingStore {
     /** Small corner label on catalogue posters: the Top 10 rank, or ✓ when it's in your library. */
     fun badge(id: UUID?): String? {
         val e = id?.let { entries[it] } ?: return null
+        val lib = libraryId(e)
         return when {
-            e.rank != null -> "#${e.rank}" + if (libraryId(e) != null) " ✓" else ""
-            libraryId(e) != null -> "✓"
+            e.rank != null -> "#${e.rank}" + (e.move?.takeIf { it != "=" }?.let { " $it" } ?: "") + if (lib != null) " ✓" else ""
+            lib != null && lib in WantedStore.watched.value -> "Watched ✓"
+            lib != null -> "✓"
             else -> e.badge
         }
     }

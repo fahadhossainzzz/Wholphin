@@ -142,7 +142,11 @@ class ElasticLoadControl private constructor(
     companion object {
         const val GOAL_MS = 180_000L
         const val FLOOR_MS = 15_000L
-        const val MAX_BUDGET_BYTES = 300L * 1024 * 1024
+        /**
+         * Only a safety ceiling: the real limit is [HEAP_SHARE] of the app's memory and the TV's spare RAM. On today's
+         * TVs (512 MB for the app) that comes to about 300 MB; a TV with more memory gets a bigger buffer by itself.
+         */
+        const val MAX_BUDGET_BYTES = 1024L * 1024 * 1024
         const val MIN_BUDGET_BYTES = 48L * 1024 * 1024
         const val RESUME_SHARE = 0.85
 

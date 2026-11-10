@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -54,6 +55,7 @@ import coil3.compose.AsyncImage
 import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.StreamingStore
+import com.github.damontecres.wholphin.services.WantedStore
 import com.github.damontecres.wholphin.services.WatchProviders
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.data.RowColumn
@@ -89,8 +91,9 @@ class StreamingViewModel
     }
 
 /**
- * NoBars: the Netflix or Prime Video page. Rows come from the daily list on the Mac. Titles you have
- * open your own copy; the rest open a side panel with "Open in Netflix / Prime Video".
+ * NoBars: the Netflix, Prime Video or Theatre page. Rows come from the daily list on the Mac. Titles you have
+ * open your own copy; the rest open a side panel (trailer, open in the app, My list). My list sits on top of
+ * all three pages: one list, kept on the Jellyfin server, emptied only by you.
  */
 @Composable
 fun StreamingPage(
@@ -99,11 +102,14 @@ fun StreamingPage(
     modifier: Modifier = Modifier,
     viewModel: StreamingViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var loadedRows by remember(service) { mutableStateOf<List<HomeRowLoadingState>?>(null) }
     var rawRows by remember(service) { mutableStateOf<List<StreamingStore.Row>?>(null) }
     LaunchedEffect(service) {
-        if (service == StreamingStore.CINEMA) com.github.damontecres.wholphin.services.WantedStore.load()
+        WantedStore.load()
         val loaded = StreamingStore.rows(service)
+        StreamingStore.rows(StreamingStore.LIST)
         rawRows = loaded
         loadedRows =
             loaded.orEmpty().map { row ->
@@ -114,35 +120,57 @@ fun StreamingPage(
                 )
             }
     }
-    // NoBars: the Theatre page opens with your "Want it" list (✓ once a film has arrived in the library)
-    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+    val wanted by WantedStore.items.collectAsState()
+    val watched by WantedStore.watched.collectAsState()
+    // today's card for each title on the list (the saved copy when it's gone from everywhere)
+    var myList by remember(service) { mutableStateOf<List<StreamingStore.Entry>>(emptyList()) }
+    LaunchedEffect(wanted, rawRows) {
+        myList = wanted.map { StreamingStore.freshFor(it, rawRows) }
+    }
+    var showGrid by remember { mutableStateOf(false) }
     val rows =
-        remember(loadedRows, rawRows, wanted, service) {
+        remember(loadedRows, myList, watched, service) {
             val base = loadedRows
-            if (base == null || service != StreamingStore.CINEMA || wanted.isEmpty()) {
+            if (base == null || myList.isEmpty()) {
                 base
             } else {
-                val arrived = wanted.count { StreamingStore.libraryId(it) != null }
+                val inLibrary = myList.count { StreamingStore.libraryId(it) != null }
+                val seen = myList.count { e -> StreamingStore.libraryId(e)?.let { it in watched } == true }
                 listOf(
                     HomeRowLoadingState.Success(
-                        title = StringStringProvider("Your list · ${wanted.size}" + if (arrived > 0) " · $arrived arrived ✓" else ""),
-                        // today's card for each film when the page has one (fresh dates, money, countdown badge)
-                        items =
-                            wanted.map { w ->
-                                val fresh =
-                                    rawRows
-                                        .orEmpty()
-                                        .asSequence()
-                                        .flatMap { it.items }
-                                        .firstOrNull { it.tmdb == w.tmdb && it.series == w.series }
-                                StreamingStore.toBaseItem(fresh?.copy(rank = null) ?: w, "wanted")
-                            },
-                        showViewMore = false,
+                        title =
+                            StringStringProvider(
+                                "My list · ${myList.size}" +
+                                    (if (inLibrary > 0) " · $inLibrary in your library" else "") +
+                                    (if (seen > 0) " · $seen watched" else ""),
+                            ),
+                        items = myList.map { StreamingStore.toBaseItem(it, MY_LIST_ROW) },
+                        showViewMore = true,
                     ),
                 ) + base
             }
         }
-    var panel by remember { mutableStateOf<StreamingStore.Entry?>(null) }
+    var panel by remember { mutableStateOf<Pair<StreamingStore.Entry, Boolean>?>(null) }
+    var position by rememberPosition()
+    // keep the focus on the same row when My list appears or disappears above it
+    var hadList by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(myList.isEmpty()) {
+        val has = myList.isNotEmpty()
+        val before = hadList
+        if (before != null && before != has && position.row >= 0) {
+            position = position.copy(row = (position.row + if (has) 1 else -1).coerceAtLeast(0))
+        }
+        hadList = has
+    }
+    val toggle = { entry: StreamingStore.Entry ->
+        scope.launch {
+            val added = WantedStore.toggle(entry, service)
+            android.widget.Toast
+                .makeText(context, if (added) "Added to My list" else "Removed from My list", android.widget.Toast.LENGTH_SHORT)
+                .show()
+        }
+        Unit
+    }
     val current = rows
     when {
         current == null -> {
@@ -156,7 +184,6 @@ fun StreamingPage(
         }
 
         else -> {
-            var position by rememberPosition()
             val onClick = { clicked: RowColumn, item: com.github.damontecres.wholphin.data.model.BaseItem ->
                 position = clicked
                 val entry = StreamingStore.entries[item.id]
@@ -165,8 +192,8 @@ fun StreamingPage(
                     viewModel.navigationManager.navigateTo(
                         Destination.MediaItem(libraryId, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
                     )
-                } else {
-                    panel = entry
+                } else if (entry != null) {
+                    panel = entry to (myList.isNotEmpty() && clicked.row == 0)
                 }
                 Unit
             }
@@ -175,25 +202,50 @@ fun StreamingPage(
                 position = position,
                 onFocusPosition = { position = it },
                 onClickItem = onClick,
-                onLongClickItem = { _, _ -> },
+                // hold OK on any poster to add it to My list, or take it off
+                onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { toggle(it) } },
                 onClickPlay = onClick,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
                 onUpdateBackdrop = viewModel::updateBackdrop,
                 showLogo = false,
-                showViewMore = false,
+                showViewMore = true,
+                onClickViewMore = { _, _ -> showGrid = true },
                 modifier = modifier,
             )
         }
     }
-    panel?.let { entry ->
-        StreamingPanel(entry = entry, service = service, onBack = { panel = null })
+    if (showGrid) {
+        MyListGrid(
+            items = myList,
+            watched = watched,
+            onOpen = { e ->
+                val libraryId = StreamingStore.libraryId(e)
+                if (libraryId != null) {
+                    showGrid = false
+                    viewModel.navigationManager.navigateTo(
+                        Destination.MediaItem(libraryId, if (e.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
+                    )
+                } else {
+                    panel = e to true
+                }
+            },
+            onToggle = { toggle(it) },
+            onBack = { showGrid = false },
+        )
+    }
+    panel?.let { (entry, fromList) ->
+        StreamingPanel(entry = entry, service = service, fromList = fromList, onToggle = { toggle(entry) }, onBack = { panel = null })
     }
 }
+
+private const val MY_LIST_ROW = "my-list"
 
 @Composable
 private fun StreamingPanel(
     entry: StreamingStore.Entry,
     service: String,
+    fromList: Boolean,
+    onToggle: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -270,37 +322,46 @@ private fun StreamingPanel(
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
                 }
             }
-            // 2. the buttons, always on screen (they wrap onto a second line rather than run off the edge)
-            val openSvc = (entry.services + entry.ott.map { it.first }).firstOrNull { WatchProviders.canOpen(it) }
+            // 2. the buttons, always on screen (they wrap onto a second line rather than run off the edge):
+            //    the same on all three pages: Trailer · Open in … · My list · Back
+            val pageSvc = if (service == StreamingStore.NETFLIX || service == StreamingStore.PRIME) name else null
+            val openSvc =
+                if (pageSvc != null && !fromList) {
+                    pageSvc
+                } else {
+                    (entry.services + entry.ott.map { it.first }).firstOrNull { WatchProviders.canOpen(it) }
+                        ?: entry.from
+                            ?.takeIf { (it == StreamingStore.NETFLIX || it == StreamingStore.PRIME) && entry.status?.contains("No longer") != true }
+                            ?.let { StreamingStore.displayName(it) }
+                }
+            val wanted by WantedStore.items.collectAsState()
+            val onList = wanted.any { it.tmdb == entry.tmdb && it.series == entry.series }
             @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (service == StreamingStore.CINEMA) {
-                    val scope = androidx.compose.runtime.rememberCoroutineScope()
-                    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
-                    val onList = wanted.any { it.tmdb == entry.tmdb && it.series == entry.series }
-                    if (entry.trailer != null) {
-                        Button(onClick = { openTrailer(context, entry.trailer) }, modifier = Modifier.focusRequester(first)) {
-                            Text("▶  Trailer")
-                        }
+                var firstUsed = false
+                fun Modifier.firstOne(): Modifier =
+                    if (!firstUsed) {
+                        firstUsed = true
+                        this.focusRequester(first)
+                    } else {
+                        this
                     }
-                    openSvc?.let { svc ->
-                        Button(
-                            onClick = { WatchProviders.open(context, WatchProviders.Provider(0, svc, null), entry.title, netflixId = entry.netflixId) },
-                            modifier = Modifier.ifElse(entry.trailer == null, Modifier.focusRequester(first)),
-                        ) { Text("▶  " + shortService(svc)) }
+                if (entry.trailer != null) {
+                    Button(onClick = { openTrailer(context, entry.trailer) }, modifier = Modifier.firstOne()) {
+                        Text("▶  Trailer")
                     }
+                }
+                openSvc?.let { svc ->
                     Button(
-                        onClick = { scope.launch { com.github.damontecres.wholphin.services.WantedStore.toggle(entry) } },
-                        modifier = Modifier.ifElse(entry.trailer == null && openSvc == null, Modifier.focusRequester(first)),
-                    ) { Text(if (onList) "✓  On your list" else "＋  Want it") }
-                } else {
-                    Button(
-                        onClick = { WatchProviders.open(context, WatchProviders.Provider(0, name, null), entry.title, netflixId = entry.netflixId) },
-                        modifier = Modifier.focusRequester(first),
-                    ) { Text("▶  Open in $name") }
+                        onClick = { WatchProviders.open(context, WatchProviders.Provider(0, svc, null), entry.title, netflixId = entry.netflixId) },
+                        modifier = Modifier.firstOne(),
+                    ) { Text("▶  " + (if (svc == pageSvc) "Open in $svc" else shortService(svc))) }
+                }
+                Button(onClick = onToggle, modifier = Modifier.firstOne()) {
+                    Text(if (onList) "✓  On My list" else "＋  My list")
                 }
                 Button(onClick = onBack) { Text("Back") }
             }
@@ -345,6 +406,10 @@ private fun StreamingPanel(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.verticalScroll(scroll).padding(6.dp),
                 ) {
+                    entry.status?.let {
+                        Text(it, fontSize = 15.sp, color = if (it.contains("No longer")) Color(0xFFEF9A9A) else Color(0xFFA5D6A7))
+                    }
+                    entry.note?.takeIf { it.startsWith("#") }?.let { Text(it, fontSize = 14.sp, color = Color(0xFFFFAB91)) }
                     entry.facts?.let { Text(it, fontSize = 14.sp, color = Color(0xFFA5D6A7)) }
                     if (entry.gross != null || entry.budget != null) {
                         com.github.damontecres.wholphin.services.BoxOffice
@@ -357,9 +422,13 @@ private fun StreamingPanel(
                     entry.freeOn?.let { Text("Free on  $it", fontSize = 14.sp, color = Color(0xFFFFCC80)) }
                     entry.rentBuy?.let { Text("Rent or buy  $it", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f)) }
                     entry.date?.let { Text(it, fontSize = 14.sp, color = Color(0xFF90CAF9)) }
-                    entry.note?.let { Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f)) }
+                    entry.note?.takeIf { !it.startsWith("#") }?.let { Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f)) }
                     entry.cast?.let { Text("With $it", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f)) }
                     if (entry.overview.isNotBlank()) Text(entry.overview, fontSize = 15.sp, color = Color.White.copy(alpha = 0.9f))
+                    entry.added?.let { added ->
+                        val page = entry.from?.let { " from the ${StreamingStore.displayName(it)} page" } ?: ""
+                        Text("On My list since ${shortDate(added)}$page", fontSize = 12.sp, color = Color.White.copy(alpha = 0.55f))
+                    }
                 }
                 if (scroll.maxValue > 0 && scroll.value < scroll.maxValue) {
                     Text(
@@ -406,3 +475,166 @@ private fun openTrailer(
     }
     android.widget.Toast.makeText(context, "Couldn't open YouTube for this trailer", android.widget.Toast.LENGTH_LONG).show()
 }
+
+/** "2026-11-10" -> "10 Nov 2026" */
+private fun shortDate(iso: String): String =
+    try {
+        java.time.LocalDate
+            .parse(iso)
+            .format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US))
+    } catch (_: Exception) {
+        iso
+    }
+
+private enum class ListSort(
+    val label: String,
+) {
+    ADDED("Newest added"),
+    RATING("Best rated"),
+    SHORT("Shortest first"),
+}
+
+private enum class ListFilter(
+    val label: String,
+) {
+    ALL("All"),
+    FILMS("Films"),
+    SHOWS("Shows"),
+    NETFLIX("Netflix"),
+    PRIME("Prime Video"),
+    LIBRARY("In my library"),
+    NOT_WATCHED("Not watched"),
+}
+
+/** NoBars: all of My list as a grid, with a sort and a filter. OK opens a title, hold OK takes it off the list. */
+@Composable
+private fun MyListGrid(
+    items: List<StreamingStore.Entry>,
+    watched: Set<java.util.UUID>,
+    onOpen: (StreamingStore.Entry) -> Unit,
+    onToggle: (StreamingStore.Entry) -> Unit,
+    onBack: () -> Unit,
+) {
+    var sort by remember { mutableStateOf(ListSort.ADDED) }
+    var filter by remember { mutableStateOf(ListFilter.ALL) }
+    val shown =
+        remember(items, watched, sort, filter) {
+            val kept =
+                items.filter { e ->
+                    val lib = StreamingStore.libraryId(e)
+                    val on = e.services + e.ott.map { it.first }
+                    when (filter) {
+                        ListFilter.ALL -> true
+                        ListFilter.FILMS -> !e.series
+                        ListFilter.SHOWS -> e.series
+                        ListFilter.NETFLIX -> on.any { it.startsWith("Netflix") } || e.status?.contains("On Netflix") == true
+                        ListFilter.PRIME -> on.any { it.contains("Prime") } || e.status?.contains("On Prime") == true
+                        ListFilter.LIBRARY -> lib != null
+                        ListFilter.NOT_WATCHED -> lib == null || lib !in watched
+                    }
+                }
+            when (sort) {
+                ListSort.ADDED -> kept
+                ListSort.RATING -> kept.sortedByDescending { it.imdbRating ?: it.tmdbRating ?: 0f }
+                ListSort.SHORT -> kept.sortedBy { if (it.series) Int.MAX_VALUE else it.runtime ?: Int.MAX_VALUE - 1 }
+            }
+        }
+    val firstButton = remember { FocusRequester() }
+    LaunchedEffect(Unit) { firstButton.tryRequestFocus() }
+    Dialog(
+        onDismissRequest = onBack,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color(0xF2101010))
+                    .padding(horizontal = 40.dp, vertical = 24.dp),
+        ) {
+            Text(
+                "My list · ${shown.size}" + if (shown.size != items.size) " of ${items.size}" else "",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Sort", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+                ListSort.entries.forEachIndexed { i, s ->
+                    Button(
+                        onClick = { sort = s },
+                        modifier = Modifier.ifElse(i == 0, Modifier.focusRequester(firstButton)),
+                    ) { Text((if (s == sort) "● " else "") + s.label, fontSize = 13.sp) }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Show", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+                ListFilter.entries.forEach { f ->
+                    Button(onClick = { filter = f }) { Text((if (f == filter) "● " else "") + f.label, fontSize = 13.sp) }
+                }
+            }
+            if (shown.isEmpty()) {
+                Text("Nothing here with this filter.", color = Color.White.copy(alpha = 0.7f))
+            }
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                columns =
+                    androidx.compose.foundation.lazy.grid.GridCells
+                        .Fixed(8),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+                items(shown.size, key = { i -> "${shown[i].series}-${shown[i].tmdb}" }) { i ->
+                    val e = shown[i]
+                    val lib = StreamingStore.libraryId(e)
+                    val label =
+                        when {
+                            lib != null && lib in watched -> "Watched ✓"
+                            lib != null -> "✓"
+                            e.badge == "Gone" -> "Gone"
+                            else -> null
+                        }
+                    androidx.tv.material3.Card(
+                        onClick = { onOpen(e) },
+                        onLongClick = { onToggle(e) },
+                    ) {
+                        Box {
+                            AsyncImage(
+                                model = e.poster,
+                                contentDescription = e.title,
+                                contentScale = ContentScale.Crop,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .androidxAspect()
+                                        .background(Color.White.copy(alpha = 0.08f)),
+                            )
+                            label?.let {
+                                Text(
+                                    it,
+                                    fontSize = 12.sp,
+                                    color = Color.White,
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(4.dp)
+                                            .background(
+                                                if (it == "Gone") Color(0xFF616161) else Color(0xFF2E7D32),
+                                                RoundedCornerShape(4.dp),
+                                            ).padding(horizontal = 5.dp, vertical = 1.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Text(
+                "OK opens a title · hold OK to take it off My list · Back to close",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+private fun Modifier.androidxAspect(): Modifier = this.then(Modifier.aspectRatio(2f / 3f))

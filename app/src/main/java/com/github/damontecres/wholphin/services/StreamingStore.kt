@@ -27,6 +27,12 @@ object StreamingStore {
     /** Today's facts for every title on My list (the Mac checks the whole list each morning) */
     const val LIST = "list"
 
+    /** The Watchlist page in the menu */
+    const val WATCHLIST = "watchlist"
+
+    /** Poster ids of the Watchlist row's own cards (they don't need the 🔖 mark) */
+    private val watchlistCards = java.util.Collections.newSetFromMap(ConcurrentHashMap<UUID, Boolean>())
+
     data class Entry(
         val tmdb: Int,
         val series: Boolean,
@@ -115,6 +121,7 @@ object StreamingStore {
         when (service) {
             NETFLIX -> "Netflix"
             CINEMA -> "Theatre"
+            WATCHLIST -> "Watchlist"
             else -> "Prime Video"
         }
 
@@ -297,6 +304,7 @@ object StreamingStore {
     ): BaseItem {
         val id = UUID.nameUUIDFromBytes("tmdb-${if (e.series) "tv" else "movie"}-${e.tmdb}-$row".toByteArray())
         entries[id] = e
+        if (row == "my-list") watchlistCards.add(id)
         return BaseItem(
             BaseItemDto(
                 id = id,
@@ -317,12 +325,15 @@ object StreamingStore {
     fun badge(id: UUID?): String? {
         val e = id?.let { entries[it] } ?: return null
         val lib = libraryId(e)
-        return when {
+        val base = when {
             e.rank != null -> "#${e.rank}" + (e.move?.takeIf { it != "=" }?.let { " $it" } ?: "") + if (lib != null) " ✓" else ""
             lib != null && lib in WantedStore.watched.value -> "Watched ✓"
             lib != null -> "✓"
             else -> e.badge
         }
+        // 🔖: already on your Watchlist (not on the Watchlist's own cards)
+        if (id !in watchlistCards && WantedStore.contains(e)) return base?.let { "$it 🔖" } ?: "🔖"
+        return base
     }
 
     /** Streaming-service logos for a Theatre poster (empty elsewhere). */

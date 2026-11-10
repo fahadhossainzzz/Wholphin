@@ -159,6 +159,11 @@ class NavDrawerViewModel
                     navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.CINEMA))
                 }
 
+                NavDrawerItem.Watchlist -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.WATCHLIST))
+                }
+
                 NavDrawerItem.Discover -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -202,6 +207,7 @@ class NavDrawerViewModel
                             is NavDrawerItem.Netflix -> Destination.Streaming(StreamingStore.NETFLIX)
                             is NavDrawerItem.Prime -> Destination.Streaming(StreamingStore.PRIME)
                             is NavDrawerItem.Cinema -> Destination.Streaming(StreamingStore.CINEMA)
+                            is NavDrawerItem.Watchlist -> Destination.Streaming(StreamingStore.WATCHLIST)
                             else -> null
                         }
                     }
@@ -315,6 +321,14 @@ sealed interface NavDrawerItem {
             get() = "a_cinema"
 
         override fun name(context: Context): String = "Theatre"
+    }
+
+    /** NoBars: everything saved from Netflix, Prime Video and Theatre to watch later (not Favourites: those are ♥) */
+    object Watchlist : NavDrawerItem {
+        override val id: String
+            get() = "a_watchlist"
+
+        override fun name(context: Context): String = "Watchlist"
     }
 }
 
@@ -762,6 +776,10 @@ fun NavigationDrawerScope.NavItem(
 
                 NavDrawerItem.Cinema -> {
                     R.string.fa_ticket
+                }
+
+                NavDrawerItem.Watchlist -> {
+                    R.string.fa_bookmark
                 }
 
                 is ServerNavDrawerItem -> {

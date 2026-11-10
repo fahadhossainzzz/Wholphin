@@ -92,8 +92,9 @@ class StreamingViewModel
 
 /**
  * NoBars: the Netflix, Prime Video or Theatre page. Rows come from the daily list on the Mac. Titles you have
- * open your own copy; the rest open a side panel (trailer, open in the app, My list). My list sits on top of
- * all three pages: one list, kept on the Jellyfin server, emptied only by you.
+ * open your own copy; the rest open a side panel (trailer, open in the app, Watchlist). The Watchlist has its own
+ * page in the menu (service = WATCHLIST) and is also the last row of all three pages: one list, kept on the
+ * Jellyfin server, emptied only by you.
  */
 @Composable
 fun StreamingPage(
@@ -102,6 +103,10 @@ fun StreamingPage(
     modifier: Modifier = Modifier,
     viewModel: StreamingViewModel = hiltViewModel(),
 ) {
+    if (service == StreamingStore.WATCHLIST) {
+        WatchlistPage(modifier, viewModel)
+        return
+    }
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var loadedRows by remember(service) { mutableStateOf<List<HomeRowLoadingState>?>(null) }
@@ -136,37 +141,26 @@ fun StreamingPage(
             } else {
                 val inLibrary = myList.count { StreamingStore.libraryId(it) != null }
                 val seen = myList.count { e -> StreamingStore.libraryId(e)?.let { it in watched } == true }
-                listOf(
+                base +
                     HomeRowLoadingState.Success(
                         title =
                             StringStringProvider(
-                                "My list · ${myList.size}" +
+                                "Watchlist · ${myList.size}" +
                                     (if (inLibrary > 0) " · $inLibrary in your library" else "") +
                                     (if (seen > 0) " · $seen watched" else ""),
                             ),
                         items = myList.map { StreamingStore.toBaseItem(it, MY_LIST_ROW) },
                         showViewMore = true,
-                    ),
-                ) + base
+                    )
             }
         }
     var panel by remember { mutableStateOf<Pair<StreamingStore.Entry, Boolean>?>(null) }
     var position by rememberPosition()
-    // keep the focus on the same row when My list appears or disappears above it
-    var hadList by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(myList.isEmpty()) {
-        val has = myList.isNotEmpty()
-        val before = hadList
-        if (before != null && before != has && position.row >= 0) {
-            position = position.copy(row = (position.row + if (has) 1 else -1).coerceAtLeast(0))
-        }
-        hadList = has
-    }
     val toggle = { entry: StreamingStore.Entry ->
         scope.launch {
             val added = WantedStore.toggle(entry, service)
             android.widget.Toast
-                .makeText(context, if (added) "Added to My list" else "Removed from My list", android.widget.Toast.LENGTH_SHORT)
+                .makeText(context, if (added) "Added to your Watchlist" else "Removed from your Watchlist", android.widget.Toast.LENGTH_SHORT)
                 .show()
         }
         Unit
@@ -193,7 +187,7 @@ fun StreamingPage(
                         Destination.MediaItem(libraryId, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
                     )
                 } else if (entry != null) {
-                    panel = entry to (myList.isNotEmpty() && clicked.row == 0)
+                    panel = entry to (myList.isNotEmpty() && clicked.row == current.lastIndex)
                 }
                 Unit
             }
@@ -202,7 +196,7 @@ fun StreamingPage(
                 position = position,
                 onFocusPosition = { position = it },
                 onClickItem = onClick,
-                // hold OK on any poster to add it to My list, or take it off
+                // hold OK on any poster to add it to the Watchlist, or take it off
                 onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { toggle(it) } },
                 onClickPlay = onClick,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
@@ -323,7 +317,7 @@ private fun StreamingPanel(
                 }
             }
             // 2. the buttons, always on screen (they wrap onto a second line rather than run off the edge):
-            //    the same on all three pages: Trailer · Open in … · My list · Back
+            //    the same on every page: Trailer · Open in … · Watchlist · Back
             val pageSvc = if (service == StreamingStore.NETFLIX || service == StreamingStore.PRIME) name else null
             val openSvc =
                 if (pageSvc != null && !fromList) {
@@ -361,7 +355,7 @@ private fun StreamingPanel(
                     ) { Text("▶  " + (if (svc == pageSvc) "Open in $svc" else shortService(svc))) }
                 }
                 Button(onClick = onToggle, modifier = Modifier.firstOne()) {
-                    Text(if (onList) "✓  On My list" else "＋  My list")
+                    Text(if (onList) "🔖  On Watchlist" else "＋  Watchlist")
                 }
                 Button(onClick = onBack) { Text("Back") }
             }
@@ -427,7 +421,7 @@ private fun StreamingPanel(
                     if (entry.overview.isNotBlank()) Text(entry.overview, fontSize = 15.sp, color = Color.White.copy(alpha = 0.9f))
                     entry.added?.let { added ->
                         val page = entry.from?.let { " from the ${StreamingStore.displayName(it)} page" } ?: ""
-                        Text("On My list since ${shortDate(added)}$page", fontSize = 12.sp, color = Color.White.copy(alpha = 0.55f))
+                        Text("On your Watchlist since ${shortDate(added)}$page", fontSize = 12.sp, color = Color.White.copy(alpha = 0.55f))
                     }
                 }
                 if (scroll.maxValue > 0 && scroll.value < scroll.maxValue) {
@@ -506,7 +500,8 @@ private enum class ListFilter(
     NOT_WATCHED("Not watched"),
 }
 
-/** NoBars: all of My list as a grid, with a sort and a filter. OK opens a title, hold OK takes it off the list. */
+/** NoBars: the whole Watchlist as a grid, with a sort and a filter. OK opens a title, hold OK takes it off the list.
+ * A page of its own from the menu, or a full-screen view from a page's Watchlist row ("View more"). */
 @Composable
 private fun MyListGrid(
     items: List<StreamingStore.Entry>,
@@ -514,6 +509,7 @@ private fun MyListGrid(
     onOpen: (StreamingStore.Entry) -> Unit,
     onToggle: (StreamingStore.Entry) -> Unit,
     onBack: () -> Unit,
+    asDialog: Boolean = true,
 ) {
     var sort by remember { mutableStateOf(ListSort.ADDED) }
     var filter by remember { mutableStateOf(ListFilter.ALL) }
@@ -541,20 +537,17 @@ private fun MyListGrid(
         }
     val firstButton = remember { FocusRequester() }
     LaunchedEffect(Unit) { firstButton.tryRequestFocus() }
-    Dialog(
-        onDismissRequest = onBack,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    val content: @Composable () -> Unit = {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(Color(0xF2101010))
+                    .ifElse(asDialog, Modifier.background(Color(0xF2101010)))
                     .padding(horizontal = 40.dp, vertical = 24.dp),
         ) {
             Text(
-                "My list · ${shown.size}" + if (shown.size != items.size) " of ${items.size}" else "",
+                "🔖  Watchlist · ${shown.size}" + if (shown.size != items.size) " of ${items.size}" else "",
                 style = MaterialTheme.typography.headlineSmall,
                 color = Color.White,
             )
@@ -628,12 +621,80 @@ private fun MyListGrid(
                     }
                 }
             }
+            if (items.isEmpty()) {
+                Text(
+                    "Your Watchlist is empty. On the Netflix, Prime Video or Theatre page, hold OK on a poster " +
+                        "(or press ＋ Watchlist in its panel) to save it here.",
+                    color = Color.White.copy(alpha = 0.8f),
+                )
+            }
             Text(
-                "OK opens a title · hold OK to take it off My list · Back to close",
+                "OK opens a title · hold OK to take it off your Watchlist" + if (asDialog) " · Back to close" else "",
                 fontSize = 12.sp,
                 color = Color.White.copy(alpha = 0.5f),
             )
         }
+    }
+    if (asDialog) {
+        Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) { content() }
+    } else {
+        content()
+    }
+}
+
+/** NoBars: the Watchlist page in the menu: everything you've saved from Netflix, Prime Video and Theatre. */
+@Composable
+private fun WatchlistPage(
+    modifier: Modifier,
+    viewModel: StreamingViewModel,
+) {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var ready by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        WantedStore.load()
+        StreamingStore.rows(StreamingStore.LIST)
+        ready = true
+    }
+    val wanted by WantedStore.items.collectAsState()
+    val watched by WantedStore.watched.collectAsState()
+    var list by remember { mutableStateOf<List<StreamingStore.Entry>>(emptyList()) }
+    LaunchedEffect(wanted, ready) { if (ready) list = wanted.map { StreamingStore.freshFor(it, null) } }
+    var panel by remember { mutableStateOf<StreamingStore.Entry?>(null) }
+    val toggle = { e: StreamingStore.Entry ->
+        scope.launch {
+            val added = WantedStore.toggle(e)
+            android.widget.Toast
+                .makeText(context, if (added) "Added to your Watchlist" else "Removed from your Watchlist", android.widget.Toast.LENGTH_SHORT)
+                .show()
+        }
+        Unit
+    }
+    if (!ready) {
+        LoadingPage(modifier)
+        return
+    }
+    Box(modifier.fillMaxSize()) {
+        MyListGrid(
+            items = list,
+            watched = watched,
+            onOpen = { e ->
+                val libraryId = StreamingStore.libraryId(e)
+                if (libraryId != null) {
+                    viewModel.navigationManager.navigateTo(
+                        Destination.MediaItem(libraryId, if (e.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
+                    )
+                } else {
+                    panel = e
+                }
+            },
+            onToggle = { toggle(it) },
+            onBack = {},
+            asDialog = false,
+        )
+    }
+    panel?.let { entry ->
+        StreamingPanel(entry = entry, service = StreamingStore.WATCHLIST, fromList = true, onToggle = { toggle(entry) }, onBack = { panel = null })
     }
 }
 

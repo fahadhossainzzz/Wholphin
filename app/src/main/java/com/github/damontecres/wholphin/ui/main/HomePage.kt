@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -576,6 +577,13 @@ fun HomePageHeader(
         showLogo = showLogo,
         logoImageUrl = rememberLogoUrl(item),
         modifier = modifier,
+        // NoBars: box office after the ratings (films; shows have none)
+        boxOffice =
+            remember(item?.id) {
+                com.github.damontecres.wholphin.services.BoxOffice
+                    .forItem(item?.id)
+                    ?.let { com.github.damontecres.wholphin.services.BoxOffice.headerLine(it) }
+            },
     )
 }
 
@@ -591,19 +599,41 @@ fun HomePageHeader(
     showLogo: Boolean,
     logoImageUrl: String?,
     modifier: Modifier = Modifier,
+    boxOffice: String? = null,
 ) {
+    // NoBars: a tighter header that starts higher: title and year · length · age rating · ends at on one line,
+    // then the ratings with the box office, then three lines of story
+    val logo = showLogo && logoImageUrl != null
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier,
+        modifier = modifier.offset(y = (-24).dp),
     ) {
-        TitleOrLogo(
-            title = title,
-            logoImageUrl = logoImageUrl,
-            showLogo = showLogo,
-            modifier = Modifier.fillMaxWidth(.75f),
-        )
+        if (logo) {
+            TitleOrLogo(
+                title = title,
+                logoImageUrl = logoImageUrl,
+                showLogo = showLogo,
+                modifier = Modifier.fillMaxWidth(.75f),
+            )
+        } else {
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.fillMaxWidth(.85f),
+            ) {
+                Text(
+                    text = title ?: "",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                QuickDetails(quickDetails, timeRemaining, endsAt = endsAt, showRatings = false, modifier = Modifier.padding(bottom = 3.dp))
+            }
+        }
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier =
                 Modifier
                     .fillMaxWidth(.6f),
@@ -611,7 +641,21 @@ fun HomePageHeader(
             if (subtitle != null) {
                 EpisodeName(subtitle)
             }
-            QuickDetails(quickDetails, timeRemaining, endsAt = endsAt)
+            if (logo) {
+                QuickDetails(quickDetails, timeRemaining, endsAt = endsAt, showRatings = false)
+            }
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                QuickDetails(quickDetails, null, showBasic = false)
+                boxOffice?.let {
+                    Text(
+                        text = "  ·  $it",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             val overviewModifier =
                 Modifier
                     .padding(0.dp)

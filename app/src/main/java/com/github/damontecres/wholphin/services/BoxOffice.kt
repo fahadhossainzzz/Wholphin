@@ -104,6 +104,15 @@ object BoxOffice {
     ): String = String.format(Locale.US, "%.${decimals}f", x).let { if (decimals > 0) it.trimEnd('0').trimEnd('.') else it }
 
     /** Poster label: "$2.1B", or "₹146Cr" for Indian figures. */
+    /** NoBars: the browsing header's short form: "$714M worldwide · Hit 3.8× · #6 of 2024" */
+    fun headerLine(m: Money): String? {
+        if (m.gross == null) return if (m.streamingOnly) "Straight to streaming" else null
+        val parts = mutableListOf(if (m.grossLocal != null) "${m.grossLocal} worldwide" else "${short(m.gross)} worldwide")
+        verdict(m)?.let { v -> parts += "$v ${trim(multiple(m)!!, 1)}×" }
+        if (m.rank != null && m.year != null) parts += "#${m.rank} of ${m.year}"
+        return parts.joinToString(" · ")
+    }
+
     fun posterLabel(m: Money): String? = m.grossShort ?: m.gross?.let { short(it) }
 
     /** Gross ÷ budget, when both are known and the budget is a real figure. */

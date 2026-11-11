@@ -44,13 +44,15 @@ fun QuickDetails(
     endsAt: DateTime? = null,
     // NoBars: the library pages show the ratings as chips instead
     showRatings: Boolean = true,
+    // NoBars: the browsing header splits the line: year · length · age rating · ends at, then the ratings on their own
+    showBasic: Boolean = true,
 ) {
     val enabled = LocalInterfaceCustomization.current.enabledDisplayToggles
     val inlineContentMap = rememberQuickDetailsContentMap(textStyle)
     Row(modifier = modifier) {
         if (details != null) {
-            QuickDetailsText(details.basic, Modifier, textStyle, inlineContentMap)
-            if (DisplayToggle.OFFICIAL_RATING in enabled) {
+            if (showBasic) QuickDetailsText(details.basic, Modifier, textStyle, inlineContentMap)
+            if (showBasic && DisplayToggle.OFFICIAL_RATING in enabled) {
                 QuickDetailsText(details.officialRating, Modifier, textStyle, inlineContentMap)
             }
             if (showRatings && DisplayToggle.COMMUNITY_RATING in enabled) {
@@ -81,7 +83,9 @@ fun QuickDetails(
                 QuickDetailsText(critic, Modifier, textStyle, inlineContentMap)
             }
         }
-        if (timeRemaining != null) {
+        if (!showBasic) {
+            // ratings only
+        } else if (timeRemaining != null) {
             TimeRemaining(timeRemaining, textStyle = textStyle)
         } else if (endsAt != null) {
             EndsAt(endsAt, textStyle = textStyle)

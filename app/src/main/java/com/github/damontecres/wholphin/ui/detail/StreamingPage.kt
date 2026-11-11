@@ -247,9 +247,11 @@ private fun StreamingPanel(
     val name = StreamingStore.displayName(service)
     val first = remember { FocusRequester() }
     LaunchedEffect(entry) {
-        // after the slide-in has started, so the focus lands on the first button
-        kotlinx.coroutines.delay(60)
-        first.tryRequestFocus()
+        // keep trying for a moment until the first button is ready, so the remote works inside the panel at once
+        repeat(20) {
+            kotlinx.coroutines.delay(30)
+            if (first.tryRequestFocus()) return@LaunchedEffect
+        }
     }
     // NoBars: drawn inside the page (not a pop-up window that is first shown, then moved): it slides in from the
     // right already in place, over a dimmed page, and slides out on Back
@@ -264,6 +266,8 @@ private fun StreamingPanel(
         }
         Unit
     }
+    // Back closes the panel whenever it's open, wherever the focus is (otherwise the page would open the main menu)
+    androidx.activity.compose.BackHandler(enabled = true) { close() }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
         androidx.compose.animation.AnimatedVisibility(
             visible = shown,

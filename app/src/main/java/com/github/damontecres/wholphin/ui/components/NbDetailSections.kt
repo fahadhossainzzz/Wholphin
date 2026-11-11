@@ -368,3 +368,82 @@ fun NbFileChips(
         added?.let { NbChip("added " + nbDate(it.toLocalDate().toString()), Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.8f)) }
     }
 }
+
+
+/**
+ * NoBars: the browsing header's facts in three small labelled columns: RATINGS · BOX OFFICE · YOUR COPY
+ * (or WHERE TO WATCH for a Netflix / Prime / Theatre title you don't have). Empty columns are left out.
+ * Everything comes from lists already on the TV, so it keeps up with fast scrolling.
+ */
+@Composable
+fun NbBrowseFacts(item: BaseItem?) {
+    item ?: return
+    val id = item.id
+    val entry = StreamingStore.entries[id]
+    val libId = entry?.let { StreamingStore.libraryId(it) } ?: id
+    val libKey = libId.toString().replace("-", "")
+    val columns =
+        remember(id) {
+            val out = mutableListOf<Triple<String, Color, Pair<String, String?>>>()
+            // ratings
+            val rating = item.data.communityRating
+            val votes = ImdbVotesStore.get(id)?.votes ?: StreamingStore.votes(id)
+            val critic =
+                item.data.criticRating?.let { "🍅 ${it.toInt()}%" }
+                    ?: CriticFallback.label(id)
+                    ?: entry?.rt?.let { "🍅 $it%" }
+                    ?: entry?.pop?.let { "🍿 $it%" }
+            if (rating != null || critic != null) {
+                val first = rating?.let { "IMDb " + String.format(Locale.US, "%.1f", it) + (votes?.let { v -> " · ${ImdbVotesStore.short(v)}" } ?: "") }
+                val second = listOfNotNull(critic, if (rating != null && rating >= 8f) "8+" else null).joinToString(" · ").ifBlank { null }
+                out += Triple("RATINGS", Color(0xFFF5C518), (first ?: second!!) to (if (first != null) second else null))
+            }
+            // box office
+            BoxOffice.forItem(id)?.let { m ->
+                val world = m.gross?.let { g -> (m.grossLocal ?: BoxOffice.short(g)) + " worldwide" }
+                val rest =
+                    listOfNotNull(
+                        BoxOffice.verdict(m)?.let { v -> "$v " + String.format(Locale.US, "%.1f", BoxOffice.multiple(m) ?: 0.0) + "×" },
+                        if (m.rank != null && m.year != null) "#${m.rank} of ${m.year}" else null,
+                    ).joinToString(" · ").ifBlank { null }
+                when {
+                    world != null -> out += Triple("BOX OFFICE", Color(0xFF64B5F6), world to rest)
+                    m.streamingOnly -> out += Triple("BOX OFFICE", Color(0xFF64B5F6), "Straight to streaming" to null)
+                }
+            }
+            // your copy, or where to watch
+            val file = StreamingStore.libraryFiles[libKey]
+            if (file != null) {
+                val second = listOfNotNull(file.size, file.drive).joinToString(" · ").ifBlank { null }
+                out += Triple("YOUR COPY", Color(0xFF81C784), (file.av ?: second ?: "") to (if (file.av != null) second else null))
+            } else if (entry != null && StreamingStore.libraryId(entry) == null) {
+                val names = (entry.services + entry.ott.map { it.first }).distinct()
+                if (names.isNotEmpty()) {
+                    out +=
+                        Triple(
+                            "WHERE TO WATCH",
+                            Color(0xFF81C784),
+                            names.take(2).joinToString(" · ") to (if (names.size > 2) "+${names.size - 2} more" else entry.rentBuy?.let { "or rent, buy" }),
+                        )
+                }
+            }
+            out
+        }
+    if (columns.isEmpty()) return
+    Row(horizontalArrangement = Arrangement.spacedBy(18.dp), modifier = Modifier.fillMaxWidth()) {
+        columns.forEach { (label, color, lines) ->
+            Row(modifier = Modifier.weight(1f).height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+                Box(Modifier.width(2.dp).fillMaxHeight().background(color))
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text(label, fontSize = 10.sp, letterSpacing = 1.2.sp, color = Color.White.copy(alpha = 0.5f), maxLines = 1)
+                    Text(lines.first, fontSize = 14.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    lines.second?.let {
+                        Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        // keep the columns the same width whether there are 2 or 3
+        repeat(3 - columns.size) { Box(Modifier.weight(1f)) }
+    }
+}

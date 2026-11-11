@@ -577,13 +577,8 @@ fun HomePageHeader(
         showLogo = showLogo,
         logoImageUrl = rememberLogoUrl(item),
         modifier = modifier,
-        // NoBars: box office after the ratings (films; shows have none)
-        boxOffice =
-            remember(item?.id) {
-                com.github.damontecres.wholphin.services.BoxOffice
-                    .forItem(item?.id)
-                    ?.let { com.github.damontecres.wholphin.services.BoxOffice.headerLine(it) }
-            },
+        // NoBars: ratings · box office · your copy (or where to watch) in three labelled columns
+        facts = { com.github.damontecres.wholphin.ui.components.NbBrowseFacts(item) },
     )
 }
 
@@ -599,11 +594,11 @@ fun HomePageHeader(
     showLogo: Boolean,
     logoImageUrl: String?,
     modifier: Modifier = Modifier,
-    boxOffice: String? = null,
+    facts: (@Composable () -> Unit)? = null,
 ) {
-    // NoBars: a tighter header that starts higher: title and year · length · age rating · ends at on one line,
-    // then the ratings with the box office, then three lines of story
-    val logo = showLogo && logoImageUrl != null
+    // NoBars: a text title (no logo image) and the meta line, then the facts in three labelled columns, then three
+    // lines of story; it starts higher on the screen
+    val logo = false
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier.offset(y = (-24).dp),
@@ -644,17 +639,10 @@ fun HomePageHeader(
             if (logo) {
                 QuickDetails(quickDetails, timeRemaining, endsAt = endsAt, showRatings = false)
             }
-            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+            if (facts != null) {
+                Box(Modifier.padding(vertical = 2.dp)) { facts() }
+            } else {
                 QuickDetails(quickDetails, null, showBasic = false)
-                boxOffice?.let {
-                    Text(
-                        text = "  ·  $it",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
             val overviewModifier =
                 Modifier

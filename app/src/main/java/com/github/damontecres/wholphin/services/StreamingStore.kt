@@ -163,6 +163,13 @@ object StreamingStore {
                 json.optJSONObject("journeys")?.let { j ->
                     libraryJourneys = j.keys().asSequence().associateWith { k -> j.optJSONArray(k)?.let(::parseSteps).orEmpty() }
                 }
+                json.optJSONObject("files")?.let { f ->
+                    libraryFiles =
+                        f.keys().asSequence().associateWith { k ->
+                            val o = f.optJSONObject(k) ?: JSONObject()
+                            FileSummary(o.str("a"), o.str("b"), o.str("d"))
+                        }
+                }
                 json.optJSONObject("facts")?.let { f ->
                     libraryFacts =
                         f.keys().asSequence().associateWith { k ->
@@ -280,6 +287,16 @@ object StreamingStore {
         private set
 
     @Volatile var libraryFacts: Map<String, LibraryFacts> = emptyMap()
+        private set
+
+    /** Films and episodes (id without dashes): "4K DV · Atmos 7.1", "29 GB · 27 Mbps · 2 versions", drive "HDD2" */
+    data class FileSummary(
+        val av: String?,
+        val size: String?,
+        val drive: String?,
+    )
+
+    @Volatile var libraryFiles: Map<String, FileSummary> = emptyMap()
         private set
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }

@@ -448,11 +448,11 @@ fun SeerrDiscoverPage(
             modifier =
                 Modifier
                     .padding(
-                        top = HeaderUtils.topPadding,
+                        top = HeaderUtils.browseTopPadding,
                         // Intentionally no bottom padding because of tabs
                         bottom = 0.dp,
                         start = HeaderUtils.startPadding,
-                    ).height(HeaderUtils.height),
+                    ).height(HeaderUtils.browseHeight),
         )
 
         val density = LocalDensity.current

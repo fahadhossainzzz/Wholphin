@@ -344,9 +344,9 @@ fun CollectionDetailsContent(
                                     Modifier
                                         .padding(
                                             start = HeaderUtils.startPadding,
-                                            top = HeaderUtils.topPadding,
+                                            top = HeaderUtils.browseTopPadding,
                                             bottom = 8.dp,
-                                        ).height(HeaderUtils.height),
+                                        ).height(HeaderUtils.browseHeight),
                             )
                         }
                     }

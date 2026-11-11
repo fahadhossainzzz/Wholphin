@@ -21,4 +21,15 @@ object HeaderUtils {
         Modifier
             .padding(padding)
             .height(height)
+
+    /**
+     * NoBars: the browsing header's frame (title line, three fact columns, three lines of story). Half the empty
+     * margin on top and that space given to the header instead, so the poster rows stay where they were.
+     */
+    val browseTopPadding = 24.dp
+    val browseHeight = 204.dp
+    val browseModifier =
+        Modifier
+            .padding(top = browseTopPadding, bottom = bottomPadding, start = startPadding)
+            .height(browseHeight)
 }

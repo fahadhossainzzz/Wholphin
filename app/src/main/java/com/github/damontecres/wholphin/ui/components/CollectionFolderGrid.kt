@@ -81,8 +81,9 @@ fun CollectionFolderViewScope.CollectionFolderGrid(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(200.dp)
-                            .padding(HeaderUtils.padding),
+                            // NoBars: room for the whole header (it was clipped in 200 dp with the 48 dp margin)
+                            .height(HeaderUtils.browseHeight + 32.dp)
+                            .padding(top = 16.dp, bottom = 16.dp, start = HeaderUtils.startPadding),
                 )
             }
             CardGrid(

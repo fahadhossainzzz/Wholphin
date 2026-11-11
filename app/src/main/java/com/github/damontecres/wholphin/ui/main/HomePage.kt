@@ -297,7 +297,7 @@ fun HomePageContent(
         HomePageHeader(
             item = focusedItem,
             showLogo = showLogo,
-            modifier = HeaderUtils.modifier,
+            modifier = HeaderUtils.browseModifier,
         )
     },
     onClickViewMore: (RowColumn, HomeRowLoadingState.Success) -> Unit = { _, _ -> },
@@ -602,7 +602,7 @@ fun HomePageHeader(
     val logo = false
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier.offset(y = (-24).dp),
+        modifier = modifier,
     ) {
         if (logo) {
             TitleOrLogo(

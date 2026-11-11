@@ -61,6 +61,7 @@ import com.github.damontecres.wholphin.services.NavigationManager
 import com.github.damontecres.wholphin.services.StreamingStore
 import com.github.damontecres.wholphin.services.WantedStore
 import com.github.damontecres.wholphin.services.WatchProviders
+import com.github.damontecres.wholphin.ui.components.HeaderUtils
 import com.github.damontecres.wholphin.ui.components.LoadingPage
 import com.github.damontecres.wholphin.ui.data.RowColumn
 import com.github.damontecres.wholphin.ui.ifElse
@@ -881,7 +882,7 @@ private fun WatchlistAll(
         com.github.damontecres.wholphin.ui.main.HomePageHeader(
             item = focused,
             showLogo = false,
-            modifier = Modifier.fillMaxWidth().height(170.dp).padding(start = 16.dp, top = 28.dp),
+            modifier = Modifier.fillMaxWidth().height(HeaderUtils.browseHeight + 16.dp).padding(start = HeaderUtils.startPadding, top = 16.dp),
         )
         if (shown.isEmpty()) {
             Text("Nothing on your Watchlist matches this filter.", color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))

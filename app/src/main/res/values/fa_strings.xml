@@ -37,6 +37,7 @@
     <string name="fa_tv" translatable="false">&#xf26c;</string>
     <string name="fa_ticket" translatable="false">&#xf145;</string>
     <string name="fa_bookmark" translatable="false">&#xf02e;</string>
+    <string name="fa_clone" translatable="false">&#xf24d;</string>
     <string name="fa_music" translatable="false">&#xf001;</string>
     <string name="fa_eye" translatable="false">&#xf06e;</string>
     <string name="fa_eye_slash" translatable="false">&#xf070;</string>

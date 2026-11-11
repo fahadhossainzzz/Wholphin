@@ -140,7 +140,14 @@ fun BannerCard(
                             .align(Alignment.Center),
                 )
             }
-            if (played || cornerText != null) {
+            // NoBars: films with two or more versions get a "⧉ 2" badge in this corner
+            val versions =
+                if (item?.type == org.jellyfin.sdk.model.api.BaseItemKind.MOVIE) {
+                    item.data.mediaSourceCount ?: item.data.mediaSources?.size ?: 0
+                } else {
+                    0
+                }
+            if (played || cornerText != null || versions > 1) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -149,6 +156,7 @@ fun BannerCard(
                             .align(Alignment.TopEnd)
                             .padding(4.dp),
                 ) {
+                    VersionBadge(versions)
                     if (played && (playPercent <= 0 || playPercent >= 100)) {
                         WatchedIcon(Modifier.size(24.dp))
                     }

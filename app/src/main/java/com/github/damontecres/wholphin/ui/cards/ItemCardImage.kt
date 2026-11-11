@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.ui.cards
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -224,24 +225,6 @@ fun ItemCardImageOverlay(
                     .align(Alignment.TopStart)
                     .padding(4.dp),
         ) {
-            if (numberOfVersions > 1) {
-                Box(
-                    modifier =
-                        Modifier
-                            .background(
-                                AppColors.TransparentBlack50,
-                                shape = RoundedCornerShape(25),
-                            ),
-                ) {
-                    Text(
-                        text = numberOfVersions.toString(),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium,
-//                            fontSize = 16.sp,
-                        modifier = Modifier.padding(4.dp),
-                    )
-                }
-            }
             if (favorite) {
                 FavoriteIndicator()
             }
@@ -254,6 +237,8 @@ fun ItemCardImageOverlay(
                     .padding(4.dp)
                     .align(Alignment.TopEnd),
         ) {
+            // NoBars: how many versions a film has (4K + 1080p, extended cut…), next to the watched tick
+            VersionBadge(numberOfVersions)
             if (watched && (watchedPercent == null || watchedPercent <= 0.0 || watchedPercent >= 100.0)) {
                 WatchedIcon(Modifier.size(24.dp))
             }
@@ -303,3 +288,32 @@ fun FavoriteIndicator(
     fontFamily = FontAwesome,
     modifier = modifier,
 )
+
+
+/** NoBars: "⧉ 2" when a film has two or more versions; nothing otherwise. */
+@Composable
+fun VersionBadge(count: Int) {
+    if (count < 2) return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            Modifier
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
+                .border(1.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = androidx.compose.ui.res.stringResource(com.github.damontecres.wholphin.R.string.fa_clone),
+            fontFamily = com.github.damontecres.wholphin.ui.FontAwesome,
+            fontSize = 11.sp,
+            color = androidx.compose.ui.graphics.Color.White,
+        )
+        Text(
+            text = count.toString(),
+            fontSize = 13.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = androidx.compose.ui.graphics.Color.White,
+        )
+    }
+}

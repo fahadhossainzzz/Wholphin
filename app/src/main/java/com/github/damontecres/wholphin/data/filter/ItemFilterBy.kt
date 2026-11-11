@@ -442,6 +442,43 @@ data object InProgressFilter : NbBoolFilter {
     ): GetItemsFilter = filter.withExtra { it.copy(inProgress = value?.takeIf { it }) }
 }
 
+/** NoBars: the Watchlist page's own filters (applied on the TV to the Watchlist, not asked of Jellyfin) */
+data object WatchlistTypeFilter : NbStringListFilter {
+    override val stringRes: Int = R.string.nb_wl_type
+    override val supportMultiple: Boolean = true
+
+    override fun get(filter: GetItemsFilter): List<String>? = filter.extra?.wlTypes
+
+    override fun set(
+        value: List<String>?,
+        filter: GetItemsFilter,
+    ): GetItemsFilter = filter.withExtra { it.copy(wlTypes = value) }
+}
+
+data object WatchlistWhereFilter : NbStringListFilter {
+    override val stringRes: Int = R.string.nb_wl_where
+    override val supportMultiple: Boolean = true
+
+    override fun get(filter: GetItemsFilter): List<String>? = filter.extra?.wlWhere
+
+    override fun set(
+        value: List<String>?,
+        filter: GetItemsFilter,
+    ): GetItemsFilter = filter.withExtra { it.copy(wlWhere = value) }
+}
+
+data object WatchlistGenreFilter : NbStringListFilter {
+    override val stringRes: Int = R.string.genres
+    override val supportMultiple: Boolean = true
+
+    override fun get(filter: GetItemsFilter): List<String>? = filter.extra?.wlGenres
+
+    override fun set(
+        value: List<String>?,
+        filter: GetItemsFilter,
+    ): GetItemsFilter = filter.withExtra { it.copy(wlGenres = value) }
+}
+
 data object WantedFilter : NbBoolFilter {
     override val stringRes: Int = R.string.nb_filter_wanted
     override val supportMultiple: Boolean = false

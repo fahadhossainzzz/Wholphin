@@ -38,6 +38,10 @@ data class NbExtraFilter(
     val inProgress: Boolean? = null,
     /** Only films from the Cinema page's "Want it" list that have arrived */
     val wantedOnly: Boolean? = null,
+    /** Watchlist page (filtered on the TV): "films" / "shows", where to watch, genre names */
+    val wlTypes: List<String>? = null,
+    val wlWhere: List<String>? = null,
+    val wlGenres: List<String>? = null,
 ) {
     /** True when some of these must be checked on the TV (the rest Jellyfin does itself). */
     val needsClient: Boolean

@@ -5,6 +5,8 @@ import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -133,7 +135,6 @@ fun StreamingPage(
     LaunchedEffect(wanted, rawRows) {
         myList = wanted.map { StreamingStore.freshFor(it, rawRows) }
     }
-    var showGrid by remember { mutableStateOf(false) }
     val rows =
         remember(loadedRows, myList, watched, service) {
             val base = loadedRows
@@ -167,6 +168,7 @@ fun StreamingPage(
         Unit
     }
     val current = rows
+    Box(Modifier.fillMaxSize()) {
     when {
         current == null -> {
             LoadingPage(modifier)
@@ -199,19 +201,11 @@ fun StreamingPage(
                 onUpdateBackdrop = viewModel::updateBackdrop,
                 showLogo = false,
                 showViewMore = true,
-                onClickViewMore = { _, _ -> showGrid = true },
+                // "View more" on the Watchlist row: the Watchlist page (tabs, sort and filter, like Movies)
+                onClickViewMore = { _, _ -> viewModel.navigationManager.navigateTo(Destination.Streaming(StreamingStore.WATCHLIST)) },
                 modifier = modifier,
             )
         }
-    }
-    if (showGrid) {
-        MyListGrid(
-            items = myList,
-            watched = watched,
-            onOpen = { e -> panel = e to true },
-            onToggle = { toggle(it) },
-            onBack = { showGrid = false },
-        )
     }
     panel?.let { (entry, fromList) ->
         StreamingPanel(
@@ -222,10 +216,10 @@ fun StreamingPage(
             onBack = { panel = null },
             onNavigate = {
                 panel = null
-                showGrid = false
                 viewModel.navigationManager.navigateTo(it)
             },
         )
+    }
     }
 }
 
@@ -244,22 +238,43 @@ private fun StreamingPanel(
     // NoBars: your own copy, when you have one: resume point, next episode, what the file is
     val libraryId = remember(entry) { StreamingStore.libraryId(entry) }
     var owned by remember(entry) { mutableStateOf<OwnedCopy?>(null) }
-    LaunchedEffect(libraryId) { if (libraryId != null) owned = loadOwnedCopy(libraryId, entry.series) }
+    LaunchedEffect(libraryId) {
+        if (libraryId != null) {
+            kotlinx.coroutines.delay(240) // after the slide-in, so it never holds up the animation
+            owned = loadOwnedCopy(libraryId, entry.series)
+        }
+    }
     val name = StreamingStore.displayName(service)
     val first = remember { FocusRequester() }
-    LaunchedEffect(entry) { first.tryRequestFocus() }
-    Dialog(
-        onDismissRequest = onBack,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false),
-    ) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        LaunchedEffect(window) {
-            window?.let {
-                it.setGravity(Gravity.END or Gravity.FILL_VERTICAL)
-                it.setLayout(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.MATCH_PARENT)
-                it.setDimAmount(0.35f)
-            }
+    LaunchedEffect(entry) {
+        // after the slide-in has started, so the focus lands on the first button
+        kotlinx.coroutines.delay(60)
+        first.tryRequestFocus()
+    }
+    // NoBars: drawn inside the page (not a pop-up window that is first shown, then moved): it slides in from the
+    // right already in place, over a dimmed page, and slides out on Back
+    val panelScope = androidx.compose.runtime.rememberCoroutineScope()
+    var shown by remember(entry) { mutableStateOf(false) }
+    LaunchedEffect(entry) { shown = true }
+    val close = {
+        panelScope.launch {
+            shown = false
+            kotlinx.coroutines.delay(170)
+            onBack()
         }
+        Unit
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = shown,
+            enter =
+                androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(220)) { it } +
+                    androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)),
+            exit =
+                androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(170)) { it } +
+                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)),
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+        ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier =
@@ -268,9 +283,11 @@ private fun StreamingPanel(
                     .fillMaxHeight()
                     .background(Color.Black.copy(alpha = 0.88f))
                     .padding(horizontal = 22.dp, vertical = 22.dp)
+                    .focusGroup()
+                    .focusProperties { onExit = { cancelFocusChange() } }
                     .onPreviewKeyEvent {
                         if (it.key == Key.Back || it.key == Key.ButtonB) {
-                            if (it.type == KeyEventType.KeyUp) onBack()
+                            if (it.type == KeyEventType.KeyUp) close()
                             true
                         } else {
                             false
@@ -380,7 +397,7 @@ private fun StreamingPanel(
                 Button(onClick = onToggle, modifier = Modifier.firstOne()) {
                     Text(if (onList) "🔖  On Watchlist" else "＋  Watchlist")
                 }
-                Button(onClick = onBack) { Text("Back") }
+                Button(onClick = close) { Text("Back") }
             }
             // 3. everything else, scrolled with ▼ / ▲ (▲ at the top goes back to the buttons)
             val scroll = androidx.compose.foundation.rememberScrollState()
@@ -484,6 +501,7 @@ private fun StreamingPanel(
                 }
             }
         }
+        }
     }
 }
 
@@ -530,159 +548,34 @@ private fun shortDate(iso: String): String =
         iso
     }
 
-private enum class ListSort(
-    val label: String,
-) {
-    ADDED("Newest added"),
-    RATING("Best rated"),
-    SHORT("Shortest first"),
+/** Where a Watchlist title can be watched today, for the rows and the "Where to watch" filter */
+private fun whereOf(e: StreamingStore.Entry): Set<String> {
+    val out = mutableSetOf<String>()
+    val on = e.services + e.ott.map { it.first }
+    if (StreamingStore.libraryId(e) != null) out += "library"
+    if (on.any { it.startsWith("Netflix") } || e.status?.contains("On Netflix") == true) out += "netflix"
+    if (on.any { it.contains("Prime") } || e.status?.contains("On Prime") == true) out += "prime"
+    if (e.status?.contains("In cinemas") == true) out += "cinemas"
+    if (out.isEmpty() && on.isNotEmpty()) out += "elsewhere"
+    if (out.isEmpty()) out += "notyet"
+    return out
 }
 
-private enum class ListFilter(
-    val label: String,
-) {
-    ALL("All"),
-    FILMS("Films"),
-    SHOWS("Shows"),
-    NETFLIX("Netflix"),
-    PRIME("Prime Video"),
-    LIBRARY("In my library"),
-    NOT_WATCHED("Not watched"),
-}
+private val WHERE_NAMES =
+    listOf(
+        "library" to "In your library",
+        "netflix" to "On Netflix",
+        "prime" to "On Prime Video",
+        "cinemas" to "In cinemas",
+        "elsewhere" to "Streaming elsewhere",
+        "notyet" to "Not out yet",
+    )
 
-/** NoBars: the whole Watchlist as a grid, with a sort and a filter. OK opens a title, hold OK takes it off the list.
- * A page of its own from the menu, or a full-screen view from a page's Watchlist row ("View more"). */
-@Composable
-private fun MyListGrid(
-    items: List<StreamingStore.Entry>,
-    watched: Set<java.util.UUID>,
-    onOpen: (StreamingStore.Entry) -> Unit,
-    onToggle: (StreamingStore.Entry) -> Unit,
-    onBack: () -> Unit,
-    asDialog: Boolean = true,
-    onFocusItem: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit = {},
-) {
-    var focused by remember { mutableStateOf<com.github.damontecres.wholphin.data.model.BaseItem?>(null) }
-    var sort by remember { mutableStateOf(ListSort.ADDED) }
-    var filter by remember { mutableStateOf(ListFilter.ALL) }
-    val shown =
-        remember(items, watched, sort, filter) {
-            val kept =
-                items.filter { e ->
-                    val lib = StreamingStore.libraryId(e)
-                    val on = e.services + e.ott.map { it.first }
-                    when (filter) {
-                        ListFilter.ALL -> true
-                        ListFilter.FILMS -> !e.series
-                        ListFilter.SHOWS -> e.series
-                        ListFilter.NETFLIX -> on.any { it.startsWith("Netflix") } || e.status?.contains("On Netflix") == true
-                        ListFilter.PRIME -> on.any { it.contains("Prime") } || e.status?.contains("On Prime") == true
-                        ListFilter.LIBRARY -> lib != null
-                        ListFilter.NOT_WATCHED -> lib == null || lib !in watched
-                    }
-                }
-            when (sort) {
-                ListSort.ADDED -> kept
-                ListSort.RATING -> kept.sortedByDescending { it.imdbRating ?: it.tmdbRating ?: 0f }
-                ListSort.SHORT -> kept.sortedBy { if (it.series) Int.MAX_VALUE else it.runtime ?: Int.MAX_VALUE - 1 }
-            }
-        }
-    val firstButton = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstButton.tryRequestFocus() }
-    val content: @Composable () -> Unit = {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .ifElse(asDialog, Modifier.background(Color(0xF2101010)))
-                    .padding(horizontal = 40.dp, vertical = 12.dp),
-        ) {
-            // the focused title's details, as on the other pages (title, ratings, box office, story)
-            com.github.damontecres.wholphin.ui.main.HomePageHeader(
-                item = focused,
-                showLogo = false,
-                modifier = Modifier.height(150.dp),
-            )
-            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-            androidx.compose.foundation.layout.FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    "🔖 Watchlist · ${shown.size}" + (if (shown.size != items.size) " of ${items.size}" else "") + "   Sort",
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                )
-                ListSort.entries.forEachIndexed { i, s ->
-                    Button(
-                        onClick = { sort = s },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.ifElse(i == 0, Modifier.focusRequester(firstButton)),
-                    ) { Text((if (s == sort) "● " else "") + s.label, fontSize = 12.sp) }
-                }
-                Text("   Show", fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.CenterVertically))
-                ListFilter.entries.forEach { f ->
-                    Button(
-                        onClick = { filter = f },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    ) { Text((if (f == filter) "● " else "") + f.label, fontSize = 12.sp) }
-                }
-            }
-            if (shown.isEmpty()) {
-                Text("Nothing here with this filter.", color = Color.White.copy(alpha = 0.7f))
-            }
-            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                columns =
-                    androidx.compose.foundation.lazy.grid.GridCells
-                        .Adaptive(((com.github.damontecres.wholphin.ui.Cards.HEIGHT_2X3_DP * 2) / 3 + 4).dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            ) {
-                items(shown.size, key = { i -> "${shown[i].series}-${shown[i].tmdb}" }) { i ->
-                    val e = shown[i]
-                    // the same poster card as every row: ratings, votes, 🍅, box office, service logo, badges
-                    val item = remember(e) { StreamingStore.toBaseItem(e, "my-list") }
-                    com.github.damontecres.wholphin.ui.main.HomePageCardContent(
-                        index = i,
-                        item = item,
-                        onClick = { onOpen(e) },
-                        onLongClick = { onToggle(e) },
-                        viewOptions = com.github.damontecres.wholphin.data.model.HomeRowViewOptions(),
-                        modifier =
-                            Modifier.onFocusChanged {
-                                if (it.isFocused) {
-                                    focused = item
-                                    onFocusItem(item)
-                                }
-                            },
-                    )
-                }
-            }
-            if (items.isEmpty()) {
-                Text(
-                    "Your Watchlist is empty. On the Netflix, Prime Video or Theatre page, hold OK on a poster " +
-                        "(or press ＋ Watchlist in its panel) to save it here.",
-                    color = Color.White.copy(alpha = 0.8f),
-                )
-            }
-            Text(
-                "OK opens a title · hold OK to take it off your Watchlist" + if (asDialog) " · Back to close" else "",
-                fontSize = 12.sp,
-                color = Color.White.copy(alpha = 0.5f),
-            )
-        }
-    }
-    if (asDialog) {
-        Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) { content() }
-    } else {
-        content()
-    }
-}
+private fun releaseDate(e: StreamingStore.Entry): String =
+    e.journey.firstOrNull { it.kind == "cinema" && it.date != null }?.date ?: e.year?.let { "$it-01-01" } ?: "0000"
 
-/** NoBars: the Watchlist page in the menu: everything you've saved from Netflix, Prime Video and Theatre. */
+/** NoBars: the Watchlist page in the menu, built like the Movies page: Overview (rows), All (grid with the same
+ * Sort and Filter buttons), Genres (a row per genre). Everything you've saved from Netflix, Prime Video and Theatre. */
 @Composable
 private fun WatchlistPage(
     modifier: Modifier,
@@ -714,152 +607,284 @@ private fun WatchlistPage(
         LoadingPage(modifier)
         return
     }
+    val open = { item: com.github.damontecres.wholphin.data.model.BaseItem -> StreamingStore.entries[item.id]?.let { panel = it } }
     Box(modifier.fillMaxSize()) {
-        MyListGrid(
-            items = list,
-            watched = watched,
-            onOpen = { e -> panel = e },
-            onToggle = { toggle(it) },
-            onBack = {},
-            asDialog = false,
-            onFocusItem = viewModel::updateBackdrop,
-        )
-    }
-    panel?.let { entry ->
-        StreamingPanel(
-            entry = entry,
-            service = StreamingStore.WATCHLIST,
-            fromList = true,
-            onToggle = { toggle(entry) },
-            onBack = { panel = null },
-            onNavigate = {
-                panel = null
-                viewModel.navigationManager.navigateTo(it)
-            },
-        )
-    }
-}
-
-
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text.uppercase(Locale.US),
-        fontSize = 11.sp,
-        letterSpacing = 1.2.sp,
-        color = Color.White.copy(alpha = 0.5f),
-        modifier = Modifier.padding(top = 6.dp),
-    )
-}
-
-@Composable
-private fun Chip(
-    text: String,
-    background: Color,
-    textColor: Color,
-) {
-    Text(
-        text,
-        fontSize = 13.sp,
-        color = textColor,
-        modifier = Modifier.background(background, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 2.dp),
-    )
-}
-
-private fun stepColor(kind: String): Color =
-    when (kind) {
-        "cinema" -> Color(0xFF64B5F6)
-        "home" -> Color(0xFF81C784)
-        "chart" -> Color(0xFFFFB74D)
-        "you" -> Color(0xFFB39DDB)
-        else -> Color(0xFF9E9E9E)
-    }
-
-/** NoBars: the vertical timeline: a dot per step on one line (hollow dots are still to come), date and detail beside it. */
-@Composable
-private fun JourneyTimeline(steps: List<StreamingStore.JourneyStep>) {
-    val today = remember { java.time.LocalDate.now().toString() }
-    Column {
-        steps.forEachIndexed { i, step ->
-            val future = step.date != null && step.date > today
-            val color = stepColor(step.kind)
-            Row(modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
-                Box(modifier = Modifier.width(22.dp).fillMaxHeight()) {
-                    // the line through the dots
-                    Box(
-                        Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = if (i == 0) 9.dp else 0.dp, bottom = if (i == steps.lastIndex) 0.dp else 0.dp)
-                            .width(2.dp)
-                            .fillMaxHeight(if (i == steps.lastIndex) 0.25f else 1f)
-                            .background(Color.White.copy(alpha = 0.18f)),
-                    )
-                    Box(
-                        Modifier
-                            .padding(top = 5.dp)
-                            .align(Alignment.TopCenter)
-                            .size(10.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(if (future) Color.Black else color)
-                            .border(2.dp, color, androidx.compose.foundation.shape.CircleShape),
+        if (list.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "Your Watchlist is empty. On the Netflix, Prime Video or Theatre page, hold OK on a poster " +
+                        "(or press ＋ Watchlist in its panel) to save it here.",
+                    color = Color.White.copy(alpha = 0.8f),
+                )
+            }
+        } else {
+            val tabs =
+                remember {
+                    listOf(
+                        com.github.damontecres.wholphin.ui.components.TabDetails(StringStringProvider("Overview")),
+                        com.github.damontecres.wholphin.ui.components.TabDetails(StringStringProvider("All")),
+                        com.github.damontecres.wholphin.ui.components.TabDetails(StringStringProvider("Genres")),
                     )
                 }
-                Column(modifier = Modifier.padding(start = 6.dp, bottom = 10.dp)) {
-                    val whenText =
-                        step.date?.let { d ->
-                            val text = shortDate(d)
-                            when {
-                                step.by -> "by $text"
-                                future -> {
-                                    val days = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(d))
-                                    "$text · in $days day${if (days == 1L) "" else "s"}"
-                                }
-                                else -> text
-                            }
-                        }
-                    Text(
-                        androidx.compose.ui.text.buildAnnotatedString {
-                            pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
-                            append(step.title)
-                            pop()
-                            whenText?.let {
-                                pushStyle(androidx.compose.ui.text.SpanStyle(color = color))
-                                append("  ·  $it")
-                                pop()
-                            }
-                        },
-                        fontSize = 14.sp,
-                    )
-                    step.detail?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f)) }
-                    if (step.weekly.size >= 2) {
-                        val max = step.weekly.max().coerceAtLeast(1)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            verticalAlignment = Alignment.Bottom,
-                            modifier = Modifier.padding(top = 4.dp).height(30.dp),
-                        ) {
-                            step.weekly.forEach { w ->
-                                Box(
-                                    Modifier
-                                        .width(12.dp)
-                                        .fillMaxHeight((w.toFloat() / max).coerceIn(0.06f, 1f))
-                                        .background(color, RoundedCornerShape(2.dp)),
-                                )
-                            }
-                            Text(
-                                "  week by week · last " + com.github.damontecres.wholphin.services.BoxOffice.short(step.weekly.last()),
-                                fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.6f),
-                            )
-                        }
-                    }
+            var showTabs by remember { mutableStateOf(true) }
+            com.github.damontecres.wholphin.ui.components.TabbedPage(
+                itemId = "nobars-watchlist",
+                tabs = tabs,
+                showTabs = showTabs,
+            ) { tabIndex, tab ->
+                val content =
+                    Modifier
+                        .fillMaxSize()
+                        .focusRequester(tab.contentFocusRequester)
+                when (tabIndex) {
+                    0 -> WatchlistRows(overviewRows(list, watched), viewModel, open, toggle, { showTabs = it }, content)
+                    1 -> WatchlistAll(list, watched, viewModel, open, toggle, { showTabs = it }, content)
+                    else -> WatchlistRows(genreRows(list), viewModel, open, toggle, { showTabs = it }, content)
                 }
             }
+        }
+        panel?.let { entry ->
+            StreamingPanel(
+                entry = entry,
+                service = StreamingStore.WATCHLIST,
+                fromList = true,
+                onToggle = { toggle(entry) },
+                onBack = { panel = null },
+                onNavigate = {
+                    panel = null
+                    viewModel.navigationManager.navigateTo(it)
+                },
+            )
         }
     }
 }
 
+private fun overviewRows(
+    list: List<StreamingStore.Entry>,
+    watched: Set<java.util.UUID>,
+): List<Pair<String, List<StreamingStore.Entry>>> {
+    fun seen(e: StreamingStore.Entry) = StreamingStore.libraryId(e)?.let { it in watched } == true
+    val unseen = list.filterNot(::seen)
+    return listOf(
+        "Recently added" to list,
+        "Films" to unseen.filter { !it.series },
+        "Shows" to unseen.filter { it.series },
+        "On Netflix" to unseen.filter { "netflix" in whereOf(it) },
+        "On Prime Video" to unseen.filter { "prime" in whereOf(it) },
+        "Streaming elsewhere" to unseen.filter { "elsewhere" in whereOf(it) },
+        "In cinemas or coming soon" to unseen.filter { "cinemas" in whereOf(it) || "notyet" in whereOf(it) },
+        "In your library" to unseen.filter { "library" in whereOf(it) },
+        "Best rated" to unseen.filter { (it.imdbRating ?: it.tmdbRating ?: 0f) >= 7f }.sortedByDescending { it.imdbRating ?: it.tmdbRating ?: 0f },
+        "Short ones · under 1 h 45" to unseen.filter { !it.series && (it.runtime ?: 999) < 105 },
+        "Watched" to list.filter(::seen),
+    ).filter { it.second.isNotEmpty() }
+}
+
+private fun genreRows(list: List<StreamingStore.Entry>): List<Pair<String, List<StreamingStore.Entry>>> =
+    list
+        .flatMap { e -> e.genres.map { it to e } }
+        .groupBy({ it.first }, { it.second })
+        .toList()
+        .sortedByDescending { it.second.size }
+        .map { (g, items) -> "$g · ${items.size}" to items }
+
+/** Rows of posters with the browsing header, like the other pages. */
+@Composable
+private fun WatchlistRows(
+    rows: List<Pair<String, List<StreamingStore.Entry>>>,
+    viewModel: StreamingViewModel,
+    onOpen: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit,
+    onToggle: (StreamingStore.Entry) -> Unit,
+    onShowTabs: (Boolean) -> Unit,
+    modifier: Modifier,
+) {
+    val homeRows =
+        remember(rows) {
+            rows.map { (title, items) ->
+                HomeRowLoadingState.Success(
+                    title = StringStringProvider(title),
+                    items = items.map { StreamingStore.toBaseItem(it, "$MY_LIST_ROW-$title") },
+                    showViewMore = false,
+                )
+            }
+        }
+    var position by rememberPosition()
+    HomePageContent(
+        homeRows = homeRows,
+        position = position,
+        onFocusPosition = {
+            position = it
+            onShowTabs(it.row < 1)
+        },
+        onClickItem = { p, item ->
+            position = p
+            onOpen(item)
+        },
+        onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let(onToggle) },
+        onClickPlay = { _, item -> onOpen(item) },
+        showClock = false,
+        onUpdateBackdrop = viewModel::updateBackdrop,
+        showLogo = false,
+        showViewMore = false,
+        takeFocus = false,
+        modifier = modifier,
+    )
+}
+
+/** Everything in one grid, with the same Sort and Filter buttons as the Movies library. */
+@Composable
+private fun WatchlistAll(
+    list: List<StreamingStore.Entry>,
+    watched: Set<java.util.UUID>,
+    viewModel: StreamingViewModel,
+    onOpen: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit,
+    onToggle: (StreamingStore.Entry) -> Unit,
+    onShowTabs: (Boolean) -> Unit,
+    modifier: Modifier,
+) {
+    val sortOptions =
+        remember {
+            listOf(
+                org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED,
+                org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME,
+                org.jellyfin.sdk.model.api.ItemSortBy.COMMUNITY_RATING,
+                org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE,
+                org.jellyfin.sdk.model.api.ItemSortBy.RUNTIME,
+            )
+        }
+    val filterOptions =
+        remember {
+            listOf(
+                com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter,
+                com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter,
+                com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter,
+                com.github.damontecres.wholphin.data.filter.PlayedFilter,
+                com.github.damontecres.wholphin.data.filter.YearFilter,
+                com.github.damontecres.wholphin.data.filter.DecadeFilter,
+                com.github.damontecres.wholphin.data.filter.CommunityRatingFilter,
+            )
+        }
+    var sort by remember {
+        mutableStateOf(
+            com.github.damontecres.wholphin.ui.data.SortAndDirection(
+                org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED,
+                org.jellyfin.sdk.model.api.SortOrder.DESCENDING,
+            ),
+        )
+    }
+    var filter by remember { mutableStateOf(com.github.damontecres.wholphin.data.model.GetItemsFilter()) }
+    val shown =
+        remember(list, watched, sort, filter) {
+            val x = filter.extra
+            val kept =
+                list.filter { e ->
+                    val lib = StreamingStore.libraryId(e)
+                    val year = e.year
+                    (x?.wlTypes.isNullOrEmpty() || (if (e.series) "shows" else "films") in x!!.wlTypes!!) &&
+                        (x?.wlWhere.isNullOrEmpty() || whereOf(e).any { it in x!!.wlWhere!! }) &&
+                        (x?.wlGenres.isNullOrEmpty() || e.genres.any { it in x!!.wlGenres!! }) &&
+                        (filter.played == null || (lib != null && lib in watched) == filter.played) &&
+                        (filter.years.isNullOrEmpty() || (year != null && year in filter.years!!)) &&
+                        (filter.decades.isNullOrEmpty() || (year != null && (year / 10) * 10 in filter.decades!!)) &&
+                        (filter.minCommunityRating == null || (e.imdbRating ?: e.tmdbRating ?: 0f) >= filter.minCommunityRating!!)
+                }
+            val ordered =
+                when (sort.sort) {
+                    org.jellyfin.sdk.model.api.ItemSortBy.SORT_NAME -> kept.sortedBy { it.title.lowercase(Locale.US).removePrefix("the ") }
+                    org.jellyfin.sdk.model.api.ItemSortBy.COMMUNITY_RATING -> kept.sortedBy { it.imdbRating ?: it.tmdbRating ?: 0f }
+                    org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE -> kept.sortedBy(::releaseDate)
+                    org.jellyfin.sdk.model.api.ItemSortBy.RUNTIME -> kept.sortedBy { if (it.series) Int.MAX_VALUE else it.runtime ?: Int.MAX_VALUE - 1 }
+                    else -> kept.reversed() // the list is kept newest first: ascending = oldest first
+                }
+            val directed = if (sort.direction == org.jellyfin.sdk.model.api.SortOrder.DESCENDING) ordered.reversed() else ordered
+            directed.map { StreamingStore.toBaseItem(it, MY_LIST_ROW) }
+        }
+    val possible = { option: com.github.damontecres.wholphin.data.filter.ItemFilterBy<*> ->
+        when (option) {
+            com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter ->
+                listOf(
+                    com.github.damontecres.wholphin.data.filter.FilterValueOption("Films", "films"),
+                    com.github.damontecres.wholphin.data.filter.FilterValueOption("Shows", "shows"),
+                )
+            com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter ->
+                WHERE_NAMES.map { com.github.damontecres.wholphin.data.filter.FilterValueOption(it.second, it.first) }
+            com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter ->
+                list.flatMap { it.genres }.distinct().sorted().map { com.github.damontecres.wholphin.data.filter.FilterValueOption(it, it) }
+            com.github.damontecres.wholphin.data.filter.PlayedFilter ->
+                listOf(
+                    com.github.damontecres.wholphin.data.filter.FilterValueOption("True", null),
+                    com.github.damontecres.wholphin.data.filter.FilterValueOption("False", null),
+                )
+            com.github.damontecres.wholphin.data.filter.YearFilter ->
+                list.mapNotNull { it.year }.distinct().sorted().map { com.github.damontecres.wholphin.data.filter.FilterValueOption("$it", it) }
+            com.github.damontecres.wholphin.data.filter.DecadeFilter ->
+                list.mapNotNull { it.year?.div(10)?.times(10) }.distinct().sorted().map { com.github.damontecres.wholphin.data.filter.FilterValueOption("${it}s", it) }
+            com.github.damontecres.wholphin.data.filter.CommunityRatingFilter ->
+                (1..9).map { com.github.damontecres.wholphin.data.filter.FilterValueOption("$it", it) }
+            else -> emptyList()
+        }
+    }
+    var focused by remember { mutableStateOf<com.github.damontecres.wholphin.data.model.BaseItem?>(null) }
+    val gridFocus = remember { FocusRequester() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    Column(modifier = modifier) {
+        com.github.damontecres.wholphin.ui.components.CollectionFolderHeader(
+            listIsNotEmpty = shown.isNotEmpty(),
+            showHeader = true,
+            showTitle = false,
+            playEnabled = false,
+            title = "Watchlist",
+            sortAndDirection = sort,
+            onSortChange = { sort = it },
+            sortOptions = sortOptions,
+            getPossibleFilterValues = { possible(it) },
+            onClickShowViewOptions = {},
+            onClickPlayAll = {},
+            onClickRandom = { shown.randomOrNull()?.let(onOpen) },
+            currentFilter = filter,
+            filterOptions = filterOptions,
+            onFilterChange = { filter = it },
+            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+        )
+        com.github.damontecres.wholphin.ui.main.HomePageHeader(
+            item = focused,
+            showLogo = false,
+            modifier = Modifier.fillMaxWidth().height(170.dp).padding(start = 16.dp, top = 28.dp),
+        )
+        if (shown.isEmpty()) {
+            Text("Nothing on your Watchlist matches this filter.", color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
+        }
+        com.github.damontecres.wholphin.ui.detail.CardGrid(
+            pager = shown,
+            onClickItem = { _, item -> onOpen(item) },
+            onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let(onToggle) },
+            onClickPlay = { _, item -> onOpen(item) },
+            letterPosition = { c -> shown.indexOfFirst { it.name?.uppercase(Locale.US)?.removePrefix("THE ")?.startsWith(c) == true }.coerceAtLeast(0) },
+            gridFocusRequester = gridFocus,
+            showJumpButtons = false,
+            showLetterButtons = false,
+            modifier = Modifier.fillMaxSize(),
+            positionCallback = { columns, pos ->
+                onShowTabs(pos < columns)
+                focused = shown.getOrNull(pos)
+                shown.getOrNull(pos)?.let(viewModel::updateBackdrop)
+            },
+            cardContent = { details ->
+                val width = with(density) { details.widthPx.toDp() }
+                com.github.damontecres.wholphin.ui.cards.BannerCard(
+                    name = details.item?.name,
+                    item = details.item,
+                    onClick = details.onClick,
+                    onLongClick = details.onLongClick,
+                    aspectRatio = com.github.damontecres.wholphin.ui.AspectRatios.TALL,
+                    cardHeight = if (details.widthPx > 0) width * 1.5f else 172.dp,
+                    modifier = details.mod,
+                )
+            },
+            columns = 6,
+        )
+    }
+}
 
 /** NoBars: what the panel needs about your own copy. [playId]: the film, or the next episode of a show. */
 private data class OwnedCopy(

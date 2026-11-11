@@ -246,6 +246,12 @@ class FilterOptionCache
                 com.github.damontecres.wholphin.data.filter.InProgressFilter,
                 com.github.damontecres.wholphin.data.filter.WantedFilter,
                 -> listOf(FilterValueOption("Yes", true))
+
+                // the Watchlist page supplies these itself
+                com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter,
+                com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter,
+                com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter,
+                -> emptyList()
             }
         }
 

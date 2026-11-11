@@ -390,7 +390,7 @@ object StreamingStore {
     ): BaseItem {
         val id = UUID.nameUUIDFromBytes("tmdb-${if (e.series) "tv" else "movie"}-${e.tmdb}-$row".toByteArray())
         entries[id] = e
-        if (row == "my-list") watchlistCards.add(id)
+        if (row.startsWith("my-list")) watchlistCards.add(id)
         return BaseItem(
             BaseItemDto(
                 id = id,

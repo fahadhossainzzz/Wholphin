@@ -49,6 +49,12 @@ fun FocusedEpisodeHeader(
                 numberOfVersions = dto.mediaSourceCount ?: 0,
                 modifier = Modifier.padding(start = HeaderUtils.startPadding),
             )
+            // NoBars: the episode's file, drive and date added
+            com.github.damontecres.wholphin.ui.components.NbFileChips(
+                source = chosenStreams?.source ?: dto.mediaSources?.firstOrNull(),
+                added = dto.dateCreated,
+                modifier = Modifier.padding(start = HeaderUtils.startPadding),
+            )
         }
         OverviewText(
             overview = dto?.overview ?: "",

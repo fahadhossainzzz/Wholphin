@@ -71,6 +71,7 @@ fun MovieDetailsHeader(
                 com.github.damontecres.wholphin.ui.components.NbGenresInline(movie)
             }
             com.github.damontecres.wholphin.ui.components.NbRatingChips(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
+            com.github.damontecres.wholphin.ui.components.NbBoxOfficeLine(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 2.dp))
 
             VideoStreamDetails(
                 chosenStreams = chosenStreams,
@@ -79,8 +80,12 @@ fun MovieDetailsHeader(
                     Modifier.padding(
                         start = HeaderUtils.startPadding,
                         top = 4.dp,
-                        bottom = 16.dp,
                     ),
+            )
+            com.github.damontecres.wholphin.ui.components.NbFileChips(
+                source = chosenStreams?.source ?: movie.data.mediaSources?.firstOrNull(),
+                added = movie.data.dateCreated,
+                modifier = Modifier.padding(start = HeaderUtils.startPadding, bottom = 16.dp),
             )
             // Description
             dto.overview?.let { overview ->

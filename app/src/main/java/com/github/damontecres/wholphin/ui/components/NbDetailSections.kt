@@ -332,3 +332,39 @@ fun NbGenresInline(item: BaseItem) {
         )
     }
 }
+
+
+/** Header: the box office in one line ("💰 $714M worldwide · budget $190M · Hit (3.8×) · #6 of 2024"). */
+@Composable
+fun NbBoxOfficeLine(
+    item: BaseItem,
+    modifier: Modifier = Modifier,
+) {
+    val money by BoxOffice.library.collectAsState()
+    val streaming by StreamingStore.library.collectAsState()
+    val m = money[key(item)] ?: return
+    val line = BoxOffice.line(m, streaming[key(item)].orEmpty()) ?: return
+    Text(line, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+}
+
+/** Header: the file itself: "MKV · 29.4 GB · 27 Mbps", the drive it lives on, and when it was added. */
+@Composable
+fun NbFileChips(
+    source: org.jellyfin.sdk.model.api.MediaSourceInfo?,
+    added: java.time.LocalDateTime?,
+    modifier: Modifier = Modifier,
+) {
+    val file =
+        listOfNotNull(
+            source?.container?.uppercase(Locale.US)?.substringBefore(","),
+            source?.size?.let { String.format(Locale.US, "%.1f GB", it / 1e9) },
+            source?.bitrate?.let { String.format(Locale.US, "%.0f Mbps", it / 1e6) },
+        ).joinToString(" · ")
+    val drive = source?.path?.let { p -> Regex("/Volumes/([^/]+)/").find(p)?.groupValues?.get(1) }
+    if (file.isEmpty() && drive == null && added == null) return
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
+        if (file.isNotEmpty()) NbChip("🗎 $file", Color.White.copy(alpha = 0.12f), Color.White)
+        drive?.let { NbChip("💾 $it", Color(0xFF26A69A).copy(alpha = 0.8f), Color.White) }
+        added?.let { NbChip("added " + nbDate(it.toLocalDate().toString()), Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.8f)) }
+    }
+}

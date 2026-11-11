@@ -607,7 +607,10 @@ private fun WatchlistPage(
         LoadingPage(modifier)
         return
     }
-    val open = { item: com.github.damontecres.wholphin.data.model.BaseItem -> StreamingStore.entries[item.id]?.let { panel = it } }
+    val open = { item: com.github.damontecres.wholphin.data.model.BaseItem ->
+        StreamingStore.entries[item.id]?.let { panel = it }
+        Unit
+    }
     Box(modifier.fillMaxSize()) {
         if (list.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -885,6 +888,126 @@ private fun WatchlistAll(
         )
     }
 }
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(Locale.US),
+        fontSize = 11.sp,
+        letterSpacing = 1.2.sp,
+        color = Color.White.copy(alpha = 0.5f),
+        modifier = Modifier.padding(top = 6.dp),
+    )
+}
+
+@Composable
+private fun Chip(
+    text: String,
+    background: Color,
+    textColor: Color,
+) {
+    Text(
+        text,
+        fontSize = 13.sp,
+        color = textColor,
+        modifier = Modifier.background(background, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 2.dp),
+    )
+}
+
+private fun stepColor(kind: String): Color =
+    when (kind) {
+        "cinema" -> Color(0xFF64B5F6)
+        "home" -> Color(0xFF81C784)
+        "chart" -> Color(0xFFFFB74D)
+        "you" -> Color(0xFFB39DDB)
+        else -> Color(0xFF9E9E9E)
+    }
+
+/** NoBars: the vertical timeline: a dot per step on one line (hollow dots are still to come), date and detail beside it. */
+@Composable
+private fun JourneyTimeline(steps: List<StreamingStore.JourneyStep>) {
+    val today = remember { java.time.LocalDate.now().toString() }
+    Column {
+        steps.forEachIndexed { i, step ->
+            val future = step.date != null && step.date > today
+            val color = stepColor(step.kind)
+            Row(modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+                Box(modifier = Modifier.width(22.dp).fillMaxHeight()) {
+                    // the line through the dots
+                    Box(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = if (i == 0) 9.dp else 0.dp, bottom = if (i == steps.lastIndex) 0.dp else 0.dp)
+                            .width(2.dp)
+                            .fillMaxHeight(if (i == steps.lastIndex) 0.25f else 1f)
+                            .background(Color.White.copy(alpha = 0.18f)),
+                    )
+                    Box(
+                        Modifier
+                            .padding(top = 5.dp)
+                            .align(Alignment.TopCenter)
+                            .size(10.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (future) Color.Black else color)
+                            .border(2.dp, color, androidx.compose.foundation.shape.CircleShape),
+                    )
+                }
+                Column(modifier = Modifier.padding(start = 6.dp, bottom = 10.dp)) {
+                    val whenText =
+                        step.date?.let { d ->
+                            val text = shortDate(d)
+                            when {
+                                step.by -> "by $text"
+                                future -> {
+                                    val days = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(d))
+                                    "$text · in $days day${if (days == 1L) "" else "s"}"
+                                }
+                                else -> text
+                            }
+                        }
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
+                            append(step.title)
+                            pop()
+                            whenText?.let {
+                                pushStyle(androidx.compose.ui.text.SpanStyle(color = color))
+                                append("  ·  $it")
+                                pop()
+                            }
+                        },
+                        fontSize = 14.sp,
+                    )
+                    step.detail?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f)) }
+                    if (step.weekly.size >= 2) {
+                        val max = step.weekly.max().coerceAtLeast(1)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = Modifier.padding(top = 4.dp).height(30.dp),
+                        ) {
+                            step.weekly.forEach { w ->
+                                Box(
+                                    Modifier
+                                        .width(12.dp)
+                                        .fillMaxHeight((w.toFloat() / max).coerceIn(0.06f, 1f))
+                                        .background(color, RoundedCornerShape(2.dp)),
+                                )
+                            }
+                            Text(
+                                "  week by week · last " + com.github.damontecres.wholphin.services.BoxOffice.short(step.weekly.last()),
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.6f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 
 /** NoBars: what the panel needs about your own copy. [playId]: the film, or the next episode of a show. */
 private data class OwnedCopy(

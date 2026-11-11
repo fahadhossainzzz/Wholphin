@@ -3,6 +3,7 @@ package com.github.damontecres.wholphin.ui.detail
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -295,23 +296,17 @@ private fun StreamingPanel(
                             if (entry.series) entry.seasons?.let { "$it season${if (it == 1) "" else "s"}" } else entry.runtime?.let { if (it >= 60) "${it / 60} h ${it % 60} min" else "$it min" },
                         ).joinToString("  ·  ")
                     if (facts.isNotEmpty()) Text(facts, fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        entry.imdbRating?.let { r ->
-                            Text(
-                                "★ " + String.format(Locale.US, "%.1f", r) + (entry.imdbVotes?.let { " (${com.github.damontecres.wholphin.services.ImdbVotesStore.short(it)} votes)" } ?: ""),
-                                fontSize = 15.sp,
-                                color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
-                            )
-                        } ?: entry.tmdbRating?.let { r ->
-                            // NoBars: IMDb hasn't rated it yet
-                            Text(
-                                "TMDB ★ " + String.format(Locale.US, "%.1f", r) + (entry.tmdbVotes?.let { " (${com.github.damontecres.wholphin.services.ImdbVotesStore.short(it)} votes)" } ?: ""),
-                                fontSize = 15.sp,
-                                color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
-                            )
-                        }
-                        entry.rt?.let { Text("🍅 $it%", fontSize = 15.sp, color = Color.White) }
-                            ?: entry.pop?.let { Text("🍿 $it% audience", fontSize = 15.sp, color = Color.White) }
+                    // ratings as small coloured chips
+                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        val votes = { v: Int? -> v?.let { " · ${com.github.damontecres.wholphin.services.ImdbVotesStore.short(it)}" } ?: "" }
+                        entry.imdbRating?.let { r -> Chip("IMDb " + String.format(Locale.US, "%.1f", r) + votes(entry.imdbVotes), Color(0xFFF5C518), Color.Black) }
+                            ?: entry.tmdbRating?.let { r -> Chip("TMDB " + String.format(Locale.US, "%.1f", r) + votes(entry.tmdbVotes), Color(0xFF01B4E4), Color.Black) }
+                        entry.rt?.let { Chip("🍅 $it%", Color(0xFFFA320A).copy(alpha = 0.85f), Color.White) }
+                            ?: entry.pop?.let { Chip("🍿 $it% audience", Color.White.copy(alpha = 0.15f), Color.White) }
                     }
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
                 }
@@ -405,24 +400,51 @@ private fun StreamingPanel(
                     }
                     entry.note?.takeIf { it.startsWith("#") }?.let { Text(it, fontSize = 14.sp, color = Color(0xFFFFAB91)) }
                     entry.facts?.let { Text(it, fontSize = 14.sp, color = Color(0xFFA5D6A7)) }
+                    // the journey: build-up, cinemas, home release, charts, and you
+                    val wantedNow by WantedStore.items.collectAsState()
+                    val watchedNow by WantedStore.watched.collectAsState()
+                    val steps =
+                        remember(entry, wantedNow, watchedNow) {
+                            val list = entry.journey.toMutableList()
+                            val added = entry.added ?: wantedNow.firstOrNull { it.tmdb == entry.tmdb && it.series == entry.series }?.added
+                            added?.let { list += StreamingStore.JourneyStep("you", "Added to your Watchlist", it, entry.from?.let { f -> "from ${StreamingStore.displayName(f)}" }) }
+                            val lib = StreamingStore.libraryId(entry)
+                            if (lib != null && lib in watchedNow && list.none { it.title == "Watched" }) {
+                                list += StreamingStore.JourneyStep("you", "Watched", null, null)
+                            }
+                            val undated = list.filter { it.date == null && it.kind != "you" }
+                            val dated = list.filter { it.date != null }
+                            val known = dated.filter { !it.by && it.kind != "you" }.mapNotNull { it.date }.maxOrNull()
+                            undated +
+                                dated.sortedBy { if (it.by && known != null) known else it.date } +
+                                list.filter { it.date == null && it.kind == "you" }
+                        }
+                    if (steps.isNotEmpty()) {
+                        SectionLabel("Journey")
+                        JourneyTimeline(steps)
+                    } else {
+                        entry.date?.let { Text(it, fontSize = 14.sp, color = Color(0xFF90CAF9)) }
+                    }
                     if (entry.gross != null || entry.budget != null) {
                         com.github.damontecres.wholphin.services.BoxOffice
                             .line(
                                 com.github.damontecres.wholphin.services.BoxOffice
                                     .Money(entry.gross, entry.budget, entry.year, entry.grossToday, grossLocal = entry.grossLocal),
-                            )?.let { Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f)) }
+                            )?.let {
+                                SectionLabel("Box office")
+                                Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f))
+                            }
                     }
-                    entry.streamOn?.let { Text("Streaming on  $it", fontSize = 14.sp, color = Color(0xFFFFE082)) }
-                    entry.freeOn?.let { Text("Free on  $it", fontSize = 14.sp, color = Color(0xFFFFCC80)) }
-                    entry.rentBuy?.let { Text("Rent or buy  $it", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f)) }
-                    entry.date?.let { Text(it, fontSize = 14.sp, color = Color(0xFF90CAF9)) }
+                    if (entry.streamOn != null || entry.freeOn != null || entry.rentBuy != null) {
+                        SectionLabel("Where to watch")
+                        entry.streamOn?.let { Text("Streaming  $it", fontSize = 14.sp, color = Color(0xFFFFE082)) }
+                        entry.freeOn?.let { Text("Free  $it", fontSize = 14.sp, color = Color(0xFFFFCC80)) }
+                        entry.rentBuy?.let { Text("Rent or buy  $it", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f)) }
+                    }
                     entry.note?.takeIf { !it.startsWith("#") }?.let { Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f)) }
+                    if (entry.cast != null || entry.overview.isNotBlank()) SectionLabel("Story")
                     entry.cast?.let { Text("With $it", fontSize = 14.sp, color = Color.White.copy(alpha = 0.75f)) }
                     if (entry.overview.isNotBlank()) Text(entry.overview, fontSize = 15.sp, color = Color.White.copy(alpha = 0.9f))
-                    entry.added?.let { added ->
-                        val page = entry.from?.let { " from the ${StreamingStore.displayName(it)} page" } ?: ""
-                        Text("On your Watchlist since ${shortDate(added)}$page", fontSize = 12.sp, color = Color.White.copy(alpha = 0.55f))
-                    }
                 }
                 if (scroll.maxValue > 0 && scroll.value < scroll.maxValue) {
                     Text(
@@ -689,3 +711,122 @@ private fun WatchlistPage(
     }
 }
 
+
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(Locale.US),
+        fontSize = 11.sp,
+        letterSpacing = 1.2.sp,
+        color = Color.White.copy(alpha = 0.5f),
+        modifier = Modifier.padding(top = 6.dp),
+    )
+}
+
+@Composable
+private fun Chip(
+    text: String,
+    background: Color,
+    textColor: Color,
+) {
+    Text(
+        text,
+        fontSize = 13.sp,
+        color = textColor,
+        modifier = Modifier.background(background, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 2.dp),
+    )
+}
+
+private fun stepColor(kind: String): Color =
+    when (kind) {
+        "cinema" -> Color(0xFF64B5F6)
+        "home" -> Color(0xFF81C784)
+        "chart" -> Color(0xFFFFB74D)
+        "you" -> Color(0xFFB39DDB)
+        else -> Color(0xFF9E9E9E)
+    }
+
+/** NoBars: the vertical timeline: a dot per step on one line (hollow dots are still to come), date and detail beside it. */
+@Composable
+private fun JourneyTimeline(steps: List<StreamingStore.JourneyStep>) {
+    val today = remember { java.time.LocalDate.now().toString() }
+    Column {
+        steps.forEachIndexed { i, step ->
+            val future = step.date != null && step.date > today
+            val color = stepColor(step.kind)
+            Row(modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
+                Box(modifier = Modifier.width(22.dp).fillMaxHeight()) {
+                    // the line through the dots
+                    Box(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = if (i == 0) 9.dp else 0.dp, bottom = if (i == steps.lastIndex) 0.dp else 0.dp)
+                            .width(2.dp)
+                            .fillMaxHeight(if (i == steps.lastIndex) 0.25f else 1f)
+                            .background(Color.White.copy(alpha = 0.18f)),
+                    )
+                    Box(
+                        Modifier
+                            .padding(top = 5.dp)
+                            .align(Alignment.TopCenter)
+                            .size(10.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(if (future) Color.Black else color)
+                            .border(2.dp, color, androidx.compose.foundation.shape.CircleShape),
+                    )
+                }
+                Column(modifier = Modifier.padding(start = 6.dp, bottom = 10.dp)) {
+                    val whenText =
+                        step.date?.let { d ->
+                            val text = shortDate(d)
+                            when {
+                                step.by -> "by $text"
+                                future -> {
+                                    val days = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(d))
+                                    "$text · in $days day${if (days == 1L) "" else "s"}"
+                                }
+                                else -> text
+                            }
+                        }
+                    Text(
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            pushStyle(androidx.compose.ui.text.SpanStyle(color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
+                            append(step.title)
+                            pop()
+                            whenText?.let {
+                                pushStyle(androidx.compose.ui.text.SpanStyle(color = color))
+                                append("  ·  $it")
+                                pop()
+                            }
+                        },
+                        fontSize = 14.sp,
+                    )
+                    step.detail?.let { Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f)) }
+                    if (step.weekly.size >= 2) {
+                        val max = step.weekly.max().coerceAtLeast(1)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = Modifier.padding(top = 4.dp).height(30.dp),
+                        ) {
+                            step.weekly.forEach { w ->
+                                Box(
+                                    Modifier
+                                        .width(12.dp)
+                                        .fillMaxHeight((w.toFloat() / max).coerceIn(0.06f, 1f))
+                                        .background(color, RoundedCornerShape(2.dp)),
+                                )
+                            }
+                            Text(
+                                "  week by week · last " + com.github.damontecres.wholphin.services.BoxOffice.short(step.weekly.last()),
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.6f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

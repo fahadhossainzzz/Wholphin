@@ -94,6 +94,18 @@ object StreamingStore {
         /** My list: when it was added (yyyy-MM-dd) and from which page (netflix / prime / cinema) */
         val added: String? = null,
         val from: String? = null,
+        /** The title's journey: trailer, premiere, cinemas, home release, streaming, Top 10, your library */
+        val journey: List<JourneyStep> = emptyList(),
+    )
+
+    /** One dot on the panel's timeline. [kind]: build, cinema, home, chart, you. [by]: the date is "by then". */
+    data class JourneyStep(
+        val kind: String,
+        val title: String,
+        val date: String?,
+        val detail: String?,
+        val by: Boolean = false,
+        val weekly: List<Long> = emptyList(),
     )
 
     data class Row(
@@ -229,6 +241,21 @@ object StreamingStore {
             status = o.str("status"),
             added = o.str("added"),
             from = o.str("from"),
+            journey =
+                o.optJSONArray("journey")?.let { a ->
+                    (0 until a.length()).mapNotNull { i ->
+                        a.optJSONObject(i)?.let { j ->
+                            JourneyStep(
+                                kind = j.optString("k"),
+                                title = j.optString("t"),
+                                date = j.str("d"),
+                                detail = j.str("x"),
+                                by = j.optBoolean("by"),
+                                weekly = j.optJSONArray("wk")?.let { w -> (0 until w.length()).map { w.optLong(it) } } ?: emptyList(),
+                            )
+                        }
+                    }
+                } ?: emptyList(),
         )
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
@@ -265,6 +292,23 @@ object StreamingStore {
             e.tmdbVotes?.let { put("tmdbVotes", it) }
             e.added?.let { put("added", it) }
             e.from?.let { put("from", it) }
+            if (e.journey.isNotEmpty()) {
+                put(
+                    "journey",
+                    JSONArray(
+                        e.journey.map { j ->
+                            JSONObject().apply {
+                                put("k", j.kind)
+                                put("t", j.title)
+                                j.date?.let { put("d", it) }
+                                j.detail?.let { put("x", it) }
+                                if (j.by) put("by", true)
+                                if (j.weekly.isNotEmpty()) put("wk", JSONArray(j.weekly))
+                            }
+                        },
+                    ),
+                )
+            }
         }
 
     /** Today's card for a My list title: the morning check, else today's rows, else the copy saved when it was added. */
@@ -289,6 +333,7 @@ object StreamingStore {
             ott = fresh.ott.ifEmpty { saved.ott },
             ottMore = if (fresh.ott.isEmpty()) saved.ottMore else fresh.ottMore,
             services = fresh.services.ifEmpty { saved.services },
+            journey = fresh.journey.ifEmpty { saved.journey },
         )
     }
 

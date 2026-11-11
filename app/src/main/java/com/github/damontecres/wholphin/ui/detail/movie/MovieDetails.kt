@@ -406,6 +406,9 @@ fun MovieDetailsContent(
                     )
                 }
             }
+            // NoBars "explore": the journey across the screen, then box office and where else to watch
+            item { com.github.damontecres.wholphin.ui.components.NbJourneySection(movie) }
+            item { com.github.damontecres.wholphin.ui.components.NbMoneyAndWhereSection(movie) }
             state.chapters.letNotEmpty { chapters ->
                 item {
                     ChapterRow(
@@ -496,6 +499,8 @@ fun MovieDetailsContent(
                     )
                 }
             }
+            // NoBars "reference": director, writers, studio, collection, tagline, file, drive, subtitles, date added
+            item { com.github.damontecres.wholphin.ui.components.NbAboutSection(movie, "About this film") }
         }
     }
 }

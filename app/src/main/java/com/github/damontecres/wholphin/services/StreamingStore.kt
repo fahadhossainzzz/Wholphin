@@ -160,6 +160,16 @@ object StreamingStore {
                 owned = json.optJSONObject("owned")?.toStringMap() ?: emptyMap()
                 netflixIds = json.optJSONObject("netflix")?.toStringMap() ?: emptyMap()
                 CriticFallback.load(json.optJSONObject("rt"), json.optJSONObject("pop"))
+                json.optJSONObject("journeys")?.let { j ->
+                    libraryJourneys = j.keys().asSequence().associateWith { k -> j.optJSONArray(k)?.let(::parseSteps).orEmpty() }
+                }
+                json.optJSONObject("facts")?.let { f ->
+                    libraryFacts =
+                        f.keys().asSequence().associateWith { k ->
+                            val o = f.optJSONObject(k) ?: JSONObject()
+                            LibraryFacts(o.str("streamOn"), o.str("freeOn"), o.str("rentBuy"), o.str("collection"))
+                        }
+                }
                 Timber.i("NoBars: streaming library list loaded (%d titles)", map.size)
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: streaming library list unavailable")
@@ -241,22 +251,36 @@ object StreamingStore {
             status = o.str("status"),
             added = o.str("added"),
             from = o.str("from"),
-            journey =
-                o.optJSONArray("journey")?.let { a ->
-                    (0 until a.length()).mapNotNull { i ->
-                        a.optJSONObject(i)?.let { j ->
-                            JourneyStep(
-                                kind = j.optString("k"),
-                                title = j.optString("t"),
-                                date = j.str("d"),
-                                detail = j.str("x"),
-                                by = j.optBoolean("by"),
-                                weekly = j.optJSONArray("wk")?.let { w -> (0 until w.length()).map { w.optLong(it) } } ?: emptyList(),
-                            )
-                        }
-                    }
-                } ?: emptyList(),
+            journey = o.optJSONArray("journey")?.let(::parseSteps) ?: emptyList(),
         )
+
+    private fun parseSteps(a: JSONArray): List<JourneyStep> =
+        (0 until a.length()).mapNotNull { i ->
+            a.optJSONObject(i)?.let { j ->
+                JourneyStep(
+                    kind = j.optString("k"),
+                    title = j.optString("t"),
+                    date = j.str("d"),
+                    detail = j.str("x"),
+                    by = j.optBoolean("by"),
+                    weekly = j.optJSONArray("wk")?.let { w -> (0 until w.length()).map { w.optLong(it) } } ?: emptyList(),
+                )
+            }
+        }
+
+    /** Library titles (id without dashes): where else to watch and the collection */
+    data class LibraryFacts(
+        val streamOn: String?,
+        val freeOn: String?,
+        val rentBuy: String?,
+        val collection: String?,
+    )
+
+    @Volatile var libraryJourneys: Map<String, List<JourneyStep>> = emptyMap()
+        private set
+
+    @Volatile var libraryFacts: Map<String, LibraryFacts> = emptyMap()
+        private set
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
 

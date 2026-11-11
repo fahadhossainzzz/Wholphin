@@ -64,17 +64,13 @@ fun MovieDetailsHeader(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxWidth(.60f),
         ) {
-            QuickDetails(
-                movie.ui.quickDetails,
-                movie.timeRemainingOrRuntime,
-                Modifier.padding(start = HeaderUtils.startPadding),
-            )
-            WatchProvidersLine(movie, Modifier.padding(start = HeaderUtils.startPadding))
-            com.github.damontecres.wholphin.ui.components.BoxOfficeLine(movie, Modifier.padding(start = HeaderUtils.startPadding))
-
-            dto.genres?.letNotEmpty {
-                GenreText(it, Modifier.padding(start = HeaderUtils.startPadding))
+            // NoBars "glance" header: one meta line, then rating chips with the "Also on" logos, then the file chips
+            // (box office, director and tagline moved to the sections below)
+            androidx.compose.foundation.layout.Row(Modifier.padding(start = HeaderUtils.startPadding)) {
+                QuickDetails(movie.ui.quickDetails, movie.timeRemainingOrRuntime, showRatings = false)
+                com.github.damontecres.wholphin.ui.components.NbGenresInline(movie)
             }
+            com.github.damontecres.wholphin.ui.components.NbRatingChips(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
 
             VideoStreamDetails(
                 chosenStreams = chosenStreams,
@@ -86,15 +82,6 @@ fun MovieDetailsHeader(
                         bottom = 16.dp,
                     ),
             )
-            dto.taglines?.firstOrNull()?.let { tagline ->
-                Text(
-                    text = tagline,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontStyle = FontStyle.Italic,
-                    modifier = Modifier.padding(start = HeaderUtils.startPadding),
-                )
-            }
-
             // Description
             dto.overview?.let { overview ->
                 OverviewText(
@@ -113,23 +100,6 @@ fun MovieDetailsHeader(
                 )
             }
 
-            val directorName =
-                remember(movie.data.people) {
-                    movie.data.people
-                        ?.filter { it.type == PersonKind.DIRECTOR && it.name.isNotNullOrBlank() }
-                        ?.joinToString(", ") { it.name!! }
-                        ?.takeIf { it.isNotNullOrBlank() }
-                }
-
-            directorName
-                ?.let {
-                    Text(
-                        text = stringResource(R.string.directed_by, it),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = HeaderUtils.startPadding),
-                    )
-                }
         }
     }
 }

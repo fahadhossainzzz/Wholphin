@@ -536,6 +536,9 @@ fun SeriesDetailsContent(
                         },
                     )
                 }
+                // NoBars: after the seasons, the journey and where else to watch
+                item { com.github.damontecres.wholphin.ui.components.NbJourneySection(series) }
+                item { com.github.damontecres.wholphin.ui.components.NbMoneyAndWhereSection(series) }
                 if (people.isNotEmpty()) {
                     item {
                         PersonRow(
@@ -643,6 +646,7 @@ fun SeriesDetailsContent(
                         )
                     }
                 }
+                item { com.github.damontecres.wholphin.ui.components.NbAboutSection(series, "About this show") }
             }
         }
     }
@@ -674,23 +678,13 @@ fun SeriesDetailsHeader(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxWidth(.60f),
         ) {
-            QuickDetails(
-                series.ui.quickDetails,
-                null,
-                Modifier.padding(start = HeaderUtils.startPadding),
-            )
-            WatchProvidersLine(series, Modifier.padding(start = HeaderUtils.startPadding))
-            dto.studios?.let {
-                val studios = remember { series.studioNames }
-                GenreText(
-                    studios,
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(start = HeaderUtils.startPadding),
-                )
+            // NoBars: meta line with genres; ratings as chips below
+            androidx.compose.foundation.layout.Row(Modifier.padding(start = HeaderUtils.startPadding)) {
+                QuickDetails(series.ui.quickDetails, null, showRatings = false)
+                com.github.damontecres.wholphin.ui.components.NbGenresInline(series)
             }
-            dto.genres?.letNotEmpty {
-                GenreText(it, Modifier.padding(start = HeaderUtils.startPadding, bottom = 4.dp))
-            }
+            com.github.damontecres.wholphin.ui.components.NbRatingChips(series, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
+            // studios and genres: genres in the meta line, studios under About
             dto.overview?.let { overview ->
                 OverviewText(
                     overview = overview,

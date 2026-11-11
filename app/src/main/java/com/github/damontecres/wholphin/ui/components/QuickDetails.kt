@@ -42,6 +42,8 @@ fun QuickDetails(
     modifier: Modifier = Modifier,
     textStyle: TextStyle = MaterialTheme.typography.titleSmall,
     endsAt: DateTime? = null,
+    // NoBars: the library pages show the ratings as chips instead
+    showRatings: Boolean = true,
 ) {
     val enabled = LocalInterfaceCustomization.current.enabledDisplayToggles
     val inlineContentMap = rememberQuickDetailsContentMap(textStyle)
@@ -51,7 +53,7 @@ fun QuickDetails(
             if (DisplayToggle.OFFICIAL_RATING in enabled) {
                 QuickDetailsText(details.officialRating, Modifier, textStyle, inlineContentMap)
             }
-            if (DisplayToggle.COMMUNITY_RATING in enabled) {
+            if (showRatings && DisplayToggle.COMMUNITY_RATING in enabled) {
                 // NoBars: "7.8★ (1,234,567 votes)"
                 val votes =
                     LocalImdbVotes.current.forItem(details.itemId)?.votes
@@ -69,7 +71,7 @@ fun QuickDetails(
                     }
                 QuickDetailsText(rating, Modifier, textStyle, inlineContentMap)
             }
-            if (DisplayToggle.CRITIC_RATING in enabled) {
+            if (showRatings && DisplayToggle.CRITIC_RATING in enabled) {
                 // NoBars: the daily run's 🍅 (or audience 🍿) when Jellyfin has no critics' score
                 val critic =
                     details.criticRating

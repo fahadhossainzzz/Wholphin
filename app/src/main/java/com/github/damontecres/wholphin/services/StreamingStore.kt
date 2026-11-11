@@ -299,6 +299,114 @@ object StreamingStore {
     @Volatile var libraryFiles: Map<String, FileSummary> = emptyMap()
         private set
 
+    /** A title's page (cast, crew, trailers, titles like it, about), fetched when its page opens; the last 50 kept */
+    data class TitlePage(
+        val tagline: String?,
+        val originalTitle: String?,
+        val language: String?,
+        val countries: List<String>,
+        val studios: List<String>,
+        val cert: String?,
+        val status: String?,
+        val episodes: Int?,
+        val networks: List<String>,
+        val collection: String?,
+        val keywords: List<String>,
+        val cast: List<Triple<String, String?, String?>>,
+        val crew: List<Pair<String, List<String>>>,
+        val videos: List<Triple<String, String, String?>>,
+        val like: List<Entry>,
+    )
+
+    private val pages =
+        object : LinkedHashMap<String, TitlePage>(50, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TitlePage>?) = size > 50
+        }
+
+    suspend fun titlePage(
+        tmdb: Int,
+        series: Boolean,
+    ): TitlePage? =
+        withContext(WholphinDispatchers.IO) {
+            val key = "${if (series) "tv" else "movie"}-$tmdb"
+            synchronized(pages) { pages[key] }?.let { return@withContext it }
+            try {
+                val o = JSONObject(ServerAccess.get("/Plugins/ImdbRatings/Streaming/title/$key") ?: return@withContext null)
+                fun list(k: String) = o.optJSONArray(k)?.toStringList().orEmpty()
+                val page =
+                    TitlePage(
+                        tagline = o.str("tagline"),
+                        originalTitle = o.str("originalTitle"),
+                        language = o.str("language"),
+                        countries = list("countries"),
+                        studios = list("studios"),
+                        cert = o.str("cert"),
+                        status = o.str("status"),
+                        episodes = o.optInt("episodes").takeIf { it > 0 },
+                        networks = list("networks"),
+                        collection = o.str("collection"),
+                        keywords = list("keywords"),
+                        cast =
+                            o.optJSONArray("cast")?.let { a ->
+                                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { c -> Triple(c.optString("n"), c.str("c"), c.str("p")) } }
+                            }.orEmpty(),
+                        crew =
+                            o.optJSONArray("crew")?.let { a ->
+                                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { c -> c.optString("job") to (c.optJSONArray("names")?.toStringList().orEmpty()) } }
+                            }.orEmpty(),
+                        videos =
+                            o.optJSONArray("videos")?.let { a ->
+                                (0 until a.length()).mapNotNull { i ->
+                                    a.optJSONObject(i)?.let { v -> v.str("k")?.let { k -> Triple(v.optString("n").ifBlank { v.optString("t") }, k, v.str("d")) } }
+                                }
+                            }.orEmpty(),
+                        like =
+                            o.optJSONArray("like")?.let { a ->
+                                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let(::parseLike) }
+                            }.orEmpty(),
+                    )
+                synchronized(pages) { pages[key] = page }
+                page
+            } catch (e: Exception) {
+                Timber.w(e, "NoBars: title page %s unavailable", key)
+                null
+            }
+        }
+
+    private fun parseLike(o: JSONObject): Entry {
+        val lib = o.str("libraryId")
+        val poster = o.str("poster") ?: lib?.let { id -> ServerAccess.baseUrl?.trimEnd('/')?.let { "$it/Items/$id/Images/Primary?maxHeight=360" } }
+        return Entry(
+            tmdb = o.optInt("tmdb"),
+            series = o.optString("type") == "series",
+            title = o.optString("title"),
+            year = o.optInt("year").takeIf { it > 0 },
+            poster = poster,
+            overview = "",
+            genres = emptyList(),
+            runtime = null,
+            seasons = null,
+            imdbRating = null,
+            imdbVotes = null,
+            libraryId = lib?.takeIf { it.length == 32 }?.let(::uuidFromHex),
+            rank = null,
+        )
+    }
+
+    /** Today's card for a title, wherever it is: the rows already loaded, the Watchlist, or any page's list. */
+    suspend fun findEntry(
+        tmdb: Int,
+        series: Boolean,
+    ): Entry? {
+        fun match(e: Entry) = e.tmdb == tmdb && e.series == series
+        entries.values.firstOrNull { match(it) && it.overview.isNotBlank() }?.let { return it }
+        for (service in listOf(NETFLIX, PRIME, CINEMA, LIST)) {
+            rows(service)?.asSequence()?.flatMap { it.items }?.firstOrNull(::match)?.let { return it }
+        }
+        WantedStore.load()
+        return WantedStore.items.value.firstOrNull(::match) ?: entries.values.firstOrNull(::match)
+    }
+
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }
 
     /** For the "Want it" list: the fields needed to show the card again later. */

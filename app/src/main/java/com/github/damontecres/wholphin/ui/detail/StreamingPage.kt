@@ -185,10 +185,8 @@ fun StreamingPage(
         else -> {
             val onClick = { clicked: RowColumn, item: com.github.damontecres.wholphin.data.model.BaseItem ->
                 position = clicked
-                // NoBars: always the quick-look panel; for a title you own it leads with Play / Resume and Details
-                StreamingStore.entries[item.id]?.let { entry ->
-                    panel = entry to (myList.isNotEmpty() && clicked.row == current.lastIndex)
-                }
+                // NoBars: a title you have opens its library page; any other opens its title page
+                StreamingStore.entries[item.id]?.let { entry -> openTitle(viewModel, entry) }
                 Unit
             }
             HomePageContent(
@@ -228,6 +226,21 @@ fun StreamingPage(
 }
 
 private const val MY_LIST_ROW = "my-list"
+
+/** NoBars: a title you have opens its library page (file, versions, Play); any other opens its title page. */
+private fun openTitle(
+    viewModel: StreamingViewModel,
+    entry: StreamingStore.Entry,
+) {
+    val lib = StreamingStore.libraryId(entry)
+    viewModel.navigationManager.navigateTo(
+        if (lib != null) {
+            Destination.MediaItem(lib, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE)
+        } else {
+            Destination.CatalogTitle(entry.tmdb, entry.series)
+        },
+    )
+}
 
 @Composable
 private fun StreamingPanel(
@@ -518,11 +531,11 @@ private fun StreamingPanel(
 }
 
 /** NoBars: short platform names for buttons ("Prime Video", not "Amazon Prime Video") */
-private fun shortService(name: String): String = name.removePrefix("Amazon ").removeSuffix(" Plus").take(22)
+internal fun shortService(name: String): String = name.removePrefix("Amazon ").removeSuffix(" Plus").take(22)
 
 /** NoBars: plays a YouTube trailer in the TV's YouTube app. The TV app wants a normal watch link addressed to it by
  * name (a "vnd.youtube:" link just opens its home screen). */
-private fun openTrailer(
+internal fun openTrailer(
     context: android.content.Context,
     key: String,
 ) {
@@ -621,7 +634,7 @@ private fun WatchlistPage(
         return
     }
     val open = { item: com.github.damontecres.wholphin.data.model.BaseItem ->
-        StreamingStore.entries[item.id]?.let { panel = it }
+        StreamingStore.entries[item.id]?.let { openTitle(viewModel, it) }
         Unit
     }
     Box(modifier.fillMaxSize()) {

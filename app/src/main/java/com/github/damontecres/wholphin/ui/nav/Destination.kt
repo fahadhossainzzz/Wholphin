@@ -159,6 +159,13 @@ sealed class Destination(
         val service: String,
     ) : Destination(false)
 
+    /** NoBars: the page of a Netflix / Prime Video / Theatre / Watchlist title you don't have */
+    @Serializable
+    data class CatalogTitle(
+        val tmdb: Int,
+        val series: Boolean,
+    ) : Destination(false)
+
     @Serializable
     data object Discover : Destination(false)
 

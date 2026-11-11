@@ -362,6 +362,14 @@ fun DestinationContent(
             )
         }
 
+        is Destination.CatalogTitle -> {
+            com.github.damontecres.wholphin.ui.detail.CatalogTitlePage(
+                tmdb = destination.tmdb,
+                series = destination.series,
+                modifier = modifier,
+            )
+        }
+
         is Destination.Streaming -> {
             com.github.damontecres.wholphin.ui.detail.StreamingPage(
                 service = destination.service,

@@ -221,7 +221,8 @@ fun HomePage(
                 onClickItem = onClickItem,
                 onLongClickItem = onLongClickItem,
                 onClickPlay = onClickPlay,
-                loadingState = refreshing,
+                // NoBars: refresh quietly (no spinner); the rows update in place
+                loadingState = null,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
                 onUpdateBackdrop = viewModel::updateBackdrop,
                 showLogo = preferences.appPreferences.interfacePreferences.showLogos,

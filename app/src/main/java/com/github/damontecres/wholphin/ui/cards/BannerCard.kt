@@ -72,6 +72,13 @@ fun BannerCard(
     useSeriesForPrimary: Boolean = true,
 ) {
     val imageUrlService = LocalImageUrlService.current
+    // NoBars: remember films shown in rows, so their page can open at once
+    androidx.compose.runtime.remember(item?.id) {
+        if (item != null && item.type == org.jellyfin.sdk.model.api.BaseItemKind.MOVIE && item.imageUrlOverride == null) {
+            com.github.damontecres.wholphin.services.ItemPreviewCache.put(item)
+        }
+        0
+    }
     val density = LocalDensity.current
     val fillHeight =
         remember(cardHeight, density) {

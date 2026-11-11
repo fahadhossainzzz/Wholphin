@@ -20,6 +20,8 @@ class NavigationManager
          * Go to the specified [com.github.damontecres.wholphin.ui.nav.Destination]
          */
         fun navigateTo(destination: Destination) {
+            // NoBars: after playback, Home refreshes its rows when you come back
+            if (destination is Destination.Playback) com.github.damontecres.wholphin.services.HomeRefresh.dirty = true
             backStack.add(destination)
             log()
         }

@@ -51,6 +51,13 @@ fun GridCard(
     fillHeight: Int? = null,
 ) {
     val dto = item?.data
+    // NoBars: remember films shown in grids, so their page can open at once
+    remember(item?.id) {
+        if (item != null && item.type == org.jellyfin.sdk.model.api.BaseItemKind.MOVIE) {
+            com.github.damontecres.wholphin.services.ItemPreviewCache.put(item)
+        }
+        0
+    }
     val focused by interactionSource.collectIsFocusedAsState()
     var focusedAfterDelay by remember { mutableStateOf(false) }
 

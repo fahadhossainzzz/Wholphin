@@ -82,7 +82,8 @@ class MovieViewModel
         val state: StateFlow<MovieState> = _state
 
         init {
-            init()
+            // NoBars: the page's resume effect starts the load (it runs on first show too); starting it here as well
+            // loaded everything twice on every open
             viewModelScope.launchDefault {
                 mediaManagementService.collectCanDelete(state.map { it.movie }) { canDelete ->
                     _state.update {
@@ -102,6 +103,15 @@ class MovieViewModel
 
         fun init(): Job =
             viewModelScope.launchDefault {
+                val started = System.currentTimeMillis()
+                // NoBars: open at once with what the row already showed; the full details replace it in a moment
+                if (_state.value.loading is DataLoadingState.Pending) {
+                    com.github.damontecres.wholphin.services.ItemPreviewCache.get(itemId)?.let { preview ->
+                        _state.update { it.copy(loading = DataLoadingState.Success(preview)) }
+                        backdropService.submit(preview)
+                        Timber.i("NoBars timing: film page shown from the row's details at once")
+                    }
+                }
                 val movie =
                     try {
                         getMovie()
@@ -126,6 +136,7 @@ class MovieViewModel
                         chapters = chapters,
                     )
                 }
+                Timber.i("NoBars timing: film page full details in %d ms", System.currentTimeMillis() - started)
                 backdropService.submit(movie)
                 viewModelScope.launchIO {
                     trailerService.getLocalTrailers(movie).letNotEmpty { localTrailers ->

@@ -24,6 +24,7 @@ class FavoriteWatchManager
             played: Boolean,
         ): UserItemDataDto {
             datePlayedService.invalidate(itemId)
+            HomeRefresh.dirty = true
             return if (played) {
                 api.playStateApi.markPlayedItem(itemId).content
             } else {
@@ -35,7 +36,7 @@ class FavoriteWatchManager
             itemId: UUID,
             favorite: Boolean,
         ): UserItemDataDto =
-            if (favorite) {
+            if (favorite.also { HomeRefresh.dirty = true }) {
                 api.userLibraryApi.markFavoriteItem(itemId).content
             } else {
                 api.userLibraryApi.unmarkFavoriteItem(itemId).content

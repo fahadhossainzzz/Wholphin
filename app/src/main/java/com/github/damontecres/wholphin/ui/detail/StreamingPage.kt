@@ -181,13 +181,8 @@ fun StreamingPage(
         else -> {
             val onClick = { clicked: RowColumn, item: com.github.damontecres.wholphin.data.model.BaseItem ->
                 position = clicked
-                val entry = StreamingStore.entries[item.id]
-                val libraryId = entry?.let { StreamingStore.libraryId(it) }
-                if (entry != null && libraryId != null) {
-                    viewModel.navigationManager.navigateTo(
-                        Destination.MediaItem(libraryId, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
-                    )
-                } else if (entry != null) {
+                // NoBars: always the quick-look panel; for a title you own it leads with Play / Resume and Details
+                StreamingStore.entries[item.id]?.let { entry ->
                     panel = entry to (myList.isNotEmpty() && clicked.row == current.lastIndex)
                 }
                 Unit
@@ -213,23 +208,24 @@ fun StreamingPage(
         MyListGrid(
             items = myList,
             watched = watched,
-            onOpen = { e ->
-                val libraryId = StreamingStore.libraryId(e)
-                if (libraryId != null) {
-                    showGrid = false
-                    viewModel.navigationManager.navigateTo(
-                        Destination.MediaItem(libraryId, if (e.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
-                    )
-                } else {
-                    panel = e to true
-                }
-            },
+            onOpen = { e -> panel = e to true },
             onToggle = { toggle(it) },
             onBack = { showGrid = false },
         )
     }
     panel?.let { (entry, fromList) ->
-        StreamingPanel(entry = entry, service = service, fromList = fromList, onToggle = { toggle(entry) }, onBack = { panel = null })
+        StreamingPanel(
+            entry = entry,
+            service = service,
+            fromList = fromList,
+            onToggle = { toggle(entry) },
+            onBack = { panel = null },
+            onNavigate = {
+                panel = null
+                showGrid = false
+                viewModel.navigationManager.navigateTo(it)
+            },
+        )
     }
 }
 
@@ -242,8 +238,13 @@ private fun StreamingPanel(
     fromList: Boolean,
     onToggle: () -> Unit,
     onBack: () -> Unit,
+    onNavigate: (Destination) -> Unit,
 ) {
     val context = LocalContext.current
+    // NoBars: your own copy, when you have one: resume point, next episode, what the file is
+    val libraryId = remember(entry) { StreamingStore.libraryId(entry) }
+    var owned by remember(entry) { mutableStateOf<OwnedCopy?>(null) }
+    LaunchedEffect(libraryId) { if (libraryId != null) owned = loadOwnedCopy(libraryId, entry.series) }
     val name = StreamingStore.displayName(service)
     val first = remember { FocusRequester() }
     LaunchedEffect(entry) { first.tryRequestFocus() }
@@ -311,6 +312,20 @@ private fun StreamingPanel(
                     if (entry.genres.isNotEmpty()) Text(entry.genres.joinToString(" · "), fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
                 }
             }
+            owned?.let { o ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (o.progress in 0.01f..0.97f) {
+                        Box(Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(2.dp))) {
+                            Box(Modifier.fillMaxWidth(o.progress).fillMaxHeight().background(Color(0xFFB39DDB), RoundedCornerShape(2.dp)))
+                        }
+                    }
+                    Text(
+                        listOfNotNull("In your library", o.facts, if (o.played) "watched ✓" else null).joinToString("  ·  "),
+                        fontSize = 13.sp,
+                        color = Color(0xFFA5D6A7),
+                    )
+                }
+            }
             // 2. the buttons, always on screen (they wrap onto a second line rather than run off the edge):
             //    the same on every page: Trailer · Open in … · Watchlist · Back
             val pageSvc = if (service == StreamingStore.NETFLIX || service == StreamingStore.PRIME) name else null
@@ -338,6 +353,19 @@ private fun StreamingPanel(
                     } else {
                         this
                     }
+                if (libraryId != null) {
+                    val o = owned
+                    val kind = if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE
+                    // one button whose label follows your copy once it's loaded (so the focus stays on it)
+                    Button(
+                        onClick = {
+                            val id = o?.playId
+                            onNavigate(if (id != null) Destination.Playback(id, o.resumeMs) else Destination.MediaItem(libraryId, kind))
+                        },
+                        modifier = Modifier.firstOne(),
+                    ) { Text("▶  " + (o?.playLabel ?: if (entry.series) "Episodes" else "Play")) }
+                    Button(onClick = { onNavigate(Destination.MediaItem(libraryId, kind)) }) { Text("Details") }
+                }
                 if (entry.trailer != null) {
                     Button(onClick = { openTrailer(context, entry.trailer) }, modifier = Modifier.firstOne()) {
                         Text("▶  Trailer")
@@ -690,16 +718,7 @@ private fun WatchlistPage(
         MyListGrid(
             items = list,
             watched = watched,
-            onOpen = { e ->
-                val libraryId = StreamingStore.libraryId(e)
-                if (libraryId != null) {
-                    viewModel.navigationManager.navigateTo(
-                        Destination.MediaItem(libraryId, if (e.series) BaseItemKind.SERIES else BaseItemKind.MOVIE),
-                    )
-                } else {
-                    panel = e
-                }
-            },
+            onOpen = { e -> panel = e },
             onToggle = { toggle(it) },
             onBack = {},
             asDialog = false,
@@ -707,7 +726,17 @@ private fun WatchlistPage(
         )
     }
     panel?.let { entry ->
-        StreamingPanel(entry = entry, service = StreamingStore.WATCHLIST, fromList = true, onToggle = { toggle(entry) }, onBack = { panel = null })
+        StreamingPanel(
+            entry = entry,
+            service = StreamingStore.WATCHLIST,
+            fromList = true,
+            onToggle = { toggle(entry) },
+            onBack = { panel = null },
+            onNavigate = {
+                panel = null
+                viewModel.navigationManager.navigateTo(it)
+            },
+        )
     }
 }
 
@@ -829,4 +858,116 @@ private fun JourneyTimeline(steps: List<StreamingStore.JourneyStep>) {
             }
         }
     }
+}
+
+
+/** NoBars: what the panel needs about your own copy. [playId]: the film, or the next episode of a show. */
+private data class OwnedCopy(
+    val playId: java.util.UUID?,
+    val playLabel: String,
+    val resumeMs: Long,
+    val progress: Float,
+    val played: Boolean,
+    val facts: String?,
+)
+
+private suspend fun loadOwnedCopy(
+    id: java.util.UUID,
+    series: Boolean,
+): OwnedCopy? =
+    kotlinx.coroutines.withContext(com.github.damontecres.wholphin.util.WholphinDispatchers.IO) {
+        try {
+            val user = com.github.damontecres.wholphin.services.ServerAccess.userId ?: return@withContext null
+            val hex = id.toString().replace("-", "")
+            if (series) {
+                val show = org.json.JSONObject(com.github.damontecres.wholphin.services.ServerAccess.get("/Users/$user/Items/$hex") ?: return@withContext null)
+                val next =
+                    com.github.damontecres.wholphin.services.ServerAccess
+                        .get("/Shows/NextUp?userId=$user&seriesId=$hex&limit=1&enableResumable=true")
+                        ?.let { org.json.JSONObject(it).optJSONArray("Items")?.optJSONObject(0) }
+                val played = show.optJSONObject("UserData")?.optBoolean("Played") == true
+                if (next == null) return@withContext OwnedCopy(null, "Episodes", 0, 0f, played, null)
+                val ticks = next.optJSONObject("UserData")?.optLong("PlaybackPositionTicks") ?: 0L
+                val runTicks = next.optLong("RunTimeTicks").takeIf { it > 0 }
+                val label = "S${next.optInt("ParentIndexNumber")}E${next.optInt("IndexNumber")}"
+                OwnedCopy(
+                    playId = parseId(next.optString("Id")),
+                    playLabel = if (ticks > 0) "Resume $label" else "Play $label",
+                    resumeMs = ticks / 10_000,
+                    progress = runTicks?.let { ticks.toFloat() / it } ?: 0f,
+                    played = played,
+                    facts = null,
+                )
+            } else {
+                val o = org.json.JSONObject(com.github.damontecres.wholphin.services.ServerAccess.get("/Users/$user/Items/$hex?fields=MediaSources") ?: return@withContext null)
+                val ud = o.optJSONObject("UserData")
+                val ticks = ud?.optLong("PlaybackPositionTicks") ?: 0L
+                val runTicks = o.optLong("RunTimeTicks").takeIf { it > 0 }
+                OwnedCopy(
+                    playId = id,
+                    playLabel = if (ticks > 0) "Resume " + clockText(ticks / 10_000) else "Play",
+                    resumeMs = ticks / 10_000,
+                    progress = runTicks?.let { ticks.toFloat() / it } ?: 0f,
+                    played = ud?.optBoolean("Played") == true,
+                    facts = o.optJSONArray("MediaSources")?.optJSONObject(0)?.let(::fileFacts),
+                )
+            }
+        } catch (e: Exception) {
+            timber.log.Timber.w(e, "NoBars: your copy's details unavailable")
+            null
+        }
+    }
+
+private fun parseId(hex: String): java.util.UUID? =
+    hex.replace("-", "").takeIf { it.length == 32 }?.let {
+        java.util.UUID.fromString("${it.substring(0, 8)}-${it.substring(8, 12)}-${it.substring(12, 16)}-${it.substring(16, 20)}-${it.substring(20)}")
+    }
+
+private fun clockText(ms: Long): String {
+    val s = ms / 1000
+    return if (s >= 3600) String.format(Locale.US, "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) else String.format(Locale.US, "%d:%02d", s / 60, s % 60)
+}
+
+/** "4K · Dolby Vision · Atmos · 41 GB" */
+private fun fileFacts(src: org.json.JSONObject): String? {
+    val streams = src.optJSONArray("MediaStreams") ?: return null
+    val all = (0 until streams.length()).mapNotNull { streams.optJSONObject(it) }
+    val v = all.firstOrNull { it.optString("Type") == "Video" }
+    val a = all.firstOrNull { it.optString("Type") == "Audio" && it.optBoolean("IsDefault") } ?: all.firstOrNull { it.optString("Type") == "Audio" }
+    val parts = mutableListOf<String>()
+    v?.let {
+        val h = it.optInt("Height")
+        val w = it.optInt("Width")
+        parts += when {
+            w >= 3200 || h >= 2000 -> "4K"
+            w >= 1800 || h >= 1000 -> "1080p"
+            h > 0 -> "${h}p"
+            else -> ""
+        }
+        val range = it.optString("VideoRangeType")
+        parts +=
+            when {
+                range.startsWith("DOVI") -> "Dolby Vision"
+                range.contains("HDR10Plus") -> "HDR10+"
+                range.contains("HDR10") -> "HDR10"
+                range.contains("HLG") -> "HLG"
+                else -> ""
+            }
+    }
+    a?.let {
+        val p = it.optString("Profile")
+        val c = it.optString("Codec").lowercase(Locale.US)
+        parts +=
+            when {
+                p.contains("Atmos", true) -> "Atmos"
+                c == "truehd" -> "TrueHD"
+                c.startsWith("dts") -> if (p.contains("MA", true)) "DTS-HD MA" else "DTS"
+                c == "eac3" -> "DD+"
+                c == "ac3" -> "Dolby Digital"
+                else -> ""
+            }
+        it.optString("ChannelLayout").takeIf { l -> l.isNotBlank() }?.let { l -> parts += l }
+    }
+    src.optLong("Size").takeIf { it > 0 }?.let { parts += String.format(Locale.US, "%.0f GB", it / 1e9) }
+    return parts.filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }
 }

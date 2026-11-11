@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -157,6 +158,7 @@ fun StreamingPage(
             }
         }
     var panel by remember { mutableStateOf<Pair<StreamingStore.Entry, Boolean>?>(null) }
+    val pageFocus = remember { FocusRequester() }
     var position by rememberPosition()
     val toggle = { entry: StreamingStore.Entry ->
         scope.launch {
@@ -203,7 +205,8 @@ fun StreamingPage(
                 showViewMore = true,
                 // "View more" on the Watchlist row: the Watchlist page (tabs, sort and filter, like Movies)
                 onClickViewMore = { _, _ -> viewModel.navigationManager.navigateTo(Destination.Streaming(StreamingStore.WATCHLIST)) },
-                modifier = modifier,
+                // remembers the last poster with the focus, so closing the panel can hand it back
+                modifier = modifier.focusRequester(pageFocus).focusRestorer(),
             )
         }
     }
@@ -218,6 +221,7 @@ fun StreamingPage(
                 panel = null
                 viewModel.navigationManager.navigateTo(it)
             },
+            onRestoreFocus = { pageFocus.tryRequestFocus() },
         )
     }
     }
@@ -233,6 +237,7 @@ private fun StreamingPanel(
     onToggle: () -> Unit,
     onBack: () -> Unit,
     onNavigate: (Destination) -> Unit,
+    onRestoreFocus: () -> Boolean = { false },
 ) {
     val context = LocalContext.current
     // NoBars: your own copy, when you have one: resume point, next episode, what the file is
@@ -258,7 +263,12 @@ private fun StreamingPanel(
     val panelScope = androidx.compose.runtime.rememberCoroutineScope()
     var shown by remember(entry) { mutableStateOf(false) }
     LaunchedEffect(entry) { shown = true }
+    // NoBars: on close, hand the focus back to the poster you came from *before* the panel disappears; otherwise the
+    // focus has nowhere to go, falls to the main menu on the left, and the menu opens by itself
+    var letFocusGo by remember(entry) { mutableStateOf(false) }
     val close = {
+        letFocusGo = true
+        onRestoreFocus()
         panelScope.launch {
             shown = false
             kotlinx.coroutines.delay(170)
@@ -266,8 +276,6 @@ private fun StreamingPanel(
         }
         Unit
     }
-    // Back closes the panel whenever it's open, wherever the focus is (otherwise the page would open the main menu)
-    androidx.activity.compose.BackHandler(enabled = true) { close() }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
         androidx.compose.animation.AnimatedVisibility(
             visible = shown,
@@ -288,7 +296,7 @@ private fun StreamingPanel(
                     .background(Color.Black.copy(alpha = 0.88f))
                     .padding(horizontal = 22.dp, vertical = 22.dp)
                     .focusGroup()
-                    .focusProperties { onExit = { cancelFocusChange() } }
+                    .focusProperties { onExit = { if (!letFocusGo) cancelFocusChange() } }
                     .onPreviewKeyEvent {
                         if (it.key == Key.Back || it.key == Key.ButtonB) {
                             if (it.type == KeyEventType.KeyUp) close()
@@ -598,6 +606,7 @@ private fun WatchlistPage(
     var list by remember { mutableStateOf<List<StreamingStore.Entry>>(emptyList()) }
     LaunchedEffect(wanted, ready) { if (ready) list = wanted.map { StreamingStore.freshFor(it, null) } }
     var panel by remember { mutableStateOf<StreamingStore.Entry?>(null) }
+    val pageFocus = remember { FocusRequester() }
     val toggle = { e: StreamingStore.Entry ->
         scope.launch {
             val added = WantedStore.toggle(e)
@@ -643,6 +652,8 @@ private fun WatchlistPage(
                     Modifier
                         .fillMaxSize()
                         .focusRequester(tab.contentFocusRequester)
+                        .focusRequester(pageFocus)
+                        .focusRestorer()
                 when (tabIndex) {
                     0 -> WatchlistRows(overviewRows(list, watched), viewModel, open, toggle, { showTabs = it }, content)
                     1 -> WatchlistAll(list, watched, viewModel, open, toggle, { showTabs = it }, content)
@@ -661,6 +672,7 @@ private fun WatchlistPage(
                     panel = null
                     viewModel.navigationManager.navigateTo(it)
                 },
+                onRestoreFocus = { pageFocus.tryRequestFocus() },
             )
         }
     }

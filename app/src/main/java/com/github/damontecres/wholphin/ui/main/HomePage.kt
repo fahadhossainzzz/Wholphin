@@ -321,7 +321,16 @@ fun HomePageContent(
             if (!firstFocused && homeRows.isNotEmpty()) {
                 if (position.row >= 0) {
                     val index = position.row.coerceIn(0, rowFocusRequesters.lastIndex)
-                    rowFocusRequesters.getOrNull(index)?.tryRequestFocus()
+                    // NoBars: the remembered row may not be laid out yet (far down the page): bring it in and try
+                    // again for a moment, so focus never slides onto the menu
+                    var ok = rowFocusRequesters.getOrNull(index)?.tryRequestFocus() == true
+                    var tries = 0
+                    while (!ok && tries < 15) {
+                        tries++
+                        if (tries == 1) listState.scrollToItem(index)
+                        delay(40)
+                        ok = rowFocusRequesters.getOrNull(index)?.tryRequestFocus() == true
+                    }
                     firstFocused = true
                 } else {
                     // Waiting for the first home row to load, then focus on it

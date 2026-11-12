@@ -274,9 +274,6 @@ fun <T : CardGridItem> CardGrid(
                         }
                         if (it.type != KeyEventType.KeyUp) {
                             return@onKeyEvent false
-                        } else if (useBackToJump && it.key == Key.Back && focusedIndex > 0) {
-                            jumpToTop()
-                            return@onKeyEvent true
                         } else if (isPlayKeyUp(it)) {
                             val item = pager.getOrNull(focusedIndex)
                             if (item?.playable == true) {

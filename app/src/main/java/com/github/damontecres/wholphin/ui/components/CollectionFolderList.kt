@@ -1,6 +1,5 @@
 package com.github.damontecres.wholphin.ui.components
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandHorizontally
@@ -114,9 +113,7 @@ fun CollectionFolderViewScope.CollectionFolderList(
         }
     }
 
-    BackHandler(contentHashFocus && position > 0) {
-        jumpTo(0)
-    }
+    // NoBars: Back opens the menu everywhere (no jump to the top first)
 
     Column(modifier = modifier) {
         val topPadding by animateDpAsState(

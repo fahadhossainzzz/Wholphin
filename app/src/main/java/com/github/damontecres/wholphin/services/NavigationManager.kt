@@ -16,6 +16,13 @@ class NavigationManager
     constructor() {
         var backStack: MutableList<Destination> = NavBackStack(Destination.Home())
 
+        /** NoBars: the page last opened from the menu (Back on it opens the menu instead of leaving it) */
+        @Volatile var drawerRoot: Destination? = null
+
+        /** NoBars: is this the page opened from the menu, sitting straight on Home? */
+        fun isDrawerRoot(destination: Destination): Boolean =
+            destination !is Destination.Home && backStack.size == 2 && backStack.lastOrNull() == destination && destination == drawerRoot
+
         /**
          * Go to the specified [com.github.damontecres.wholphin.ui.nav.Destination]
          */
@@ -31,6 +38,7 @@ class NavigationManager
          */
         fun navigateToFromDrawer(destination: Destination) {
             goToHome()
+            drawerRoot = destination
             backStack.add(destination)
             log()
         }

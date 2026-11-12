@@ -380,10 +380,16 @@ fun NavDrawer(
 
     val focusRequester = remember { FocusRequester() }
 
-    // If the user presses back while on the home page, open the nav drawer, another back press will quit the app
-    BackHandler(enabled = (drawerState.currentValue == DrawerValue.Closed && destination is Destination.Home)) {
+    // NoBars, one rule everywhere (as Google TV and YouTube): on Home or any page opened from the menu, Back opens the
+    // menu on that page's item and the page stays behind it. With the menu open, Back goes to Home; on Home it leaves.
+    val isMenuPage = destination is Destination.Home || viewModel.navigationManager.isDrawerRoot(destination)
+    BackHandler(enabled = (drawerState.currentValue == DrawerValue.Closed && isMenuPage)) {
         drawerState.setValue(DrawerValue.Open)
-        focusRequester.requestFocus()
+        focusRequester.tryRequestFocus()
+    }
+    BackHandler(enabled = (drawerState.currentValue == DrawerValue.Open && destination !is Destination.Home && isMenuPage)) {
+        drawerState.setValue(DrawerValue.Closed)
+        viewModel.navigationManager.goToHome()
     }
     val serviceState by viewModel.serviceState.collectAsState()
     val state by viewModel.state.collectAsState()

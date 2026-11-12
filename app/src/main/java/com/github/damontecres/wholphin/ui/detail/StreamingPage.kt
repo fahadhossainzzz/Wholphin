@@ -609,7 +609,9 @@ private fun WatchlistPage(
 ) {
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var ready by remember { mutableStateOf(false) }
+    // Opens at once from the list already in memory (coming back from a title page shows the same rows, so the
+    // remembered poster is still there); the server copy is refreshed quietly behind it.
+    var ready by remember { mutableStateOf(WatchlistMemo.list != null) }
     LaunchedEffect(Unit) {
         WantedStore.load()
         StreamingStore.rows(StreamingStore.LIST)
@@ -617,13 +619,29 @@ private fun WatchlistPage(
     }
     val wanted by WantedStore.items.collectAsState()
     val watched by WantedStore.watched.collectAsState()
-    var list by remember { mutableStateOf<List<StreamingStore.Entry>>(emptyList()) }
-    LaunchedEffect(wanted, ready) { if (ready) list = wanted.map { StreamingStore.freshFor(it, null) } }
+    var list by remember { mutableStateOf(WatchlistMemo.list.orEmpty()) }
+    // after removing the poster you're on, focus goes back into the page (not to the menu)
+    var refocusPending by remember { mutableStateOf(false) }
+    var refocus by remember { mutableStateOf(0) }
+    LaunchedEffect(wanted, ready) {
+        if (ready) {
+            val fresh = wanted.map { StreamingStore.freshFor(it, null) }
+            if (fresh != list) list = fresh
+            WatchlistMemo.list = fresh
+            if (refocusPending) {
+                refocusPending = false
+                refocus++
+            }
+        }
+    }
+    // Only the tab you land on takes focus (first poster, or the one you left); switching tabs on the tab row doesn't
+    var landed by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<StreamingStore.Entry?>(null) }
     val pageFocus = remember { FocusRequester() }
     val toggle = { e: StreamingStore.Entry ->
         scope.launch {
             val added = WantedStore.toggle(e)
+            if (!added) refocusPending = true
             android.widget.Toast
                 .makeText(context, if (added) "Added to your Watchlist" else "Removed from your Watchlist", android.widget.Toast.LENGTH_SHORT)
                 .show()
@@ -668,10 +686,14 @@ private fun WatchlistPage(
                         .focusRequester(tab.contentFocusRequester)
                         .focusRequester(pageFocus)
                         .focusRestorer()
+                val onShow = { show: Boolean ->
+                    showTabs = show
+                    landed = true
+                }
                 when (tabIndex) {
-                    0 -> WatchlistRows(overviewRows(list, watched), viewModel, open, toggle, { showTabs = it }, content)
-                    1 -> WatchlistAll(list, watched, viewModel, open, toggle, { showTabs = it }, content)
-                    else -> WatchlistRows(genreRows(list), viewModel, open, toggle, { showTabs = it }, content)
+                    0 -> WatchlistRows(overviewRows(list, watched), viewModel, open, toggle, onShow, !landed, refocus, content)
+                    1 -> WatchlistAll(list, watched, viewModel, open, toggle, onShow, !landed, refocus, content)
+                    else -> WatchlistRows(genreRows(list), viewModel, open, toggle, onShow, !landed, refocus, content)
                 }
             }
         }
@@ -690,6 +712,17 @@ private fun WatchlistPage(
             )
         }
     }
+}
+
+/** The Watchlist page's state kept while the app runs: its list (so a return opens instantly) and the All tab's Sort and Filter. */
+private object WatchlistMemo {
+    var list: List<StreamingStore.Entry>? = null
+    var sort =
+        com.github.damontecres.wholphin.ui.data.SortAndDirection(
+            org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED,
+            org.jellyfin.sdk.model.api.SortOrder.DESCENDING,
+        )
+    var filter = com.github.damontecres.wholphin.data.model.GetItemsFilter()
 }
 
 private fun overviewRows(
@@ -729,8 +762,17 @@ private fun WatchlistRows(
     onOpen: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit,
     onToggle: (StreamingStore.Entry) -> Unit,
     onShowTabs: (Boolean) -> Unit,
+    takeFocus: Boolean,
+    refocus: Int,
     modifier: Modifier,
 ) {
+    val rowsFocus = remember { FocusRequester() }
+    LaunchedEffect(refocus) {
+        if (refocus > 0) {
+            kotlinx.coroutines.delay(150)
+            rowsFocus.tryRequestFocus()
+        }
+    }
     val homeRows =
         remember(rows) {
             rows.map { (title, items) ->
@@ -759,8 +801,8 @@ private fun WatchlistRows(
         onUpdateBackdrop = viewModel::updateBackdrop,
         showLogo = false,
         showViewMore = false,
-        takeFocus = false,
-        modifier = modifier,
+        takeFocus = takeFocus,
+        modifier = modifier.focusRequester(rowsFocus),
     )
 }
 
@@ -773,6 +815,8 @@ private fun WatchlistAll(
     onOpen: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit,
     onToggle: (StreamingStore.Entry) -> Unit,
     onShowTabs: (Boolean) -> Unit,
+    takeFocus: Boolean,
+    refocus: Int,
     modifier: Modifier,
 ) {
     val sortOptions =
@@ -797,15 +841,13 @@ private fun WatchlistAll(
                 com.github.damontecres.wholphin.data.filter.CommunityRatingFilter,
             )
         }
-    var sort by remember {
-        mutableStateOf(
-            com.github.damontecres.wholphin.ui.data.SortAndDirection(
-                org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED,
-                org.jellyfin.sdk.model.api.SortOrder.DESCENDING,
-            ),
-        )
+    // kept while the app runs, so Sort and Filter are still set when you come back from a title
+    var sort by remember { mutableStateOf(WatchlistMemo.sort) }
+    var filter by remember { mutableStateOf(WatchlistMemo.filter) }
+    LaunchedEffect(sort, filter) {
+        WatchlistMemo.sort = sort
+        WatchlistMemo.filter = filter
     }
-    var filter by remember { mutableStateOf(com.github.damontecres.wholphin.data.model.GetItemsFilter()) }
     val shown =
         remember(list, watched, sort, filter) {
             val x = filter.extra
@@ -859,6 +901,16 @@ private fun WatchlistAll(
     }
     var focused by remember { mutableStateOf<com.github.damontecres.wholphin.data.model.BaseItem?>(null) }
     val gridFocus = remember { FocusRequester() }
+    // the grid remembers its poster; on landing (and after removing a poster) focus goes to it, never the menu
+    val landing = remember { takeFocus }
+    LaunchedEffect(refocus) {
+        if (landing || refocus > 0) {
+            repeat(20) {
+                kotlinx.coroutines.delay(50)
+                if (gridFocus.tryRequestFocus()) return@LaunchedEffect
+            }
+        }
+    }
     val density = androidx.compose.ui.platform.LocalDensity.current
     Column(modifier = modifier) {
         com.github.damontecres.wholphin.ui.components.CollectionFolderHeader(

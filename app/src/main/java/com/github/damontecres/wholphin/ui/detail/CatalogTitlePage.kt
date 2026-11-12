@@ -75,12 +75,13 @@ fun CatalogTitlePage(
     modifier: Modifier = Modifier,
     viewModel: StreamingViewModel = hiltViewModel(),
 ) {
-    var entry by remember(tmdb, series) { mutableStateOf<StreamingStore.Entry?>(null) }
+    val cached = remember(tmdb, series) { StreamingStore.cachedEntry(tmdb, series) }
+    var entry by remember(tmdb, series) { mutableStateOf(cached) }
     var page by remember(tmdb, series) { mutableStateOf<StreamingStore.TitlePage?>(null) }
-    var searched by remember(tmdb, series) { mutableStateOf(false) }
+    var searched by remember(tmdb, series) { mutableStateOf(cached != null) }
     LaunchedEffect(tmdb, series) {
-        val e = StreamingStore.findEntry(tmdb, series)
-        entry = e
+        val e = cached ?: StreamingStore.findEntry(tmdb, series)
+        if (e != entry) entry = e
         searched = true
         e?.let { viewModel.updateBackdrop(StreamingStore.toBaseItem(it, "page")) }
         val started = System.currentTimeMillis()
@@ -106,7 +107,9 @@ private fun CatalogTitleContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
-    LaunchedEffect(e) {
+    // focus the first button in the same frame the page appears (no stop on the menu); retry only if it missed
+    LaunchedEffect(e.tmdb, e.series) {
+        if (first.tryRequestFocus()) return@LaunchedEffect
         repeat(20) {
             kotlinx.coroutines.delay(30)
             if (first.tryRequestFocus()) return@LaunchedEffect

@@ -393,6 +393,16 @@ object StreamingStore {
         )
     }
 
+    /** NoBars: the card already in memory (the poster you just pressed), so the title page draws in its first frame. */
+    fun cachedEntry(
+        tmdb: Int,
+        series: Boolean,
+    ): Entry? {
+        fun match(e: Entry) = e.tmdb == tmdb && e.series == series
+        return entries.values.firstOrNull { match(it) && it.overview.isNotBlank() }
+            ?: WantedStore.items.value.firstOrNull(::match)
+    }
+
     /** Today's card for a title, wherever it is: the rows already loaded, the Watchlist, or any page's list. */
     suspend fun findEntry(
         tmdb: Int,

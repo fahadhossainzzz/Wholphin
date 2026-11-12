@@ -255,6 +255,32 @@ fun PlaybackPageContent(
         (player as? MpvPlayer)?.subtitleDelay =
             state.currentPlayback?.subtitleDelay ?: Duration.ZERO
     }
+    // NoBars: subtitle delay for ExoPlayer: text subtitles shown by the app at (position - delay), see SubtitleShift.kt
+    val shiftable by androidx.compose.runtime.produceState<ShiftableSubtitles?>(
+        null,
+        state.currentPlayback?.itemId,
+        state.currentPlayback?.subtitleIndex,
+        player,
+    ) {
+        value = null
+        val playback = state.currentPlayback
+        if (player !is MpvPlayer && playback != null) value = ShiftableSubtitles.load(playback)
+    }
+    val exoSubtitleDelayMs =
+        if (player is MpvPlayer) 0L else (state.currentPlayback?.subtitleDelay ?: Duration.ZERO).inWholeMilliseconds
+    var shiftedCues by remember { mutableStateOf<List<androidx.media3.common.text.Cue>?>(null) }
+    LaunchedEffect(shiftable, exoSubtitleDelayMs) {
+        val subs = shiftable
+        if (subs == null || exoSubtitleDelayMs == 0L) {
+            shiftedCues = null
+            return@LaunchedEffect
+        }
+        while (true) {
+            val now = subs.at(player.currentPosition - exoSubtitleDelayMs)
+            if (now != shiftedCues) shiftedCues = now
+            delay(50)
+        }
+    }
 
     val presentationState = rememberPresentationState(player, false)
     val playbackState by rememberPlayerState(player)
@@ -631,13 +657,14 @@ fun PlaybackPageContent(
                         Timber.v("Switching SDR/HDR, reapplying subtitle style")
                         subtitleSettings.applyTo(subtitleView)
                     }
-                    subtitleView.setCues(state.subtitleCues)
-                    if (state.subtitleCues.size > cueCount) {
+                    val cuesNow = shiftedCues ?: state.subtitleCues
+                    subtitleView.setCues(cuesNow)
+                    if (cuesNow.size > cueCount) {
                         Timber.i("Applying subtitle style to SubtitleView")
                         // The output creates a painter for each cue, so need to apply the changes when the number of cues increases
                         Media3SubtitleOverride(subtitleSettings.calculateEdgeSize(density))
                             .apply(subtitleView)
-                        cueCount = state.subtitleCues.size
+                        cueCount = cuesNow.size
                     }
                     subtitleView.children.firstOrNull { it is AssSubtitleView }?.let {
                         (it as? AssSubtitleView)?.apply {
@@ -854,7 +881,7 @@ fun PlaybackPageContent(
             onPlaybackActionClick = onPlaybackActionClick,
             onChangeSubtitleDelay = { viewModel.updateSubtitleDelay(it) },
             onChangeZoom = onChangeZoom,
-            enableSubtitleDelay = player is MpvPlayer,
+            enableSubtitleDelay = player is MpvPlayer || shiftable != null,
             enableVideoScale = player !is MpvPlayer,
         )
     }

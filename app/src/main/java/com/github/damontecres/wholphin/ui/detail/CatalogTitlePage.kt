@@ -95,7 +95,7 @@ fun CatalogTitlePage(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun CatalogTitleContent(
     e: StreamingStore.Entry,

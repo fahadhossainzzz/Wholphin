@@ -139,6 +139,13 @@ fun PlaybackDialog(
                     onPlaybackActionClick.invoke(PlaybackAction.SearchCaptions)
                 },
                 gravity = rightGravity,
+                subtitleDelay = if (enableSubtitleDelay) settings.subtitleDelay else null,
+                onSelectDelay =
+                    if (enableSubtitleDelay) {
+                        { onClickPlaybackDialogType(PlaybackDialogType.SUBTITLE_DELAY) }
+                    } else {
+                        null
+                    },
             )
         }
 
@@ -345,6 +352,8 @@ fun SubtitleChoiceBottomDialog(
     gravity: Int,
     hasDownloadPermission: Boolean,
     currentChoice: Int? = null,
+    subtitleDelay: kotlin.time.Duration? = null,
+    onSelectDelay: (() -> Unit)? = null,
 ) {
     val numberBefore = 2
     val initialChoice =
@@ -469,6 +478,21 @@ fun SubtitleChoiceBottomDialog(
                         interactionSource = interactionSource,
                         modifier = Modifier.focusRequester(choiceFocusRequesters[index]),
                     )
+                }
+                // NoBars: the delay sits with the subtitle choices (CC), for the chosen text subtitle
+                if (onSelectDelay != null && subtitleDelay != null) {
+                    item {
+                        HorizontalDivider()
+                        ListItem(
+                            selected = false,
+                            onClick = onSelectDelay,
+                            leadingContent = {},
+                            headlineContent = { Text(text = stringResource(R.string.subtitle_delay)) },
+                            supportingContent = {
+                                Text(if (subtitleDelay == kotlin.time.Duration.ZERO) "In sync (0 s) · adjust" else "$subtitleDelay · adjust")
+                            },
+                        )
+                    }
                 }
                 item {
                     HorizontalDivider()

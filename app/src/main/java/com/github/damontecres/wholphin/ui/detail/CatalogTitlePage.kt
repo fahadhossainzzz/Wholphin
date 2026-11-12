@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
@@ -116,7 +117,14 @@ private fun CatalogTitleContent(
     val added = wanted.firstOrNull { it.tmdb == e.tmdb && it.series == e.series }?.added
     val openSvc = (e.services + e.ott.map { it.first }).firstOrNull { WatchProviders.canOpen(it) }
         ?: e.from?.takeIf { it == StreamingStore.NETFLIX || it == StreamingStore.PRIME }?.let { StreamingStore.displayName(it) }
+    // NoBars: scroll only as much as needed to show what has the focus (the TV's default moves it to a third of the
+    // way down, which pushed the title off the top), and keep the whole header in view while its buttons have focus
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides MinimalScroll,
+    ) {
     LazyColumn(
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 40.dp),
         modifier = modifier.fillMaxSize(),
@@ -125,7 +133,11 @@ private fun CatalogTitleContent(
         item {
             Column(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxWidth(.66f).padding(start = HeaderUtils.startPadding + 8.dp, top = HeaderUtils.topPadding),
+                modifier =
+                    Modifier
+                        .fillMaxWidth(.66f)
+                        .padding(start = HeaderUtils.startPadding + 8.dp, top = HeaderUtils.topPadding)
+                        .onFocusChanged { if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) } },
             ) {
                 Text(e.title, style = MaterialTheme.typography.headlineMedium, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val meta =
@@ -255,6 +267,7 @@ private fun CatalogTitleContent(
                     }
                 PersonRow(
                     people = people,
+                    title = com.github.damontecres.wholphin.R.string.nb_cast,
                     onClick = { person ->
                         scope.launch {
                             val id = findLibraryPerson(person.name ?: "")
@@ -372,6 +385,23 @@ private fun CatalogTitleContent(
                     modifier = Modifier.padding(start = HeaderUtils.startPadding + 8.dp),
                 )
             }
+        }
+    }
+    }
+}
+
+/** Scrolls only when the focused thing is (partly) off screen, and only as far as needed. */
+private object MinimalScroll : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(
+        offset: Float,
+        size: Float,
+        containerSize: Float,
+    ): Float {
+        val end = offset + size
+        return when {
+            offset >= 0f && end <= containerSize -> 0f
+            offset < 0f || size > containerSize -> offset
+            else -> end - containerSize
         }
     }
 }

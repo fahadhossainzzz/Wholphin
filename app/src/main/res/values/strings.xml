@@ -1027,4 +1027,5 @@
     <string name="error">Error</string>
     <string name="nb_wl_type">Films or shows</string>
     <string name="nb_wl_where">Where to watch</string>
+    <string name="nb_cast">Cast</string>
 </resources>

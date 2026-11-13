@@ -169,6 +169,8 @@ fun PlaybackPageContent(
     val playerBackend = playerInstance.backend
 
     val prefs = preferences.appPreferences.playbackPreferences
+    // NoBars: left/right always scrub with the seek bar and thumbnails (unless set to "none")
+    val dpadSeekMode = if (prefs.dpadSeekMode == DpadSeekMode.SEEKBAR_NONE) DpadSeekMode.SEEKBAR_NONE else DpadSeekMode.SEEKBAR_TRICKPLAY
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     LaunchedEffect(density) { viewModel.updateDensity(density) }
@@ -307,8 +309,18 @@ fun PlaybackPageContent(
     val controllerViewState = remember { viewModel.controllerViewState }
 
     var skipIndicatorDuration by remember { mutableLongStateOf(0L) }
+    // NoBars: scrubbing like Netflix. The film pauses while you choose a spot; OK (or Play) jumps there and plays,
+    // Back puts you back where you were. Nothing jumps by itself.
+    var scrubResume by remember { mutableStateOf(false) }
+    val cancelScrub = {
+        if (skipIndicatorDuration != 0L && dpadSeekMode == DpadSeekMode.SEEKBAR_TRICKPLAY) {
+            skipIndicatorDuration = 0L
+            if (scrubResume) player.play()
+        }
+    }
     LaunchedEffect(controllerViewState.controlsVisible) {
         // If controller shows/hides, immediately cancel the skip indicator
+        if (controllerViewState.controlsVisible) cancelScrub()
         skipIndicatorDuration = 0L
     }
     var skipPosition by remember { mutableLongStateOf(0L) }
@@ -322,19 +334,32 @@ fun PlaybackPageContent(
     val onDpadSeek: (Long) -> Unit = { deltaMs ->
         if (skipIndicatorDuration == 0L) {
             skipPosition = player.currentPosition
+            scrubResume = player.isPlaying || player.playWhenReady
+            player.pause()
         }
         if ((skipIndicatorDuration > 0 && deltaMs < 0) ||
             (skipIndicatorDuration < 0 && deltaMs > 0)
         ) {
-            skipIndicatorDuration = 0L
+            // changing direction: keep the overlay (0 would close it)
+            skipIndicatorDuration = if (deltaMs > 0) 1L else -1L
         }
         skipIndicatorDuration += deltaMs
+        if (skipIndicatorDuration == 0L) skipIndicatorDuration = if (deltaMs > 0) 1L else -1L
         skipPosition =
             (skipPosition + deltaMs).coerceIn(
                 minimumValue = 0L,
                 maximumValue = player.duration.coerceAtLeast(0L),
             )
-        seekBarState.onValueChange(skipPosition)
+    }
+    val commitScrub = {
+        if (skipIndicatorDuration != 0L) {
+            skipIndicatorDuration = 0L
+            player.seekTo(skipPosition)
+            player.play()
+        }
+    }
+    androidx.activity.compose.BackHandler(skipIndicatorDuration != 0L && dpadSeekMode == DpadSeekMode.SEEKBAR_TRICKPLAY) {
+        cancelScrub()
     }
     val keyHandler =
         remember(preferences) {
@@ -348,6 +373,7 @@ fun PlaybackPageContent(
                 controllerViewState = controllerViewState,
                 updateSkipIndicator = updateSkipIndicator,
                 clearSkipIndicator = { skipIndicatorDuration = 0 },
+                onCommitDpadSeek = commitScrub,
                 skipBackOnResume = preferences.appPreferences.playbackPreferences.skipBackOnResume,
                 onInteraction = viewModel::reportInteraction,
                 oneClickPause = preferences.appPreferences.playbackPreferences.oneClickPause,
@@ -357,10 +383,10 @@ fun PlaybackPageContent(
                 },
                 onPlaybackDialogTypeClick = { playbackDialog = it },
                 isDpadSeekVisible = {
-                    prefs.dpadSeekMode == DpadSeekMode.SEEKBAR_TRICKPLAY && skipIndicatorDuration != 0L
+                    dpadSeekMode == DpadSeekMode.SEEKBAR_TRICKPLAY && skipIndicatorDuration != 0L
                 },
                 onDpadSeek = onDpadSeek,
-                dpadSeekMode = prefs.dpadSeekMode,
+                dpadSeekMode = dpadSeekMode,
                 onSeekToNext = viewModel::playNextUp,
                 onPSeekToPrevious = viewModel::playPrevious,
             )
@@ -484,7 +510,7 @@ fun PlaybackPageContent(
                 visible =
                     !controllerViewState.controlsVisible &&
                         skipIndicatorDuration != 0L &&
-                        prefs.dpadSeekMode == DpadSeekMode.SEEKBAR_TRICKPLAY,
+                        dpadSeekMode == DpadSeekMode.SEEKBAR_TRICKPLAY,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut() + slideOutVertically { it },
                 modifier =
@@ -504,16 +530,12 @@ fun PlaybackPageContent(
                                 .fillMaxWidth(.95f),
                     )
                 }
-                // Clear the overlay after a delay
-                LaunchedEffect(skipIndicatorDuration) {
-                    delay(1.5.seconds)
-                    skipIndicatorDuration = 0L
-                }
+                // NoBars: the overlay stays until OK / Play (jump there) or Back (stay where you were)
             }
 
             // If D-pad skipping, show the amount skipped in an animation
             if (!controllerViewState.controlsVisible && skipIndicatorDuration != 0L &&
-                prefs.dpadSeekMode != DpadSeekMode.SEEKBAR_TRICKPLAY
+                dpadSeekMode != DpadSeekMode.SEEKBAR_TRICKPLAY
             ) {
                 // Skip time mode: show seek distance indicator
                 SkipIndicator(
@@ -527,7 +549,7 @@ fun PlaybackPageContent(
                             .padding(bottom = 70.dp),
                 )
                 // Show a small progress bar along the bottom of the screen
-                if (prefs.dpadSeekMode == DpadSeekMode.SEEKBAR_MINIMAL) {
+                if (dpadSeekMode == DpadSeekMode.SEEKBAR_MINIMAL) {
                     val percent = skipPosition.toFloat() / player.duration.toFloat()
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Box(

@@ -32,6 +32,7 @@ class PlaybackKeyHandler(
     private val onPlaybackDialogTypeClick: (PlaybackDialogType) -> Unit,
     private val isDpadSeekVisible: () -> Boolean = { false },
     private val onDpadSeek: (Long) -> Unit = { },
+    private val onCommitDpadSeek: () -> Unit = { },
     private val dpadSeekMode: DpadSeekMode,
     private val onSeekToNext: () -> Unit,
     private val onPSeekToPrevious: () -> Unit,
@@ -44,6 +45,10 @@ class PlaybackKeyHandler(
 
         if (!controlsEnabled) {
             return false
+        } else if (isDpadSeekVisible() && (isEnterKey(it) || it.key == Key.MediaPlay || it.key == Key.MediaPlayPause)) {
+            // NoBars: choosing a spot on the seek bar: OK or Play jumps there and plays
+            if (it.type == KeyEventType.KeyUp) onCommitDpadSeek.invoke()
+            return true
         } else if (handleHoldSkip(it)) {
             return true
         } else if (it.type != KeyEventType.KeyUp) {

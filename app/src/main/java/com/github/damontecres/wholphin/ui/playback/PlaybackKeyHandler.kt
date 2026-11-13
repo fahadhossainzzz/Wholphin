@@ -33,6 +33,8 @@ class PlaybackKeyHandler(
     private val isDpadSeekVisible: () -> Boolean = { false },
     private val onDpadSeek: (Long) -> Unit = { },
     private val onCommitDpadSeek: () -> Unit = { },
+    private val hasPendingBarSeek: () -> Boolean = { false },
+    private val onCommitBarSeek: () -> Unit = { },
     private val dpadSeekMode: DpadSeekMode,
     private val onSeekToNext: () -> Unit,
     private val onPSeekToPrevious: () -> Unit,
@@ -45,6 +47,12 @@ class PlaybackKeyHandler(
 
         if (!controlsEnabled) {
             return false
+        } else if (controllerViewState.controlsVisible && hasPendingBarSeek() &&
+            (isEnterKey(it) || it.key == Key.MediaPlay || it.key == Key.MediaPlayPause)
+        ) {
+            // NoBars: a spot chosen on the controls' seek bar: OK or Play jumps there and plays
+            if (it.type == KeyEventType.KeyUp) onCommitBarSeek.invoke()
+            return true
         } else if (isDpadSeekVisible() && (isEnterKey(it) || it.key == Key.MediaPlay || it.key == Key.MediaPlayPause)) {
             // NoBars: choosing a spot on the seek bar: OK or Play jumps there and plays
             if (it.type == KeyEventType.KeyUp) onCommitDpadSeek.invoke()

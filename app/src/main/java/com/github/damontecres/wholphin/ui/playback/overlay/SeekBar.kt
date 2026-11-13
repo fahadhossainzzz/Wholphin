@@ -53,6 +53,11 @@ import kotlinx.coroutines.FlowPreview
 import timber.log.Timber
 import kotlin.time.Duration
 
+/** NoBars: bumped when a chosen seek-bar position is applied or cancelled, so the bar follows the film again. */
+internal object SeekBarReset {
+    var count by androidx.compose.runtime.mutableIntStateOf(0)
+}
+
 /**
  * This is a seek bar which seeks by a percentage of the duration instead of a fixed amount of time
  *
@@ -77,6 +82,7 @@ fun SteppedSeekBarImpl(
     LaunchedEffect(isFocused) {
         if (!isFocused) hasSeeked = false
     }
+    LaunchedEffect(SeekBarReset.count) { hasSeeked = false }
 
     val offset = 1f / intervals
 
@@ -157,6 +163,7 @@ fun IntervalSeekBarImpl(
     LaunchedEffect(isFocused) {
         if (!isFocused) hasSeeked = false
     }
+    LaunchedEffect(SeekBarReset.count) { hasSeeked = false }
 
     SeekBarDisplay(
         enabled = enabled,

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -361,6 +362,40 @@ fun PlaybackPageContent(
     androidx.activity.compose.BackHandler(skipIndicatorDuration != 0L && dpadSeekMode == DpadSeekMode.SEEKBAR_TRICKPLAY) {
         cancelScrub()
     }
+    // NoBars: the same on the controls' seek bar: moving it pauses the film and nothing jumps by itself;
+    // OK / Play jumps there and plays; Back, or leaving the bar, keeps the film where it was.
+    val seekBarSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val seekBarFocused by seekBarSource.collectIsFocusedAsState()
+    var barPending by remember { mutableStateOf<Long?>(null) }
+    var barResume by remember { mutableStateOf(false) }
+    val onBarSeek: (Long) -> Unit = { pos ->
+        if (barPending == null) {
+            barResume = player.isPlaying || player.playWhenReady
+            player.pause()
+        }
+        controllerViewState.pulseControls(Long.MAX_VALUE)
+        barPending = pos
+    }
+    val commitBarSeek = {
+        barPending?.let {
+            barPending = null
+            player.seekTo(it)
+            player.play()
+            com.github.damontecres.wholphin.ui.playback.overlay.SeekBarReset.count++
+            controllerViewState.pulseControls()
+        }
+        Unit
+    }
+    val cancelBarSeek = {
+        if (barPending != null) {
+            barPending = null
+            com.github.damontecres.wholphin.ui.playback.overlay.SeekBarReset.count++
+            if (barResume) player.play()
+            controllerViewState.pulseControls()
+        }
+    }
+    LaunchedEffect(seekBarFocused) { if (!seekBarFocused) cancelBarSeek() }
+    androidx.activity.compose.BackHandler(barPending != null) { cancelBarSeek() }
     val keyHandler =
         remember(preferences) {
             PlaybackKeyHandler(
@@ -374,6 +409,8 @@ fun PlaybackPageContent(
                 updateSkipIndicator = updateSkipIndicator,
                 clearSkipIndicator = { skipIndicatorDuration = 0 },
                 onCommitDpadSeek = commitScrub,
+                hasPendingBarSeek = { barPending != null },
+                onCommitBarSeek = commitBarSeek,
                 skipBackOnResume = preferences.appPreferences.playbackPreferences.skipBackOnResume,
                 onInteraction = viewModel::reportInteraction,
                 oneClickPause = preferences.appPreferences.playbackPreferences.oneClickPause,
@@ -606,7 +643,8 @@ fun PlaybackPageContent(
                 skipBackOnResume = preferences.appPreferences.playbackPreferences.skipBackOnResume,
                 onPlaybackActionClick = onPlaybackActionClick,
                 onClickPlaybackDialogType = { playbackDialog = it },
-                onSeekBarChange = seekBarState::onValueChange,
+                onSeekBarChange = onBarSeek,
+                seekBarInteractionSource = seekBarSource,
                 showDebugInfo = showDebugInfo,
                 currentPlayback = state.currentPlayback,
                 chapters = state.currentMediaInfo.chapters,

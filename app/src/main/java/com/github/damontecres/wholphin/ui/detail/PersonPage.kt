@@ -164,7 +164,7 @@ class PersonViewModel
                             val credits =
                                 dto.providerIds?.get("Tmdb")
                                     ?.let { com.github.damontecres.wholphin.services.ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
-                                    ?.let(com.github.damontecres.wholphin.ui.playback.overlay::parseCredits)
+                                    ?.let { com.github.damontecres.wholphin.ui.playback.overlay.parseCredits(it) }
                                     .orEmpty()
                             _state.update { it.copy(work = credits) }
                         } catch (e: Exception) {

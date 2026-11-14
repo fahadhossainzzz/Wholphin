@@ -959,6 +959,8 @@ fun PlaybackPageContent(
             onOpenItem = { restartHereAfter(it.destination()) },
             onOpenProfile = { peopleViewModel.openProfile() },
             onToggleBio = peopleViewModel::toggleBio,
+            onOpenWork = peopleViewModel::openWork,
+            onSelectCredit = peopleViewModel::selectCredit,
         )
     }
 }

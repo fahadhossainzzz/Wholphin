@@ -108,7 +108,75 @@ data class PersonPanelState(
     val profile: PersonProfile? = null,
     val episodes: List<BaseItem> = emptyList(),
     val bioExpanded: Boolean = false,
+    /** NoBars: "All work": the person's whole career from TMDB (fetched by our plugin, kept 30 days on the server). */
+    val workOpen: Boolean = false,
+    val workLoading: Boolean = false,
+    val work: List<Credit>? = null,
+    val workSelected: Credit? = null,
+    val workFocus: String? = null,
 )
+
+/** One title in a person's career. [crew]: directing, writing or producing (with [role] the jobs). */
+data class Credit(
+    val tmdb: Int,
+    val tv: Boolean,
+    val title: String,
+    val year: String,
+    val date: String,
+    val poster: String?,
+    val rating: Float,
+    val votes: Int,
+    val role: String,
+    val episodes: Int?,
+    val crew: Boolean,
+    val about: String,
+) {
+    val key: String get() = (if (crew) "c" else "a") + (if (tv) "tv:" else "movie:") + tmdb
+    val ownedKey: String get() = (if (tv) "tv:" else "movie:") + tmdb
+    val posterSmall: String? get() = poster?.let { "https://image.tmdb.org/t/p/w92$it" }
+    val posterLarge: String? get() = poster?.let { "https://image.tmdb.org/t/p/w185$it" }
+}
+
+/** NoBars: the person's credits from /Plugins/ImdbRatings/Person/{tmdbId}: acting merged per title, newest first. */
+internal fun parseCredits(json: String): List<Credit> {
+    val o = org.json.JSONObject(json)
+    fun read(
+        arr: org.json.JSONArray?,
+        crew: Boolean,
+    ): List<Credit> =
+        (0 until (arr?.length() ?: 0)).mapNotNull { i ->
+            val c = arr!!.getJSONObject(i)
+            val id = c.optInt("id")
+            if (id == 0) return@mapNotNull null
+            Credit(
+                tmdb = id,
+                tv = c.optBoolean("tv"),
+                title = c.optString("title"),
+                year = c.optString("year"),
+                date = c.optString("date"),
+                poster = c.optString("poster").takeIf { it.isNotBlank() && it != "null" },
+                rating = c.optDouble("rating", 0.0).toFloat(),
+                votes = c.optInt("votes"),
+                role = c.optString("role"),
+                episodes = if (c.has("eps")) c.optInt("eps") else null,
+                crew = crew,
+                about = c.optString("about"),
+            )
+        }
+    val acting =
+        read(o.optJSONArray("cast"), false)
+            .groupBy { it.tv to it.tmdb }
+            .map { (_, same) ->
+                same.first().copy(
+                    role = same.map { it.role }.filter { it.isNotBlank() }.distinct().joinToString(" / "),
+                    episodes = same.mapNotNull { it.episodes }.sum().takeIf { it > 0 },
+                )
+            }
+    val behind = read(o.optJSONArray("crew"), true)
+    val today = java.time.LocalDate.now().toString()
+    val order = compareByDescending<Credit> { it.date.isEmpty() || it.date > today }.thenByDescending { it.date }
+    return acting.sortedWith(order) + behind.sortedWith(order)
+}
 
 data class PersonProfile(
     val overview: String?,
@@ -270,11 +338,61 @@ class PlayerPeopleViewModel
 
         fun toggleBio() = _panel.update { it?.copy(bioExpanded = !it.bioExpanded) }
 
+        /** NoBars: "All work", inside the panel. One request to our plugin, which keeps the answer for 30 days. */
+        fun openWork() {
+            val current = _panel.value ?: return
+            _panel.value = current.copy(workOpen = true, workSelected = null, selected = null, focusId = null)
+            if (current.work != null || current.workLoading) return
+            val personId = current.person.id
+            _panel.update { it?.copy(workLoading = true) }
+            viewModelScope.launchIO {
+                val credits =
+                    try {
+                        if (com.github.damontecres.wholphin.services.StreamingStore.owned.isEmpty()) {
+                            com.github.damontecres.wholphin.services.StreamingStore.loadLibrary()
+                        }
+                        val tmdb = api.userLibraryApi.getItem(personId).content.providerIds?.get("Tmdb")
+                        tmdb?.let { com.github.damontecres.wholphin.services.ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
+                            ?.let(::parseCredits)
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars: could not load all work")
+                        null
+                    }
+                _panel.update {
+                    if (it != null && it.person.id == personId) it.copy(work = credits ?: emptyList(), workLoading = false) else it
+                }
+            }
+        }
+
+        /** A title from "All work": one you have opens like the library list; others show their summary. */
+        fun selectCredit(credit: Credit) {
+            val hex = com.github.damontecres.wholphin.services.StreamingStore.owned[credit.ownedKey]
+            if (hex == null || hex.length != 32) {
+                _panel.update { it?.copy(workSelected = credit, workFocus = credit.key) }
+                return
+            }
+            _panel.update { it?.copy(workFocus = credit.key) }
+            viewModelScope.launchIO {
+                try {
+                    val id = UUID.fromString(hex.replaceFirst(Regex("(.{8})(.{4})(.{4})(.{4})(.{12})"), "$1-$2-$3-$4-$5"))
+                    val item = BaseItem(api.userLibraryApi.getItem(id).content, false)
+                    _panel.update { it?.copy(selected = item) }
+                } catch (e: Exception) {
+                    Timber.w(e, "NoBars: could not open %s", credit.title)
+                    _panel.update { it?.copy(workSelected = credit) }
+                }
+            }
+        }
+
         /** Back, one step: summary -> full bio -> profile -> the list -> the Cast & Crew row. */
         fun back() {
             val current = _panel.value ?: return
             if (current.selected != null) {
                 _panel.value = current.copy(selected = null, focusId = current.selected.id)
+            } else if (current.workSelected != null) {
+                _panel.value = current.copy(workSelected = null, workFocus = current.workSelected.key)
+            } else if (current.workOpen) {
+                _panel.value = current.copy(workOpen = false, focusId = WORK_BUTTON)
             } else if (current.profileOpen && current.bioExpanded) {
                 _panel.value = current.copy(bioExpanded = false, focusId = null)
             } else if (current.profileOpen) {
@@ -374,6 +492,8 @@ fun PersonPanel(
     onOpenItem: (BaseItem) -> Unit,
     onOpenProfile: (Person) -> Unit,
     onToggleBio: () -> Unit = {},
+    onOpenWork: () -> Unit = {},
+    onSelectCredit: (Credit) -> Unit = {},
 ) {
     Dialog(
         onDismissRequest = onBack,
@@ -393,7 +513,7 @@ fun PersonPanel(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier =
                 Modifier
-                    .width(if (state.profileOpen) 500.dp else 440.dp)
+                    .width(if (state.profileOpen || state.workOpen) 500.dp else 440.dp)
                     .fillMaxHeight()
                     .onPreviewKeyEvent {
                         if (it.key == Key.Back || it.key == Key.ButtonB) {
@@ -446,10 +566,13 @@ fun PersonPanel(
                 }
             }
             val selected = state.selected
+            val creditSelected = state.workSelected
             when {
                 selected != null -> FilmSummary(selected, thumbUrl, onPlay, onOpenItem, onBack)
+                creditSelected != null -> CreditSummary(creditSelected, onBack)
+                state.workOpen -> WorkView(state, onSelectCredit)
                 state.profileOpen -> ProfileView(state, thumbUrl, onSelect, onToggleBio)
-                else -> FilmList(state, thumbUrl, onSelect, onOpenProfile)
+                else -> FilmList(state, thumbUrl, onSelect, onOpenProfile, onOpenWork)
             }
         }
     }
@@ -461,9 +584,11 @@ private fun FilmList(
     thumbUrl: (BaseItem) -> String?,
     onSelect: (BaseItem?) -> Unit,
     onOpenProfile: (Person) -> Unit,
+    onOpenWork: () -> Unit,
 ) {
     val first = remember { FocusRequester() }
-    val onButton = state.focusId == state.person.id
+    val onWork = state.focusId == WORK_BUTTON
+    val onButton = state.focusId == state.person.id || onWork
     val focusIndex = remember(state.loading) { state.items.indexOfFirst { it.id == state.focusId }.coerceAtLeast(0) }
     // +1: the Full profile button sits above the films
     val listState = androidx.compose.foundation.lazy.rememberLazyListState(if (onButton) 0 else focusIndex + 1)
@@ -486,14 +611,19 @@ private fun FilmList(
     ) {
         if (!state.loading) {
             item(key = "profile") {
-                Button(
-                    onClick = { onOpenProfile(state.person) },
-                    modifier =
-                        Modifier
-                            .padding(bottom = 8.dp)
-                            .ifElse(onButton || state.items.isEmpty(), Modifier.focusRequester(first)),
-                ) {
-                    Text("Full profile")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                    Button(
+                        onClick = { onOpenProfile(state.person) },
+                        modifier = Modifier.ifElse(!onWork && (onButton || state.items.isEmpty()), Modifier.focusRequester(first)),
+                    ) {
+                        Text("Full profile")
+                    }
+                    Button(
+                        onClick = onOpenWork,
+                        modifier = Modifier.ifElse(onWork, Modifier.focusRequester(first)),
+                    ) {
+                        Text("All work")
+                    }
                 }
             }
         }
@@ -701,6 +831,196 @@ private fun episodeLabel(item: BaseItem): String? {
     val e = item.data.indexNumber
     val code = if (s != null && e != null) "S$s·E$e" else null
     return listOfNotNull(code, item.name).joinToString(" ").takeIf { it.isNotBlank() }
+}
+
+/** Focus marker for the "All work" button (any id that is never a real person). */
+internal val WORK_BUTTON: UUID = UUID(0L, 0xA11L)
+
+private sealed interface WorkRow {
+    val key: Any
+
+    data class Header(
+        val text: String,
+    ) : WorkRow {
+        override val key: Any get() = "h:$text"
+    }
+
+    data class Note(
+        val text: String,
+    ) : WorkRow {
+        override val key: Any get() = "n:$text"
+    }
+
+    data class Item(
+        val credit: Credit,
+    ) : WorkRow {
+        override val key: Any get() = credit.key
+    }
+}
+
+/** NoBars: the person's whole career: upcoming, acting, then directing / writing / producing. */
+@Composable
+private fun WorkView(
+    state: PersonPanelState,
+    onSelectCredit: (Credit) -> Unit,
+) {
+    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+    val rows =
+        remember(state.work, state.workLoading) {
+            buildList {
+                val work = state.work
+                when {
+                    state.workLoading || work == null -> add(WorkRow.Note("Looking up their whole career…"))
+                    work.isEmpty() -> add(WorkRow.Note("No career list available for this person"))
+                    else -> {
+                        val today = java.time.LocalDate.now().toString()
+                        val acting = work.filter { !it.crew }
+                        val upcoming = acting.filter { it.date.isEmpty() || it.date > today }
+                        val past = acting - upcoming.toSet()
+                        val behind = work.filter { it.crew }
+                        if (upcoming.isNotEmpty()) {
+                            add(WorkRow.Header("Upcoming (${upcoming.size})"))
+                            upcoming.forEach { add(WorkRow.Item(it)) }
+                        }
+                        if (past.isNotEmpty()) {
+                            add(WorkRow.Header("Acting (${past.size})"))
+                            past.forEach { add(WorkRow.Item(it)) }
+                        }
+                        if (behind.isNotEmpty()) {
+                            add(WorkRow.Header("Directing, writing, producing (${behind.size})"))
+                            behind.forEach { add(WorkRow.Item(it)) }
+                        }
+                    }
+                }
+            }
+        }
+    val target =
+        remember(rows, state.workFocus) {
+            rows.indexOfFirst { it is WorkRow.Item && it.credit.key == state.workFocus }.takeIf { it >= 0 }
+                ?: rows.indexOfFirst { it is WorkRow.Item }
+        }
+    val first = remember { FocusRequester() }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState((target - 1).coerceAtLeast(0))
+    LaunchedEffect(target) { if (target >= 0) first.tryRequestFocus() }
+    val total = state.work?.size ?: 0
+    Text(
+        text = if (total > 0) "All work ($total)" else "All work",
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White.copy(alpha = 0.85f),
+    )
+    LazyColumn(
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        itemsIndexed(rows, key = { _, r -> r.key }) { index, row ->
+            when (row) {
+                is WorkRow.Header ->
+                    Text(
+                        text = row.text,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
+                    )
+                is WorkRow.Note -> Text(text = row.text, fontSize = 14.sp, color = Color.White.copy(alpha = 0.6f))
+                is WorkRow.Item -> {
+                    val c = row.credit
+                    ListItem(
+                        selected = false,
+                        onClick = { onSelectCredit(c) },
+                        leadingContent = { Thumb(c.posterSmall) },
+                        headlineContent = { Text(c.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = { Text(creditFacts(c, wanted), fontSize = 12.sp, maxLines = 1) },
+                        modifier = Modifier.ifElse(index == target, Modifier.focusRequester(first)),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun creditFacts(
+    c: Credit,
+    wanted: List<com.github.damontecres.wholphin.services.StreamingStore.Entry>,
+): String =
+    buildList {
+        when {
+            com.github.damontecres.wholphin.services.StreamingStore.owned.containsKey(c.ownedKey) -> add("✓ In your library")
+            wanted.any { it.tmdb == c.tmdb && it.series == c.tv } -> add("🔖 Watchlist")
+        }
+        if (c.year.isNotBlank()) add(c.year) else add("Upcoming")
+        if (c.tv) add(c.episodes?.let { "TV · $it ep" } ?: "TV")
+        if (c.role.isNotBlank()) add(if (c.crew) c.role else "as ${c.role}")
+        if (c.votes >= 20 && c.rating > 0f) add("★ " + String.format(Locale.US, "%.1f", c.rating))
+    }.joinToString("  ·  ")
+
+/** NoBars: a title from "All work" that isn't in your library: what it is, and the Watchlist. */
+@Composable
+private fun CreditSummary(
+    c: Credit,
+    onBack: () -> Unit,
+) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(c.key) { first.tryRequestFocus() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+    val onList = wanted.any { it.tmdb == c.tmdb && it.series == c.tv }
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Thumb(c.posterLarge, large = true)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(c.title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 3)
+            Text(
+                listOfNotNull(
+                    c.year.ifBlank { "Upcoming" },
+                    if (c.tv) "TV show" else "Film",
+                    c.episodes?.let { "$it episodes" },
+                    if (c.votes >= 20 && c.rating > 0f) "★ " + String.format(Locale.US, "%.1f", c.rating) + " (TMDB)" else null,
+                ).joinToString("  ·  "),
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.8f),
+            )
+            if (c.role.isNotBlank()) {
+                Text(if (c.crew) c.role else "as ${c.role}", fontSize = 14.sp, color = Color.White.copy(alpha = 0.9f), maxLines = 2)
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(
+            onClick = {
+                scope.launch {
+                    val entry =
+                        com.github.damontecres.wholphin.services.StreamingStore.cachedEntry(c.tmdb, c.tv)
+                            ?: com.github.damontecres.wholphin.services.StreamingStore.Entry(
+                                tmdb = c.tmdb,
+                                series = c.tv,
+                                title = c.title,
+                                year = c.year.toIntOrNull(),
+                                poster = c.poster?.let { "https://image.tmdb.org/t/p/w342$it" },
+                                overview = c.about,
+                                genres = emptyList(),
+                                runtime = null,
+                                seasons = null,
+                                imdbRating = null,
+                                imdbVotes = null,
+                                libraryId = null,
+                                rank = null,
+                                tmdbRating = c.rating.takeIf { c.votes >= 20 && it > 0f },
+                                tmdbVotes = c.votes.takeIf { it > 0 },
+                            )
+                    com.github.damontecres.wholphin.services.WantedStore.toggle(entry, "people")
+                }
+            },
+            modifier = Modifier.focusRequester(first),
+        ) {
+            Text(if (onList) "✓ On your Watchlist" else "＋ Watchlist")
+        }
+        Button(onClick = onBack) { Text("Back") }
+    }
+    if (c.about.isNotBlank()) {
+        Text(text = c.about, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f))
+    }
 }
 
 @Composable

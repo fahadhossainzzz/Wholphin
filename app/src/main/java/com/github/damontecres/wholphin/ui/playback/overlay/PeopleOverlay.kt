@@ -35,7 +35,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -956,9 +958,22 @@ private fun creditFacts(
         if (c.votes >= 20 && c.rating > 0f) add("★ " + String.format(Locale.US, "%.1f", c.rating))
     }.joinToString("  ·  ")
 
-/** NoBars: a title from "All work" that isn't in your library: what it is, and the Watchlist. */
+/** NoBars: a title's trailer (YouTube key) from our plugin, which asks TMDB once and keeps it 30 days. */
+internal suspend fun trailerKey(c: Credit): String? =
+    kotlinx.coroutines.withContext(com.github.damontecres.wholphin.util.WholphinDispatchers.IO) {
+        try {
+            com.github.damontecres.wholphin.services.ServerAccess
+                .get("/Plugins/ImdbRatings/Trailer/" + (if (c.tv) "tv-" else "movie-") + c.tmdb)
+                ?.let { org.json.JSONObject(it).optString("key").takeIf { k -> k.isNotBlank() && k != "null" } }
+        } catch (e: Exception) {
+            Timber.w(e, "NoBars: trailer lookup failed")
+            null
+        }
+    }
+
+/** NoBars: a title from "All work" that isn't in your library: what it is, its trailer, and the Watchlist. */
 @Composable
-private fun CreditSummary(
+internal fun CreditSummary(
     c: Credit,
     onBack: () -> Unit,
 ) {
@@ -1016,6 +1031,23 @@ private fun CreditSummary(
         ) {
             Text(if (onList) "✓ On your Watchlist" else "＋ Watchlist")
         }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var looking by remember { mutableStateOf(false) }
+        Button(
+            onClick = {
+                if (looking) return@Button
+                looking = true
+                scope.launch {
+                    val key = trailerKey(c)
+                    looking = false
+                    if (key != null) {
+                        com.github.damontecres.wholphin.ui.detail.openTrailer(context, key)
+                    } else {
+                        android.widget.Toast.makeText(context, "No trailer found for ${c.title}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+        ) { Text(if (looking) "Trailer…" else "▶ Trailer") }
         Button(onClick = onBack) { Text("Back") }
     }
     if (c.about.isNotBlank()) {

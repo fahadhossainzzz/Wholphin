@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -152,6 +155,22 @@ class PersonViewModel
                     } else {
                         _state.update { it.copy(episodes = RowLoadingState.Success(emptyList())) }
                     }
+                    // NoBars: their whole career (from our plugin, which keeps it 30 days on the server)
+                    viewModelScope.launchIO {
+                        try {
+                            if (com.github.damontecres.wholphin.services.StreamingStore.owned.isEmpty()) {
+                                com.github.damontecres.wholphin.services.StreamingStore.loadLibrary()
+                            }
+                            val credits =
+                                dto.providerIds?.get("Tmdb")
+                                    ?.let { com.github.damontecres.wholphin.services.ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
+                                    ?.let(com.github.damontecres.wholphin.ui.playback.overlay::parseCredits)
+                                    .orEmpty()
+                            _state.update { it.copy(work = credits) }
+                        } catch (e: Exception) {
+                            Timber.w(e, "NoBars: all work unavailable")
+                        }
+                    }
                     viewModelScope.launchIO {
                         val results = seerrService.similar(person).orEmpty()
                         _state.update {
@@ -208,6 +227,31 @@ class PersonViewModel
             }
         }
 
+        /** NoBars: a title from "All work": yours opens its page; one on today's lists opens that title page;
+         * anything else shows its summary card (trailer, Watchlist). */
+        fun openCredit(c: com.github.damontecres.wholphin.ui.playback.overlay.Credit) {
+            viewModelScope.launchIO {
+                try {
+                    val hex = com.github.damontecres.wholphin.services.StreamingStore.owned[c.ownedKey]
+                    if (hex != null && hex.length == 32) {
+                        val id = UUID.fromString(hex.replaceFirst(Regex("(.{8})(.{4})(.{4})(.{4})(.{12})"), "$1-$2-$3-$4-$5"))
+                        val item = BaseItem(api.userLibraryApi.getItem(id).content, false)
+                        navigationManager.navigateTo(item.destination())
+                        return@launchIO
+                    }
+                    if (com.github.damontecres.wholphin.services.StreamingStore.findEntry(c.tmdb, c.tv) != null) {
+                        navigationManager.navigateTo(Destination.CatalogTitle(c.tmdb, c.tv))
+                        return@launchIO
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "NoBars: could not open %s", c.title)
+                }
+                _state.update { it.copy(credit = c) }
+            }
+        }
+
+        fun closeCredit() = _state.update { it.copy(credit = null) }
+
         fun setFavorite(favorite: Boolean) {
             viewModelScope.launchIO {
                 favoriteWatchManager.setFavorite(itemId, favorite)
@@ -223,6 +267,8 @@ data class PersonState(
     val episodes: RowLoadingState = RowLoadingState.Pending,
     val discovered: List<DiscoverItem> = emptyList(),
     val discoverPerson: DiscoverItem? = null,
+    val work: List<com.github.damontecres.wholphin.ui.playback.overlay.Credit> = emptyList(),
+    val credit: com.github.damontecres.wholphin.ui.playback.overlay.Credit? = null,
 )
 
 @Composable
@@ -297,8 +343,24 @@ fun PersonPage(
                     }
                 },
                 enableViewMoreDiscover = state.discovered.size > discovered.size,
+                work = state.work,
+                onClickCredit = viewModel::openCredit,
                 modifier = modifier,
             )
+            state.credit?.let { c ->
+                androidx.compose.ui.window.Dialog(onDismissRequest = viewModel::closeCredit) {
+                    androidx.compose.foundation.layout.Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier =
+                            Modifier
+                                .width(520.dp)
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.9f), androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                .padding(20.dp),
+                    ) {
+                        com.github.damontecres.wholphin.ui.playback.overlay.CreditSummary(c, viewModel::closeCredit)
+                    }
+                }
+            }
             AnimatedVisibility(showOverviewDialog) {
                 ItemDetailsDialog(
                     info =
@@ -321,6 +383,7 @@ private const val MOVIE_ROW = 1
 private const val SERIES_ROW = 2
 private const val EPISODE_ROW = 3
 private const val DISCOVER_ROW = EPISODE_ROW + 1
+private const val WORK_ROW = DISCOVER_ROW + 1
 
 @Composable
 fun PersonPageContent(
@@ -343,6 +406,8 @@ fun PersonPageContent(
     onClickViewMoreDiscover: () -> Unit,
     enableViewMoreDiscover: Boolean,
     modifier: Modifier = Modifier,
+    work: List<com.github.damontecres.wholphin.ui.playback.overlay.Credit> = emptyList(),
+    onClickCredit: (com.github.damontecres.wholphin.ui.playback.overlay.Credit) -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
     val headerFocusRequester = remember { FocusRequester() }
@@ -440,6 +505,19 @@ fun PersonPageContent(
                 },
             )
         }
+        if (work.isNotEmpty()) {
+            item {
+                WorkRow(
+                    work = work,
+                    position = position,
+                    focusRequester = focusRequester,
+                    onClick = { index, c ->
+                        position = RowColumn(WORK_ROW, index)
+                        onClickCredit(c)
+                    },
+                )
+            }
+        }
         if (discovered.isNotEmpty()) {
             item {
                 DiscoverRow(
@@ -462,6 +540,80 @@ fun PersonPageContent(
                         onClickViewMoreDiscover.invoke()
                     },
                 )
+            }
+        }
+    }
+}
+
+/** NoBars: the person's whole career as a row of posters: upcoming first, then newest; ✓ marks what you have. */
+@Composable
+private fun WorkRow(
+    work: List<com.github.damontecres.wholphin.ui.playback.overlay.Credit>,
+    position: RowColumn,
+    focusRequester: FocusRequester,
+    onClick: (Int, com.github.damontecres.wholphin.ui.playback.overlay.Credit) -> Unit,
+) {
+    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+    val shown = remember(work) { work.filter { it.poster != null }.distinctBy { it.ownedKey } }
+    androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "All work (${shown.size})",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(start = 24.dp),
+        )
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+        ) {
+            items(shown.size, key = { shown[it].key }) { index ->
+                val c = shown[index]
+                val owned = com.github.damontecres.wholphin.services.StreamingStore.owned.containsKey(c.ownedKey)
+                val onList = wanted.any { it.tmdb == c.tmdb && it.series == c.tv }
+                androidx.compose.foundation.layout.Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.width(120.dp),
+                ) {
+                    androidx.tv.material3.Surface(
+                        onClick = { onClick(index, c) },
+                        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
+                        modifier =
+                            Modifier
+                                .width(120.dp)
+                                .height(180.dp)
+                                .ifElse(
+                                    position.row == WORK_ROW && position.column == index,
+                                    Modifier.focusRequester(focusRequester),
+                                ),
+                    ) {
+                        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+                            AsyncImage(
+                                model = c.posterLarge,
+                                contentDescription = c.title,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            if (owned || onList) {
+                                Text(
+                                    text = if (owned) "✓" else "🔖",
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(4.dp)
+                                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                                )
+                            }
+                        }
+                    }
+                    Text(c.title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        listOfNotNull(c.year.ifBlank { "Upcoming" }, c.role.takeIf { it.isNotBlank() }).joinToString(" · "),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
             }
         }
     }

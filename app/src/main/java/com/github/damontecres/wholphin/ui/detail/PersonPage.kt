@@ -592,6 +592,18 @@ private fun WorkRow(
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
                             )
+                            if (c.tv) {
+                                Text(
+                                    text = "TV",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(4.dp)
+                                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                                )
+                            }
                             if (owned || onList) {
                                 Text(
                                     text = if (owned) "✓" else "🔖",
@@ -607,12 +619,26 @@ private fun WorkRow(
                     }
                     Text(c.title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                     Text(
-                        listOfNotNull(c.year.ifBlank { "Upcoming" }, c.role.takeIf { it.isNotBlank() }).joinToString(" · "),
+                        listOfNotNull(
+                            c.year.ifBlank { "Upcoming" },
+                            if (c.tv) "TV" else "Film",
+                            c.episodes?.let { "$it ep" },
+                            if (c.votes >= 20 && c.rating > 0f) "★ " + String.format(java.util.Locale.US, "%.1f", c.rating) else null,
+                        ).joinToString(" · "),
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                     )
+                    if (c.role.isNotBlank()) {
+                        Text(
+                            if (c.crew) c.role else "as ${c.role}",
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                        )
+                    }
                 }
             }
         }

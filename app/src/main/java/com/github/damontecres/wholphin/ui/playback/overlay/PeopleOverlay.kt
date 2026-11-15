@@ -953,7 +953,7 @@ private fun creditFacts(
             wanted.any { it.tmdb == c.tmdb && it.series == c.tv } -> add("🔖 Watchlist")
         }
         if (c.year.isNotBlank()) add(c.year) else add("Upcoming")
-        if (c.tv) add(c.episodes?.let { "TV · $it ep" } ?: "TV")
+        add(if (c.tv) c.episodes?.let { "TV · $it ep" } ?: "TV" else "Film")
         if (c.role.isNotBlank()) add(if (c.crew) c.role else "as ${c.role}")
         if (c.votes >= 20 && c.rating > 0f) add("★ " + String.format(Locale.US, "%.1f", c.rating))
     }.joinToString("  ·  ")

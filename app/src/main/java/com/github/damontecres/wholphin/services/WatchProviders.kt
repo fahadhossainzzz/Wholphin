@@ -24,6 +24,26 @@ object ServerAccess {
         val t = token ?: return null
         return httpGet(base.trimEnd('/') + path, mapOf("Authorization" to "MediaBrowser Token=\"$t\""))
     }
+
+    /** POST with an empty body; the reply's text, or null when it failed. */
+    fun post(path: String): String? {
+        val base = baseUrl ?: return null
+        val t = token ?: return null
+        val conn = URL(base.trimEnd('/') + path).openConnection() as HttpURLConnection
+        conn.connectTimeout = 8_000
+        conn.readTimeout = 12_000
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Authorization", "MediaBrowser Token=\"$t\"")
+        conn.setRequestProperty("Accept", "application/json")
+        conn.setFixedLengthStreamingMode(0)
+        return try {
+            conn.outputStream.close()
+            if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else null
+        } finally {
+            conn.disconnect()
+        }
+    }
 }
 
 internal fun httpGet(

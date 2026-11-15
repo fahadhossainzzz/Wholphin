@@ -7,6 +7,7 @@ import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.PlaylistItem
 import com.github.damontecres.wholphin.data.model.TrackIndex
+import com.github.damontecres.wholphin.services.ServerAccess
 import com.github.damontecres.wholphin.services.getPreferredLanguage
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.launchIO
@@ -22,7 +23,9 @@ import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.RemoteSubtitleInfo
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
+import org.json.JSONObject
 import timber.log.Timber
+import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
 
 sealed interface SubtitleSearchStatus {
@@ -34,6 +37,7 @@ sealed interface SubtitleSearchStatus {
 
     data class Success(
         val options: List<RemoteSubtitleInfo>,
+        val marks: Map<String, SubtitleMarks> = emptyMap(),
     ) : SubtitleSearchStatus
 
     data class Error(
@@ -66,18 +70,29 @@ fun PlaybackViewModel.searchForSubtitles(language: String? = null) {
         try {
             state.value.currentPlayback?.itemId?.let { itemId ->
                 Timber.v("Searching for remote subtitles for %s", itemId)
-                val results =
+                val found =
                     api.subtitleApi
                         .searchRemoteSubtitles(
                             itemId = itemId,
                             language = language,
                         ).content
-                        .sortedWith(
-                            compareByDescending<RemoteSubtitleInfo> { it.isHashMatch }
-                                .thenByDescending { it.communityRating }
-                                .thenByDescending { it.downloadCount },
-                        )
-                subtitleSearchState.update { it.copy(status = SubtitleSearchStatus.Success(results)) }
+                // NoBars: mark how well each one fits this file and list the best match first
+                val playback = state.value.currentPlayback
+                val origin =
+                    try {
+                        ServerAccess.get("/Plugins/ImdbRatings/Origin/$itemId")?.let {
+                            JSONObject(it).optString("name").takeIf { n -> n.isNotBlank() }
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars: original release name unavailable")
+                        null
+                    }
+                val fps = SubtitleMatch.videoFps(playback)
+                val fileName = SubtitleMatch.fileName(playback)
+                val marked = found.map { it to SubtitleMatch.marks(it, fps, origin, fileName) }
+                val results = marked.sortedByDescending { it.second.rank }.map { it.first }
+                val marks = marked.mapIndexedNotNull { i, (info, m) -> (info.id ?: "#$i").let { it to m } }.toMap()
+                subtitleSearchState.update { it.copy(status = SubtitleSearchStatus.Success(results, marks)) }
             }
         } catch (ex: Exception) {
             Timber.e(ex, "Exception while searching for subtitles")
@@ -210,6 +225,7 @@ fun PlaybackViewModel.downloadAndSwitchSubtitles(
                                 positionMs = onMain { player.currentPosition },
                                 enableDirectPlay = true,
                             )
+                            checkSubtitleTiming(currentPlayback.itemId, newStream.index)
                         }
                     }
                     subtitleSearchState.update { it.copy(status = SubtitleSearchStatus.Inactive) }
@@ -231,6 +247,55 @@ fun PlaybackViewModel.downloadAndSwitchSubtitles(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * NoBars: asks the server to check the downloaded subtitle's timing against the film's speech (and re-time it if it
+ * is off), then follows the result for up to 10 minutes: tells the viewer, and reloads the subtitle when it was fixed.
+ */
+fun PlaybackViewModel.checkSubtitleTiming(
+    itemId: UUID,
+    subtitleIndex: Int,
+) {
+    viewModelScope.launchIO {
+        val asked =
+            try {
+                ServerAccess.post("/Plugins/ImdbRatings/CheckSubtitle/$itemId") != null
+            } catch (e: Exception) {
+                Timber.w(e, "NoBars: subtitle check request failed")
+                false
+            }
+        if (!asked) return@launchIO
+        showToast(context, "Checking timing…", Toast.LENGTH_LONG)
+        val until = System.currentTimeMillis() + 10 * 60_000
+        while (System.currentTimeMillis() < until) {
+            delay(20_000.milliseconds)
+            if (state.value.currentPlayback?.itemId != itemId) return@launchIO
+            val r =
+                try {
+                    ServerAccess.get("/Plugins/ImdbRatings/CheckSubtitle/$itemId")?.let { JSONObject(it) }
+                } catch (e: Exception) {
+                    null
+                } ?: continue
+            val status = r.optString("status")
+            if (status == "waiting" || status == "checking") continue
+            val message = r.optString("message").ifBlank { status }
+            showToast(context, if (status == "flagged") "⚠ $message" else message, Toast.LENGTH_LONG)
+            val now = state.value.currentPlayback
+            if (status == "fixed" && now != null && now.itemId == itemId && now.subtitleIndex == subtitleIndex) {
+                // the file on the server changed: load the subtitle again at the current position
+                changeStreams(
+                    item = currentItem.item,
+                    sourceId = now.mediaSourceInfo.id,
+                    audioIndex = now.audioIndex,
+                    subtitleIndex = subtitleIndex,
+                    positionMs = onMain { player.currentPosition },
+                    enableDirectPlay = true,
+                )
+            }
+            return@launchIO
         }
     }
 }

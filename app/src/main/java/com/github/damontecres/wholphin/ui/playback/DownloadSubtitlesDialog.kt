@@ -20,10 +20,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItem
@@ -130,6 +134,7 @@ fun DownloadSubtitlesContent(
                         itemsIndexed(s.options) { index, item ->
                             SubtitleInfo(
                                 subtitle = item,
+                                marks = s.marks[item.id ?: "#$index"],
                                 onClick = onClickDownload,
                                 modifier =
                                     Modifier
@@ -148,6 +153,7 @@ fun SubtitleInfo(
     subtitle: RemoteSubtitleInfo,
     onClick: (RemoteSubtitleInfo) -> Unit,
     modifier: Modifier = Modifier,
+    marks: SubtitleMarks? = null,
 ) {
     ListItem(
         selected = false,
@@ -158,7 +164,24 @@ fun SubtitleInfo(
             )
         },
         overlineContent =
-            if (subtitle.isHashMatch == true) {
+            if (marks != null && (marks.good.isNotEmpty() || marks.warn.isNotEmpty())) {
+                {
+                    // NoBars: how well it matches this file (green: good signs, amber: warnings)
+                    Text(
+                        text =
+                            buildAnnotatedString {
+                                marks.good.forEachIndexed { i, t ->
+                                    if (i > 0) append("  ·  ")
+                                    withStyle(SpanStyle(color = Color(0xFF7BD88F))) { append(t) }
+                                }
+                                marks.warn.forEachIndexed { i, t ->
+                                    if (i > 0 || marks.good.isNotEmpty()) append("  ·  ")
+                                    withStyle(SpanStyle(color = Color(0xFFFFB74D))) { append(t) }
+                                }
+                            },
+                    )
+                }
+            } else if (subtitle.isHashMatch == true) {
                 {
                     Text(stringResource(R.string.hash_matches))
                 }
@@ -168,14 +191,15 @@ fun SubtitleInfo(
         supportingContent = {
             val resources = LocalResources.current
             val details =
-                remember(resources, subtitle) {
+                remember(resources, subtitle, marks) {
                     val strings =
                         buildList {
-                            subtitle.providerName?.let(::add)
+                            (marks?.site ?: subtitle.providerName)?.let(::add)
+                            marks?.scorePct?.let { add("Score $it%") }
                             if (subtitle.forced == true) {
                                 add(resources.getString(R.string.forced_track))
                             }
-                            if (subtitle.hearingImpaired == true) {
+                            if (subtitle.hearingImpaired == true && marks == null) {
                                 add(resources.getString(R.string.subtitles_hearing_impaired))
                             }
                             add(
@@ -186,7 +210,7 @@ fun SubtitleInfo(
                                 ),
                             )
                         }
-                    strings.joinToString(" - ")
+                    strings.joinToString(" · ")
                 }
             Text(
                 text = details,

@@ -27,10 +27,12 @@ import com.github.damontecres.wholphin.services.TrailerService
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.deleteItem
 import com.github.damontecres.wholphin.ui.ItemRowFields
+import com.github.damontecres.wholphin.ui.detail.deleteVersionOnServer
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.nav.Destination
+import com.github.damontecres.wholphin.ui.onMain
 import com.github.damontecres.wholphin.ui.showToast
 import com.github.damontecres.wholphin.util.DataLoadingState
 import dagger.assisted.Assisted
@@ -46,6 +48,7 @@ import kotlinx.coroutines.flow.update
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.libraryApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
+import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.request.GetSimilarItemsRequest
 import timber.log.Timber
@@ -299,6 +302,18 @@ class MovieViewModel
         fun deleteItem(item: BaseItem) {
             deleteItem(context, mediaManagementService, item) {
                 navigationManager.goBack()
+            }
+        }
+
+        /** NoBars: delete one version's file; the page closes, since the title changes once the library updates. */
+        fun deleteVersion(
+            item: BaseItem,
+            source: MediaSourceInfo,
+        ) {
+            viewModelScope.launchIO {
+                if (deleteVersionOnServer(context, item, source)) {
+                    onMain { navigationManager.goBack() }
+                }
             }
         }
     }

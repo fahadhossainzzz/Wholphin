@@ -111,6 +111,7 @@ fun MovieDetails(
                 },
                 onSendMediaInfo = viewModel.serverReportService::sendMediaReportFor,
                 onDeleteItem = viewModel::deleteItem,
+                onDeleteVersion = viewModel::deleteVersion,
                 onChooseVersion = { item, source ->
                     viewModel.savePlayVersion(
                         item,

@@ -25,6 +25,7 @@ import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.ItemPlayback
 import com.github.damontecres.wholphin.data.model.Person
 import com.github.damontecres.wholphin.preferences.PlayerBackend
+import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.nav.Destination
 import com.github.damontecres.wholphin.util.supportedPlayableTypes
@@ -96,6 +97,8 @@ data class ContextMenuActions(
     val onClickRemoveFromNextUp: (BaseItem) -> Unit = {},
     val onClickAddToQueue: (BaseItem) -> Unit = {},
     val onRemoveFromPlaylist: (Int, UUID) -> Unit = { _, _ -> },
+    /** NoBars: delete one version's file of a title with two or more (null: not offered here). */
+    val onDeleteVersion: ((BaseItem, MediaSourceInfo) -> Unit)? = null,
 )
 
 data class PersonContextActions(
@@ -199,6 +202,7 @@ fun ContextMenu(
     var chooseVersion by remember { mutableStateOf<DialogParams?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showPlayWithDialog by remember { mutableStateOf(false) }
+    var deleteVersion by remember { mutableStateOf<MediaSourceInfo?>(null) }
 
     val dialogItems =
         remember(resources, item, chosenStreams) {
@@ -267,6 +271,18 @@ fun ContextMenu(
                 },
                 onClickDelete = { showDeleteDialog = true },
                 onClickPlayWith = { showPlayWithDialog = true },
+                onClickDeleteVersion = {
+                    val sources = item.data.mediaSources.orEmpty().filter { it.id.isNotNullOrBlank() }
+                    chooseVersion =
+                        chooseVersionParams(
+                            resources,
+                            sources,
+                            chosenStreams?.source?.id?.toUUIDOrNull(),
+                        ) { idx ->
+                            chooseVersion = null
+                            deleteVersion = sources[idx]
+                        }.copy(title = "Delete which version?")
+                },
             )
         }
     DialogPopup(
@@ -296,6 +312,18 @@ fun ContextMenu(
             onCancel = { showDeleteDialog = false },
             onConfirm = {
                 actions.onDeleteItem.invoke(item)
+                onDismissRequest.invoke()
+            },
+            elevation = 3.dp,
+        )
+    }
+    deleteVersion?.let { source ->
+        ConfirmDeleteDialog(
+            itemTitle = versionLabel(source) + "\n\nOnly this file is deleted. The other version(s) and all subtitle files stay.",
+            onCancel = { deleteVersion = null },
+            onConfirm = {
+                deleteVersion = null
+                actions.onDeleteVersion?.invoke(item, source)
                 onDismissRequest.invoke()
             },
             elevation = 3.dp,
@@ -344,6 +372,7 @@ private fun buildContextMenuItems(
     onClearChosenStreams: () -> Unit,
     onClickDelete: () -> Unit,
     onClickPlayWith: () -> Unit,
+    onClickDeleteVersion: () -> Unit = {},
 ): List<DialogItem> =
     buildList {
         // Songs should not show Go to
@@ -514,6 +543,20 @@ private fun buildContextMenuItems(
                     dismissOnClick = false,
                 ) {
                     onClickDelete.invoke()
+                },
+            )
+        }
+        if (contextMenu.canDelete && actions.onDeleteVersion != null &&
+            item.data.mediaSources.orEmpty().count { it.id.isNotNullOrBlank() } >= 2
+        ) {
+            add(
+                DialogItem(
+                    "Delete one version…",
+                    Icons.Default.Delete,
+                    iconColor = Color.Red.copy(alpha = .6f),
+                    dismissOnClick = false,
+                ) {
+                    onClickDeleteVersion.invoke()
                 },
             )
         }
@@ -968,3 +1011,21 @@ fun buildContextForMusicQueue(
             )
         }
     }
+
+
+/** NoBars: "Name · 1080p H264 · 8.2 GB · HDD2" for a version. */
+internal fun versionLabel(source: MediaSourceInfo): String {
+    val video = source.mediaStreams?.firstOrNull { it.type == MediaStreamType.VIDEO }
+    val drive =
+        source.path
+            ?.removePrefix("/Volumes/")
+            ?.substringBefore('/')
+            ?.substringBefore('-')
+            ?.takeIf { source.path?.startsWith("/Volumes/") == true }
+    return listOfNotNull(
+        source.name ?: source.path?.substringAfterLast('/'),
+        video?.displayTitle,
+        source.size?.let { String.format(java.util.Locale.US, "%.1f GB", it / 1e9) },
+        drive,
+    ).joinToString(" · ")
+}

@@ -92,6 +92,7 @@ fun EpisodeDetails(
                 },
                 onSendMediaInfo = viewModel.serverReportService::sendMediaReportFor,
                 onDeleteItem = viewModel::deleteItem,
+                onDeleteVersion = viewModel::deleteVersion,
                 onShowOverview = { overviewDialog = ItemDetailsDialogInfo(it) },
                 onChooseVersion = { item, source ->
                     viewModel.savePlayVersion(

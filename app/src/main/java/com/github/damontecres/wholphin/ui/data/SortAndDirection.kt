@@ -78,15 +78,6 @@ val MovieLibrarySortOptions =
         }
     }
 
-/** NoBars: the TV Shows library's sort menu, with size on disk. */
-val TvLibrarySortOptions =
-    SeriesSortOptions.flatMap {
-        when (it) {
-            ItemSortBy.OFFICIAL_RATING -> listOf(it, SizeSort)
-            else -> listOf(it)
-        }
-    }
-
 /** NoBars: the custom row builder's sorts (films and shows alike). */
 val CustomRowSortOptions =
     listOf(
@@ -117,6 +108,15 @@ val SeriesSortOptions =
         ItemSortBy.OFFICIAL_RATING,
         ItemSortBy.RANDOM,
     )
+
+/** NoBars: the TV Shows library's sort menu, with size on disk. */
+val TvLibrarySortOptions =
+    SeriesSortOptions.flatMap {
+        when (it) {
+            ItemSortBy.OFFICIAL_RATING -> listOf(it, SizeSort)
+            else -> listOf(it)
+        }
+    }
 
 val EpisodeSortOptions =
     listOf(

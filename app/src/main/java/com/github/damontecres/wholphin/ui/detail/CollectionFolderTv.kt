@@ -26,7 +26,6 @@ import com.github.damontecres.wholphin.ui.components.StudioCardGrid
 import com.github.damontecres.wholphin.ui.components.TabDetails
 import com.github.damontecres.wholphin.ui.components.TabbedPage
 import com.github.damontecres.wholphin.ui.components.ViewOptionsPoster
-import com.github.damontecres.wholphin.ui.data.SeriesSortOptions
 import com.github.damontecres.wholphin.ui.nav.Destination
 import dagger.hilt.android.lifecycle.HiltViewModel
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -101,7 +100,7 @@ fun CollectionFolderTv(
                         ),
                     showTitle = false,
                     recursive = true,
-                    sortOptions = SeriesSortOptions,
+                    sortOptions = com.github.damontecres.wholphin.ui.data.TvLibrarySortOptions,
                     filterOptions = com.github.damontecres.wholphin.data.filter.NbTvFilterOptions,
                     defaultViewOptions = ViewOptionsPoster,
                     modifier =

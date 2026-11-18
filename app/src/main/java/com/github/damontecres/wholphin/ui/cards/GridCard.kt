@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -126,8 +128,23 @@ fun GridCard(
                             .padding(horizontal = 4.dp)
                             .enableMarquee(focusedAfterDelay),
                 )
+                // NoBars: while sorted by size, the size follows the year ("2021 · 22.3 GB"), in light blue
+                val showSize = com.github.damontecres.wholphin.services.LocalShowSizeOnCards.current
+                val sizes by com.github.damontecres.wholphin.services.SizeStore.sizes
+                    .collectAsState()
+                val size = if (showSize && item != null) sizes[item.id] else null
                 Text(
-                    text = item?.subtitle ?: "",
+                    text =
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            val year = item?.subtitle.orEmpty()
+                            append(year)
+                            if (size != null) {
+                                if (year.isNotBlank()) append(" · ")
+                                withStyle(androidx.compose.ui.text.SpanStyle(color = Color(0xFF7FD3FF), fontWeight = FontWeight.SemiBold)) {
+                                    append(com.github.damontecres.wholphin.services.SizeStore.label(size))
+                                }
+                            }
+                        },
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodySmall,

@@ -1073,6 +1073,11 @@ fun CollectionFolderViewContent(
                                         get() = pager.data.size
                                 }
 
+                            // NoBars: sorted by size: the cards add it after the year
+                            androidx.compose.runtime.CompositionLocalProvider(
+                                com.github.damontecres.wholphin.services.LocalShowSizeOnCards provides
+                                    (state.sortAndDirection.sort == com.github.damontecres.wholphin.ui.data.SizeSort),
+                            ) {
                             Box(Modifier.fillMaxSize()) {
                                 if (state.viewOptions.type == ViewOptionsType.GRID) {
                                     scope.CollectionFolderGrid(
@@ -1132,6 +1137,7 @@ fun CollectionFolderViewContent(
                                             .padding(4.dp),
                                     )
                                 }
+                            }
                             }
                         }
                     }

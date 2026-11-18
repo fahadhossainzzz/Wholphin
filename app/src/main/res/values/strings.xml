@@ -804,6 +804,7 @@
     <string name="sort_by_budget">Budget</string>
     <string name="sort_by_return">Return on budget</string>
     <string name="sort_by_year_rank">Rank in its year</string>
+    <string name="sort_by_size">Size on disk</string>
     <string-array name="browse_order_options">
         <item>Highest rated</item>
         <item>Newest first</item>

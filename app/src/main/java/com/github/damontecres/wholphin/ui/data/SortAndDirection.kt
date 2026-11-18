@@ -64,12 +64,25 @@ object MoneySortCarrier {
 /** NoBars: IMDb rating weighted by its number of votes (IMDb's Top 250 method), worked out on the TV */
 val WeightedImdbSort: ItemSortBy = ItemSortBy.NAME
 
+/** NoBars: size on disk (films: the file(s); shows: all episodes), worked out on the TV ([com.github.damontecres.wholphin.services.SizeStore]) */
+val SizeSort: ItemSortBy = ItemSortBy.SIMILARITY_SCORE
+
 /** NoBars: the Movies library's sort menu, with the weighted IMDb order and the money orders after the ratings. */
 val MovieLibrarySortOptions =
     MovieSortOptions.flatMap {
         when (it) {
             ItemSortBy.COMMUNITY_RATING -> listOf(it, WeightedImdbSort)
             ItemSortBy.CRITIC_RATING -> listOf(it) + MoneySortCarrier.options
+            ItemSortBy.RUNTIME -> listOf(it, SizeSort)
+            else -> listOf(it)
+        }
+    }
+
+/** NoBars: the TV Shows library's sort menu, with size on disk. */
+val TvLibrarySortOptions =
+    SeriesSortOptions.flatMap {
+        when (it) {
+            ItemSortBy.OFFICIAL_RATING -> listOf(it, SizeSort)
             else -> listOf(it)
         }
     }
@@ -85,6 +98,7 @@ val CustomRowSortOptions =
     ) + MoneySortCarrier.options +
         listOf(
             ItemSortBy.RUNTIME,
+            SizeSort,
             ItemSortBy.SORT_NAME,
             ItemSortBy.DATE_PLAYED,
             ItemSortBy.PLAY_COUNT,
@@ -277,6 +291,8 @@ fun getStringRes(sort: ItemSortBy): Int =
         ItemSortBy.STUDIO -> R.string.sort_by_return
 
         ItemSortBy.IS_FOLDER -> R.string.sort_by_year_rank
+
+        ItemSortBy.SIMILARITY_SCORE -> R.string.sort_by_size
 
         else -> throw IllegalArgumentException("Unsupported sort option: $sort")
     }

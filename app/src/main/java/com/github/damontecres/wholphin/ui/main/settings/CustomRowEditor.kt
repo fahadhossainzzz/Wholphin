@@ -439,6 +439,7 @@ private fun autoName(
             ItemSortBy.STUDIO -> if (f.sort?.direction == SortOrder.ASCENDING) "biggest flops first" else "best return"
             ItemSortBy.IS_FOLDER -> "by year rank"
             ItemSortBy.RUNTIME -> "by length"
+            ItemSortBy.SIMILARITY_SCORE -> "by size"
             ItemSortBy.RANDOM -> "shuffled"
             else -> null
         }

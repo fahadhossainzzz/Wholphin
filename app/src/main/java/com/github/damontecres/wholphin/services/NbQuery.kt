@@ -13,7 +13,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 /** NoBars: orders the TV works out itself (Jellyfin has no such fields). */
-enum class ClientSort { WEIGHTED_IMDB, BOX_OFFICE, TODAYS_MONEY, BUDGET, RETURN, YEAR_RANK }
+enum class ClientSort { WEIGHTED_IMDB, BOX_OFFICE, TODAYS_MONEY, BUDGET, RETURN, YEAR_RANK, SIZE }
 
 /**
  * NoBars: the filter engine behind the library filter menu's own filters and custom Home rows.
@@ -24,6 +24,7 @@ enum class ClientSort { WEIGHTED_IMDB, BOX_OFFICE, TODAYS_MONEY, BUDGET, RETURN,
 object NbQuery {
     fun clientSort(sort: ItemSortBy?): ClientSort? {
         if (sort == ItemSortBy.NAME) return ClientSort.WEIGHTED_IMDB
+        if (sort == com.github.damontecres.wholphin.ui.data.SizeSort) return ClientSort.SIZE
         return when (MoneySortCarrier.of(sort)) {
             MoneySort.BOX_OFFICE -> ClientSort.BOX_OFFICE
             MoneySort.TODAYS_MONEY -> ClientSort.TODAYS_MONEY
@@ -63,6 +64,7 @@ object NbQuery {
                 enableUserData = false,
                 enableTotalRecordCount = false,
             )
+        if (sort == ClientSort.SIZE) SizeStore.ensure(api, request.userId)
         val items = api.itemsApi.getItems(light).content.items
         val inCollections =
             extra?.collections?.takeIf { it.isNotEmpty() }?.let { ids ->
@@ -102,6 +104,7 @@ object NbQuery {
             ClientSort.BUDGET -> BoxOffice.sortValue(MoneySort.BUDGET, BoxOffice.forItem(dto.id))
             ClientSort.RETURN -> BoxOffice.sortValue(MoneySort.RETURN, BoxOffice.forItem(dto.id))
             ClientSort.YEAR_RANK -> BoxOffice.sortValue(MoneySort.YEAR_RANK, BoxOffice.forItem(dto.id))
+            ClientSort.SIZE -> SizeStore.get(dto.id)?.bytes?.toDouble()
         }
 
     private fun matches(

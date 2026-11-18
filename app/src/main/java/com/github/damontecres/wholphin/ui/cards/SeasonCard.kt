@@ -230,8 +230,14 @@ fun SeasonCard(
                         .padding(horizontal = 4.dp)
                         .enableMarquee(focusedAfterDelay),
             )
+            // NoBars: plus its size on disk for anything you have ("Season 1 · 18.4 GB", "2021 · 22.3 GB")
             Text(
-                text = subtitle ?: "",
+                text =
+                    if (ratingItem != null) {
+                        posterInfoText(ratingItem, base = subtitle)
+                    } else {
+                        androidx.compose.ui.text.AnnotatedString(subtitle ?: "")
+                    },
                 maxLines = 1,
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodySmall,

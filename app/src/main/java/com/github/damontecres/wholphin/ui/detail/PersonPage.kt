@@ -35,6 +35,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.withStyle
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -618,13 +619,34 @@ private fun WorkRow(
                         }
                     }
                     Text(c.title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    // NoBars: plus your copy's size on disk, in light blue, for titles you have
+                    val sizes by com.github.damontecres.wholphin.services.SizeStore.sizes
+                        .collectAsState()
+                    androidx.compose.runtime.LaunchedEffect(Unit) { com.github.damontecres.wholphin.services.SizeStore.refreshSoon() }
+                    val mine =
+                        com.github.damontecres.wholphin.services.StreamingStore
+                            .ownedId(c.ownedKey)
+                            ?.let { sizes[it] }
                     Text(
-                        listOfNotNull(
-                            c.year.ifBlank { "Upcoming" },
-                            if (c.tv) "TV" else "Film",
-                            c.episodes?.let { "$it ep" },
-                            if (c.votes >= 20 && c.rating > 0f) "★ " + String.format(java.util.Locale.US, "%.1f", c.rating) else null,
-                        ).joinToString(" · "),
+                        androidx.compose.ui.text.buildAnnotatedString {
+                            append(
+                                listOfNotNull(
+                                    c.year.ifBlank { "Upcoming" },
+                                    if (c.tv) "TV" else "Film",
+                                    c.episodes?.let { "$it ep" },
+                                    if (c.votes >= 20 && c.rating > 0f) "★ " + String.format(java.util.Locale.US, "%.1f", c.rating) else null,
+                                ).joinToString(" · "),
+                            )
+                            if (mine != null) {
+                                append(" · ")
+                                withStyle(
+                                    androidx.compose.ui.text.SpanStyle(
+                                        color = com.github.damontecres.wholphin.ui.cards.PosterSizeColor,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                    ),
+                                ) { append(com.github.damontecres.wholphin.services.SizeStore.label(mine, withEpisodes = false)) }
+                            }
+                        },
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelSmall,

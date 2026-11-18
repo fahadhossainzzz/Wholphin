@@ -70,6 +70,7 @@ fun BannerCard(
     imageType: ImageType = ImageType.PRIMARY,
     imageContentScale: ContentScale = ContentScale.FillBounds,
     useSeriesForPrimary: Boolean = true,
+    showInfoLine: Boolean = true,
 ) {
     val imageUrlService = LocalImageUrlService.current
     // NoBars: remember films shown in rows, so their page can open at once
@@ -111,6 +112,11 @@ fun BannerCard(
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnLongClick by rememberUpdatedState(onLongClick)
 
+    // NoBars: under every poster, the year and (for anything you have) its size on disk: "2021 · 22.3 GB"
+    androidx.compose.foundation.layout.Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (showInfoLine) Modifier.width(cardHeight * aspectRatio) else Modifier,
+    ) {
     Card(
         modifier = modifier.size(cardHeight * aspectRatio, cardHeight),
         onClick = { currentOnClick() },
@@ -272,6 +278,21 @@ fun BannerCard(
             }
         }
     }
+    if (showInfoLine) {
+        Text(
+            text = posterInfoText(item),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, start = 2.dp, end = 2.dp),
+        )
+    }
+    }
 }
 
 @Composable
@@ -317,6 +338,7 @@ fun BannerCardWithTitle(
             imageType = imageType,
             imageContentScale = imageContentScale,
             useSeriesForPrimary = useSeriesForPrimary,
+            showInfoLine = false,
         )
         SlidingCardText(focused) {
             Text(
@@ -332,7 +354,7 @@ fun BannerCardWithTitle(
                         .enableMarquee(focusedAfterDelay),
             )
             Text(
-                text = subtitle ?: "",
+                text = posterInfoText(item, base = subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Normal,
                 maxLines = 1,

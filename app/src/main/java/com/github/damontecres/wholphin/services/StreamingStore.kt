@@ -145,6 +145,9 @@ object StreamingStore {
         private set
 
     /** The library copy of a catalogue title, if you have it (the daily list, or anything imported since). */
+    /** NoBars: your library copy of a title by its "movie:123" / "tv:456" key, if you have it. */
+    fun ownedId(key: String): UUID? = owned[key]?.let(::uuidFromHex)
+
     fun libraryId(e: Entry): UUID? = e.libraryId ?: owned["${if (e.series) "tv" else "movie"}:${e.tmdb}"]?.let(::uuidFromHex)
 
     suspend fun loadLibrary() =

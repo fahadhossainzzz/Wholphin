@@ -31,6 +31,7 @@ suspend fun deleteVersionOnServer(
         return false
     }
     val ok = reply.optBoolean("ok")
+    if (ok) com.github.damontecres.wholphin.services.SizeStore.invalidate()
     showToast(context, reply.optString("message").ifBlank { if (ok) "Version deleted" else "Not deleted" })
     return ok
 }

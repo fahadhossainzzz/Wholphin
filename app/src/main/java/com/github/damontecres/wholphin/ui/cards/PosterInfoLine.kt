@@ -42,8 +42,15 @@ fun posterInfoText(
         }
     val ownId = StreamingStore.entries[item.id]?.let { StreamingStore.libraryId(it) } ?: item.id
     val size = sizes[ownId]
+    val preparingItems by com.github.damontecres.wholphin.services.PreparingStore.items.collectAsState()
+    val preparing = preparingItems.any { it.id == item.id }
     return buildAnnotatedString {
         append(first.orEmpty())
+        if (preparing) {
+            if (!first.isNullOrBlank()) append(" · ")
+            withStyle(SpanStyle(color = Color(0xFFFFD27F), fontWeight = FontWeight.SemiBold)) { append("⏳ preparing") }
+            return@buildAnnotatedString
+        }
         if (size != null) {
             if (!first.isNullOrBlank()) append(" · ")
             withStyle(SpanStyle(color = PosterSizeColor, fontWeight = FontWeight.SemiBold)) {

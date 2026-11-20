@@ -350,6 +350,12 @@ fun HomePageContent(
         focusedItem?.let { onUpdateBackdrop.invoke(it) }
     }
     Box(modifier = modifier) {
+        // NoBars: what the server is preparing (a new download being made ready), top right
+        com.github.damontecres.wholphin.ui.components.PreparingBanner(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 12.dp, end = 24.dp),
+        )
         Column(
             modifier =
                 Modifier

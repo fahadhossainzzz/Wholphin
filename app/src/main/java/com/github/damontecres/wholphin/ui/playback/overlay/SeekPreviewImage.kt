@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -22,7 +23,6 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.MaterialTheme
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
@@ -84,8 +84,10 @@ fun SeekPreviewImage(
     val context = LocalContext.current
 
     if (previewImageUrl.isNotNullOrBlank()) {
-        val height = 160.dp
-        val width = height * (trickPlayInfo.width.toFloat() / trickPlayInfo.height)
+        // NoBars: Netflix-size preview: one-sixth of the screen width (= the thumbnail's own 320 px on a 1080p
+        // screen, so it is shown pixel for pixel), the film's own shape, rounded corners and a white outline
+        val width = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp / 6f).dp
+        val height = width * (trickPlayInfo.height.toFloat() / trickPlayInfo.width)
         val scale = with(LocalDensity.current) { width.toPx() / trickPlayInfo.width }
 
         val model =
@@ -108,11 +110,14 @@ fun SeekPreviewImage(
             index % numberOfTilesPerImage // Index of tile within the current image
         val x = (tileIndex % trickPlayInfo.tileWidth) // x position within tile grid
         val y = (tileIndex / trickPlayInfo.tileWidth) // y position
+        val shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
         Box(
             modifier =
                 modifier
-                    .border(1.5.dp, color = MaterialTheme.colorScheme.border)
+                    .shadow(10.dp, shape)
+                    .clip(shape)
                     .background(Color.Black)
+                    .border(2.dp, Color.White.copy(alpha = 0.9f), shape)
                     .height(height)
                     .width(width),
         ) {

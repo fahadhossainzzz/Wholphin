@@ -1,10 +1,7 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -26,7 +23,7 @@ fun TrickplayPreview(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier,
     ) {
@@ -48,16 +45,15 @@ fun TrickplayPreview(
         val resources = LocalResources.current
         val seekProgressSec = seekProgressMs / 1000L
         val seekText = remember(seekProgressSec) { resources.formatDuration(seekProgressSec.seconds) }
+        // NoBars: Netflix style: one bold time right under the preview
         Text(
             text = seekText,
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.labelLarge,
-            modifier =
-                Modifier
-                    .background(
-                        Color.Black.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(4.dp),
-                    ).padding(horizontal = 8.dp, vertical = 4.dp),
+            color = Color.White,
+            style =
+                MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    shadow = androidx.compose.ui.graphics.Shadow(Color.Black, blurRadius = 8f),
+                ),
         )
     }
 }

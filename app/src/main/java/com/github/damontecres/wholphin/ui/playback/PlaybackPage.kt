@@ -258,16 +258,21 @@ fun PlaybackPageContent(
         (player as? MpvPlayer)?.subtitleDelay =
             state.currentPlayback?.subtitleDelay ?: Duration.ZERO
     }
-    // NoBars: subtitle delay for ExoPlayer: text subtitles shown by the app at (position - delay), see SubtitleShift.kt
+    // NoBars: subtitle delay for ExoPlayer: text subtitles shown by the app at (position - delay), see SubtitleShift.kt.
+    // The whole subtitle is fetched only once a delay is actually set: for a subtitle inside the file, fetching it
+    // makes Jellyfin read the entire film from the drive to pull the subtitles out, which stalled the start of
+    // American History X and Star Trek Into Darkness when it was done for every film at every start.
+    val delaySet = player !is MpvPlayer && (state.currentPlayback?.subtitleDelay ?: Duration.ZERO) != Duration.ZERO
     val shiftable by androidx.compose.runtime.produceState<ShiftableSubtitles?>(
         null,
         state.currentPlayback?.itemId,
         state.currentPlayback?.subtitleIndex,
         player,
+        delaySet,
     ) {
         value = null
         val playback = state.currentPlayback
-        if (player !is MpvPlayer && playback != null) value = ShiftableSubtitles.load(playback)
+        if (delaySet && playback != null) value = ShiftableSubtitles.load(playback)
     }
     val exoSubtitleDelayMs =
         if (player is MpvPlayer) 0L else (state.currentPlayback?.subtitleDelay ?: Duration.ZERO).inWholeMilliseconds

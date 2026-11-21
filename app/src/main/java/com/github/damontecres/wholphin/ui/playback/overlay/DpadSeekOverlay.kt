@@ -1,6 +1,7 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -31,14 +32,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -56,8 +55,8 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * The overlay shown during D-Pad seeking in trickplay mode, laid out like Netflix's: the paused picture lightly
  * dimmed; a filmstrip across the screen (each picture one-sixth of the screen wide, the thumbnail's own size) with
- * the target in the centre, outlined in white, and the pictures one press before and after on either side, sliding
- * as you move; under it a thin white bar with the elapsed and remaining time, and the keys.
+ * a fixed white frame in the centre and the pictures (one press apart) sliding under it as you move; whatever is in
+ * the frame is where OK plays from. Under it a thin white bar with the elapsed and remaining time, and the keys.
  */
 @Composable
 fun DpadSeekOverlay(
@@ -85,7 +84,7 @@ fun DpadSeekOverlay(
     val target = seekPositionMs.toFloat() / step
     val shown = remember { Animatable(target) }
     LaunchedEffect(target, step) {
-        if (abs(shown.value - target) > 2f) shown.snapTo(target) else shown.animateTo(target, tween(160))
+        if (abs(shown.value - target) > 2f) shown.snapTo(target) else shown.animateTo(target, tween(200, easing = FastOutSlowInEasing))
     }
     val slide = target - shown.value // in pictures; slides to 0
 
@@ -104,40 +103,34 @@ fun DpadSeekOverlay(
                     val w = fullWidth / 6
                     val h = w * 9f / 16f
                     val gap = 8.dp
-                    val selW = w * 1.08f
-                    val selH = h * 1.08f
-                    Box(modifier = Modifier.fillMaxWidth().height(selH + 30.dp)) {
+                    val frame = 6.dp // the fixed white frame sits this much outside the picture
+                    Box(modifier = Modifier.fillMaxWidth().height(h + frame * 2)) {
+                        // all pictures the same size, sliding under the fixed frame
                         for (j in -4..4) {
                             val time = seekPositionMs + j * step
                             if (time < 0 || (durationMs > 0 && time > durationMs)) continue
-                            val selected = j == 0
-                            val bw = if (selected) selW else w
-                            val bh = if (selected) selH else h
                             val centreX = fullWidth / 2 + (w + gap) * (j + slide)
                             FilmstripPicture(
                                 timeMs = time,
                                 info = trickplayInfo,
                                 url = trickplayUrlFor(((time / trickplayInfo.interval).toInt()) / (trickplayInfo.tileWidth * trickplayInfo.tileHeight)),
-                                selected = selected,
-                                width = bw,
-                                height = bh,
-                                modifier = Modifier.offset(x = centreX - bw / 2, y = (selH - bh) / 2),
+                                selected = false,
+                                width = w,
+                                height = h,
+                                modifier = Modifier.offset(x = centreX - w / 2, y = frame),
                             )
                         }
-                        Text(
-                            text = elapsedText,
-                            style =
-                                TextStyle(
-                                    color = Color.White,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    shadow = Shadow(Color.Black, blurRadius = 8f),
-                                ),
-                            modifier = Modifier.align(Alignment.BottomCenter),
+                        // NoBars: the white frame never moves: whatever settles inside it is where OK plays from
+                        Box(
+                            modifier =
+                                Modifier
+                                    .offset(x = fullWidth / 2 - w / 2 - frame, y = 0.dp)
+                                    .size(w + frame * 2, h + frame * 2)
+                                    .border(3.dp, Color.White, RoundedCornerShape(10.dp)),
                         )
                     }
                 }
-                Spacer(Modifier.height(36.dp))
+                Spacer(Modifier.height(42.dp))
             }
             // the thin white bar, elapsed time on the left and remaining time on the right
             Row(
@@ -150,7 +143,7 @@ fun DpadSeekOverlay(
                     val y = size.height / 2
                     val hh = 3.dp.toPx()
                     val r = CornerRadius(hh / 2, hh / 2)
-                    drawRoundRect(Color.White.copy(alpha = 0.3f), Offset(0f, y - hh / 2), Size(size.width, hh), r)
+                    drawRoundRect(Color.White.copy(alpha = 0.45f), Offset(0f, y - hh / 2), Size(size.width, hh), r)
                     drawRoundRect(Color.White, Offset(0f, y - hh / 2), Size(size.width * progress, hh), r)
                     drawCircle(Color.White, radius = 6.dp.toPx(), center = Offset(size.width * progress, y))
                 }

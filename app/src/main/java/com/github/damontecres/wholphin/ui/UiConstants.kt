@@ -52,7 +52,6 @@ val DetailItemFields =
         ItemFields.OVERVIEW,
         ItemFields.TRICKPLAY,
         ItemFields.SORT_NAME,
-        ItemFields.CHAPTERS,
         ItemFields.MEDIA_SOURCES,
         ItemFields.MEDIA_SOURCE_COUNT,
         ItemFields.CAN_DELETE,

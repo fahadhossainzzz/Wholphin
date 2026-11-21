@@ -37,7 +37,6 @@ import com.github.damontecres.wholphin.preferences.UserPreferences
 import com.github.damontecres.wholphin.services.TrailerService
 import com.github.damontecres.wholphin.ui.Cards
 import com.github.damontecres.wholphin.ui.RequestOrRestoreFocus
-import com.github.damontecres.wholphin.ui.cards.ChapterRow
 import com.github.damontecres.wholphin.ui.cards.ExtrasRow
 import com.github.damontecres.wholphin.ui.cards.ItemRow
 import com.github.damontecres.wholphin.ui.cards.PersonRow
@@ -410,22 +409,6 @@ fun MovieDetailsContent(
             // NoBars "explore": the journey across the screen, then box office and where else to watch
             item { com.github.damontecres.wholphin.ui.components.NbJourneySection(movie) }
             item { com.github.damontecres.wholphin.ui.components.NbMoneyAndWhereSection(movie) }
-            state.chapters.letNotEmpty { chapters ->
-                item {
-                    ChapterRow(
-                        chapters = chapters,
-                        onClick = {
-                            position = CHAPTER_ROW
-                            playOnClick.invoke(it.position)
-                        },
-                        onLongClick = {},
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequesters[CHAPTER_ROW]),
-                    )
-                }
-            }
             state.extras.letNotEmpty { extras ->
                 item {
                     ExtrasRow(

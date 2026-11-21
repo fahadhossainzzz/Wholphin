@@ -617,7 +617,8 @@ class PlaybackViewModel
                     TrickplayCache.clear()
                 }
 
-                val chapters = Chapter.fromDto(base)
+                // NoBars: no Chapters tab in the player (chapter image extraction is off on the server)
+                val chapters = emptyList<Chapter>()
                 _state.update {
                     it.copy(
                         currentItemPlayback = itemPlayback,

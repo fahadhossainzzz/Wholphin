@@ -130,7 +130,8 @@ class MovieViewModel
                         userPreferencesService.getCurrent(),
                     )
                 val remoteTrailers = trailerService.getRemoteTrailers(movie)
-                val chapters = Chapter.fromDto(movie.data)
+                // NoBars: no chapter pictures (chapter image extraction is off on the server)
+                val chapters = emptyList<Chapter>()
                 _state.update {
                     it.copy(
                         loading = DataLoadingState.Success(movie),

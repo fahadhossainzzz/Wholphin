@@ -324,6 +324,19 @@ class WholphinRenderersFactory(
     private val preferDolbyVisionOverHdr10Plus: Boolean = false,
     private val convertDolbyVisionProfile7: Boolean = false,
 ) : DefaultRenderersFactory(context) {
+    // NoBars: subtitle delay inside the player (see DelayedTextRenderer)
+    override fun buildTextRenderers(
+        context: Context,
+        output: androidx.media3.exoplayer.text.TextOutput,
+        outputLooper: android.os.Looper,
+        extensionRendererMode: Int,
+        out: ArrayList<Renderer>,
+    ) {
+        val built = ArrayList<Renderer>()
+        super.buildTextRenderers(context, output, outputLooper, extensionRendererMode, built)
+        built.forEach { out.add(com.github.damontecres.wholphin.services.stream.DelayedTextRenderer(it)) }
+    }
+
     // NoBars: DTS/TrueHD are decoded here instead of being handed to a TV that refuses them
     override fun buildAudioSink(
         context: Context,

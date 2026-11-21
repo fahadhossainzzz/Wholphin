@@ -266,36 +266,14 @@ fun PlaybackPageContent(
             delay(30_000)
         }
     }
-    // NoBars: subtitle delay for ExoPlayer: text subtitles shown by the app at (position - delay), see SubtitleShift.kt.
-    // The whole subtitle is fetched only once a delay is actually set: for a subtitle inside the file, fetching it
-    // makes Jellyfin read the entire film from the drive to pull the subtitles out, which stalled the start of
-    // American History X and Star Trek Into Darkness when it was done for every film at every start.
-    val delaySet = player !is MpvPlayer && (state.currentPlayback?.subtitleDelay ?: Duration.ZERO) != Duration.ZERO
-    val shiftable by androidx.compose.runtime.produceState<ShiftableSubtitles?>(
-        null,
-        state.currentPlayback?.itemId,
-        state.currentPlayback?.subtitleIndex,
-        player,
-        delaySet,
-    ) {
-        value = null
-        val playback = state.currentPlayback
-        if (delaySet && playback != null) value = ShiftableSubtitles.load(playback)
+    // NoBars: subtitle delay for ExoPlayer is applied inside the player (DelayedTextRenderer): any subtitle the
+    // player shows (inside the file, separate .srt, picture subtitles) moves by the delay, live, nothing fetched
+    LaunchedEffect(state.currentPlayback?.subtitleDelay, player) {
+        com.github.damontecres.wholphin.services.stream.SubtitleOffset.delayUs =
+            if (player is MpvPlayer) 0L else (state.currentPlayback?.subtitleDelay ?: Duration.ZERO).inWholeMicroseconds
     }
-    val exoSubtitleDelayMs =
-        if (player is MpvPlayer) 0L else (state.currentPlayback?.subtitleDelay ?: Duration.ZERO).inWholeMilliseconds
-    var shiftedCues by remember { mutableStateOf<List<androidx.media3.common.text.Cue>?>(null) }
-    LaunchedEffect(shiftable, exoSubtitleDelayMs) {
-        val subs = shiftable
-        if (subs == null || exoSubtitleDelayMs == 0L) {
-            shiftedCues = null
-            return@LaunchedEffect
-        }
-        while (true) {
-            val now = subs.at(player.currentPosition - exoSubtitleDelayMs)
-            if (now != shiftedCues) shiftedCues = now
-            delay(50)
-        }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { com.github.damontecres.wholphin.services.stream.SubtitleOffset.delayUs = 0L }
     }
 
     val presentationState = rememberPresentationState(player, false)
@@ -730,7 +708,7 @@ fun PlaybackPageContent(
                         Timber.v("Switching SDR/HDR, reapplying subtitle style")
                         subtitleSettings.applyTo(subtitleView)
                     }
-                    val cuesNow = shiftedCues ?: state.subtitleCues
+                    val cuesNow = state.subtitleCues
                     subtitleView.setCues(cuesNow)
                     if (cuesNow.size > cueCount) {
                         Timber.i("Applying subtitle style to SubtitleView")
@@ -954,7 +932,7 @@ fun PlaybackPageContent(
             onPlaybackActionClick = onPlaybackActionClick,
             onChangeSubtitleDelay = { viewModel.updateSubtitleDelay(it) },
             onChangeZoom = onChangeZoom,
-            enableSubtitleDelay = player is MpvPlayer || shiftable != null,
+            enableSubtitleDelay = player is MpvPlayer || state.currentPlayback?.subtitleIndexEnabled == true,
             enableVideoScale = player !is MpvPlayer,
         )
     }

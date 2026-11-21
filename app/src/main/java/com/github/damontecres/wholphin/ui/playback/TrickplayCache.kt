@@ -111,7 +111,7 @@ object TrickplayCache {
         val perSheet = trickplay.tileWidth * trickplay.tileHeight
         val count = ((durationMs / trickplay.interval).toInt() / perSheet + 1).coerceIn(1, 60)
         sheets = arrayOfNulls(count)
-        soft = AtomicReferenceArray(count)
+        soft = AtomicReferenceArray(count * perSheet)
         // half size; a very long film at quarter size, so this layer stays under ~40 MB
         val halfBytes = count.toLong() * (trickplay.width * trickplay.tileWidth / 2) * (trickplay.height * trickplay.tileHeight / 2) * 2
         softScale = if (halfBytes > 40L * 1024 * 1024) 4 else 2
@@ -186,8 +186,26 @@ object TrickplayCache {
                     null
                 } ?: continue
             if (key != forKey) return
-            soft.set(s, bmp.asImageBitmap())
-            bytes += bmp.width.toLong() * bmp.height * 2
+            // cut the sheet into separate small pictures (drawn the same way as the sharp ones), sized from the
+            // sheet itself, trimmed at its edges rather than skipped
+            val scale = bmp.width.toDouble() / (i.width * i.tileWidth)
+            val tw = (i.width * scale).toInt().coerceAtLeast(1)
+            val th = (i.height * scale).toInt().coerceAtLeast(1)
+            for (t in 0 until perSheet) {
+                val x = (t % i.tileWidth) * tw
+                val y = (t / i.tileWidth) * th
+                if (x >= bmp.width || y >= bmp.height) continue
+                val piece =
+                    try {
+                        Bitmap.createBitmap(bmp, x, y, minOf(tw, bmp.width - x), minOf(th, bmp.height - y))
+                    } catch (e: Throwable) {
+                        null
+                    } ?: continue
+                val idx = s * perSheet + t
+                if (idx < soft.length()) soft.set(idx, piece.asImageBitmap())
+                bytes += piece.width.toLong() * piece.height * 2
+            }
+            bmp.recycle()
             made++
             _version.value++
         }
@@ -227,43 +245,43 @@ object TrickplayCache {
     fun picture(timeMs: Long): SeekPicture? {
         val i = info ?: return null
         val index = (timeMs / i.interval).toInt()
-        tiles.get(index)?.let { return SeekPicture(it, IntOffset.Zero, IntSize(it.width, it.height)) }
-        val perSheet = i.tileWidth * i.tileHeight
-        val layer = soft
-        if (layer.length() == 0) return nearestSharp(index)
-        val sheet = (index / perSheet).coerceIn(0, layer.length() - 1)
-        softPicture(i, layer, sheet, index % perSheet)?.let { return it }
-        // that sheet isn't open yet: the closest picture from the nearest sheet that is
-        for (d in 1 until layer.length()) {
-            if (sheet - d >= 0) softPicture(i, layer, sheet - d, perSheet - 1)?.let { return it }
-            if (sheet + d < layer.length()) softPicture(i, layer, sheet + d, 0)?.let { return it }
+        tiles.get(index)?.let {
+            stats[0]++
+            return whole(it)
         }
-        return nearestSharp(index)
-    }
-
-    private fun nearestSharp(index: Int): SeekPicture? {
-        for (d in 1..12) {
-            (tiles.get(index - d) ?: tiles.get(index + d))?.let {
-                return SeekPicture(it, IntOffset.Zero, IntSize(it.width, it.height))
+        val layer = soft
+        if (index in 0 until layer.length()) {
+            layer.get(index)?.let {
+                stats[1]++
+                return whole(it)
             }
         }
+        // not ready (the first second of a film): the nearest picture there is
+        for (d in 1..60) {
+            val near =
+                tiles.get(index - d) ?: tiles.get(index + d)
+                    ?: layer.getOrNull(index - d) ?: layer.getOrNull(index + d)
+            if (near != null) {
+                stats[2]++
+                return whole(near)
+            }
+        }
+        stats[3]++
         return null
     }
 
-    private fun softPicture(
-        i: TrickplayInfo,
-        layer: AtomicReferenceArray<ImageBitmap?>,
-        sheet: Int,
-        tile: Int,
-    ): SeekPicture? {
-        val img = layer.get(sheet) ?: return null
-        val s = softScale
-        val w = i.width / s
-        val h = i.height / s
-        val x = (tile % i.tileWidth) * w
-        val y = (tile / i.tileWidth) * h
-        if (w <= 0 || h <= 0 || x + w > img.width || y + h > img.height) return null
-        return SeekPicture(img, IntOffset(x, y), IntSize(w, h))
+    private fun whole(img: ImageBitmap) = SeekPicture(img, IntOffset.Zero, IntSize(img.width, img.height))
+
+    private fun AtomicReferenceArray<ImageBitmap?>.getOrNull(i: Int): ImageBitmap? = if (i in 0 until length()) get(i) else null
+
+    // what the filmstrip boxes were given while seeking: sharp, soft, nearest, nothing
+    private val stats = IntArray(4)
+
+    /** End of a seek: log what the boxes got (to check the previews from a playback report). */
+    fun logSeekStats() {
+        if (stats.sum() == 0) return
+        Timber.i("NoBars: seek pictures shown: sharp %s, soft %s, nearest %s, none %s", stats[0], stats[1], stats[2], stats[3])
+        stats.fill(0)
     }
 
     /**

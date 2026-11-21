@@ -93,6 +93,7 @@ fun DpadSeekOverlay(
     val slide = (seekPositionMs - shownMs.value) / step // in pictures; glides to 0
     val progress = if (durationMs > 0) (shownMs.value / durationMs).coerceIn(0f, 1f) else 0f
     val ready by TrickplayCache.version.collectAsState()
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { TrickplayCache.logSeekStats() } }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f))) {
         Column(

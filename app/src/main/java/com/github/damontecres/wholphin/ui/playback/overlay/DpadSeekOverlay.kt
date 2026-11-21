@@ -84,13 +84,18 @@ fun DpadSeekOverlay(
     // far jumps (more than 20 presses) are shown at once
     val shownMs = remember { Animatable(seekPositionMs.toFloat()) }
     LaunchedEffect(seekPositionMs) {
-        if (abs(shownMs.value - seekPositionMs) > 20f * step) {
-            shownMs.snapTo(seekPositionMs.toFloat())
+        val target = seekPositionMs.toFloat()
+        val behind = target - shownMs.value
+        if (abs(behind) > 20f * step) {
+            shownMs.snapTo(target)
         } else {
-            shownMs.animateTo(seekPositionMs.toFloat(), tween(200, easing = FastOutSlowInEasing))
+            // NoBars: never trail more than one picture behind (holding the button repeats faster than the
+            // glide), so the picture under the frame is always the current one
+            if (abs(behind) > step) shownMs.snapTo(target - kotlin.math.sign(behind) * step)
+            shownMs.animateTo(target, tween(200, easing = FastOutSlowInEasing))
         }
     }
-    val slide = (seekPositionMs - shownMs.value) / step // in pictures; glides to 0
+    val slide = ((seekPositionMs - shownMs.value) / step).coerceIn(-1.5f, 1.5f) // in pictures; glides to 0
     val progress = if (durationMs > 0) (shownMs.value / durationMs).coerceIn(0f, 1f) else 0f
     val ready by TrickplayCache.version.collectAsState()
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { TrickplayCache.logSeekStats() } }
@@ -113,7 +118,10 @@ fun DpadSeekOverlay(
                     val frame = 6.dp // the fixed white frame sits this much outside the picture
                     Box(modifier = Modifier.fillMaxWidth().height(h + frame * 2)) {
                         // all pictures the same size, sliding under the fixed frame
-                        for (j in -4..4) {
+                        // always fill the whole width around where the strip is now, whatever it is doing
+                        val first = kotlin.math.floor(-4f - slide).toInt()
+                        val last = kotlin.math.ceil(4f - slide).toInt()
+                        for (j in first..last) {
                             val time = seekPositionMs + j * step
                             if (time < 0 || (durationMs > 0 && time > durationMs)) continue
                             val centreX = fullWidth / 2 + (w + gap) * (j + slide)

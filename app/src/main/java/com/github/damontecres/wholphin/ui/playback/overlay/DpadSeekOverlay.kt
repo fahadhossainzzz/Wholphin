@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -32,11 +33,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -44,9 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import androidx.tv.material3.Text
-import coil3.compose.rememberAsyncImagePainter
-import coil3.request.ImageRequest
 import com.github.damontecres.wholphin.ui.formatDuration
+import com.github.damontecres.wholphin.ui.playback.TrickplayCache
 import org.jellyfin.sdk.model.api.TrickplayInfo
 import kotlin.math.abs
 import kotlin.math.max
@@ -67,7 +62,6 @@ fun DpadSeekOverlay(
     modifier: Modifier = Modifier,
 ) {
     val durationMs = player.duration.coerceAtLeast(0L)
-    val progress = if (durationMs > 0) (seekPositionMs.toDouble() / durationMs).toFloat().coerceIn(0f, 1f) else 0f
     val resources = LocalResources.current
     val elapsedText = remember(seekPositionMs / 1000) { resources.formatDuration((seekPositionMs / 1000).seconds) }
     val remainingSec = ((durationMs - seekPositionMs) / 1000L).coerceAtLeast(0L)
@@ -76,17 +70,29 @@ fun DpadSeekOverlay(
     // one press = the distance of the last move (10 s, more while the button is held and seeking speeds up)
     var step by remember { mutableLongStateOf(10_000L) }
     var last by remember { mutableLongStateOf(seekPositionMs) }
+    var forward by remember { androidx.compose.runtime.mutableStateOf(true) }
     LaunchedEffect(seekPositionMs) {
-        val d = abs(seekPositionMs - last)
-        if (d >= 1_000L) step = d
+        val d = seekPositionMs - last
+        if (abs(d) >= 1_000L) {
+            step = abs(d)
+            forward = d > 0
+        }
         last = seekPositionMs
+        TrickplayCache.prepare(seekPositionMs, step, forward, durationMs)
     }
-    val target = seekPositionMs.toFloat() / step
-    val shown = remember { Animatable(target) }
-    LaunchedEffect(target, step) {
-        if (abs(shown.value - target) > 2f) shown.snapTo(target) else shown.animateTo(target, tween(200, easing = FastOutSlowInEasing))
+    // NoBars: one smooth position (in film time) drives both the strip and the bar, so they glide together;
+    // far jumps (more than 20 presses) are shown at once
+    val shownMs = remember { Animatable(seekPositionMs.toFloat()) }
+    LaunchedEffect(seekPositionMs) {
+        if (abs(shownMs.value - seekPositionMs) > 20f * step) {
+            shownMs.snapTo(seekPositionMs.toFloat())
+        } else {
+            shownMs.animateTo(seekPositionMs.toFloat(), tween(200, easing = FastOutSlowInEasing))
+        }
     }
-    val slide = target - shown.value // in pictures; slides to 0
+    val slide = (seekPositionMs - shownMs.value) / step // in pictures; glides to 0
+    val progress = if (durationMs > 0) (shownMs.value / durationMs).coerceIn(0f, 1f) else 0f
+    val ready by TrickplayCache.version.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f))) {
         Column(
@@ -111,10 +117,7 @@ fun DpadSeekOverlay(
                             if (time < 0 || (durationMs > 0 && time > durationMs)) continue
                             val centreX = fullWidth / 2 + (w + gap) * (j + slide)
                             FilmstripPicture(
-                                timeMs = time,
-                                info = trickplayInfo,
-                                url = trickplayUrlFor(((time / trickplayInfo.interval).toInt()) / (trickplayInfo.tileWidth * trickplayInfo.tileHeight)),
-                                selected = false,
+                                picture = if (ready >= 0) TrickplayCache.picture(time) else null,
                                 width = w,
                                 height = h,
                                 modifier = Modifier.offset(x = centreX - w / 2, y = frame),
@@ -159,50 +162,35 @@ fun DpadSeekOverlay(
     }
 }
 
-/** One picture of the filmstrip: its tile cut from the trickplay sheet, filling a 16:9 box with rounded corners. */
+/** One picture of the filmstrip, filling a 16:9 box with rounded corners (grey until it is ready, then it fades in). */
 @Composable
 private fun FilmstripPicture(
-    timeMs: Long,
-    info: TrickplayInfo,
-    url: String?,
-    selected: Boolean,
+    picture: androidx.compose.ui.graphics.ImageBitmap?,
     width: Dp,
     height: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val shape = RoundedCornerShape(6.dp)
-    val model = remember(url) { url?.let { ImageRequest.Builder(context).data(it).size(coil3.size.Size.ORIGINAL).build() } }
-    val painter = rememberAsyncImagePainter(model = model, contentScale = ContentScale.None)
-    val perSheet = info.tileWidth * info.tileHeight
-    val tile = ((timeMs.toDouble() / info.interval).toInt()) % perSheet
-    val tx = tile % info.tileWidth
-    val ty = tile / info.tileWidth
+    val alpha by androidx.compose.animation.core.animateFloatAsState(if (picture != null) 1f else 0f, tween(120), label = "fade")
     Box(
         modifier =
             modifier
                 .size(width, height)
                 .clip(shape)
-                .background(Color.White.copy(alpha = 0.12f))
-                .then(if (selected) Modifier.border(3.dp, Color.White, shape) else Modifier),
+                .background(Color.White.copy(alpha = 0.12f)),
     ) {
-        if (model != null) {
+        if (picture != null) {
             Canvas(modifier = Modifier.size(width, height)) {
-                // cover the box with the tile, centred (wide films lose a little at the sides)
-                val s = max(size.width / info.width, size.height / info.height)
-                val dx = (size.width - info.width * s) / 2
-                val dy = (size.height - info.height * s) / 2
-                clipRect {
-                    translate(dx, dy) {
-                        scale(s, s, pivot = Offset.Zero) {
-                            translate(-tx.toFloat() * info.width, -ty.toFloat() * info.height) {
-                                with(painter) {
-                                    draw(Size(info.width * info.tileWidth.toFloat(), info.height * info.tileHeight.toFloat()))
-                                }
-                            }
-                        }
-                    }
-                }
+                // cover the box, centred (wide films lose a little at the sides)
+                val s = max(size.width / picture.width, size.height / picture.height)
+                val dw = picture.width * s
+                val dh = picture.height * s
+                drawImage(
+                    image = picture,
+                    dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - dw) / 2).toInt(), ((size.height - dh) / 2).toInt()),
+                    dstSize = androidx.compose.ui.unit.IntSize(dw.toInt(), dh.toInt()),
+                    alpha = alpha,
+                )
             }
         }
     }

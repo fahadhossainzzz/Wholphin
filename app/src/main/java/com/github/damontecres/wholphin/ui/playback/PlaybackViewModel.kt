@@ -604,8 +604,18 @@ class PlaybackViewModel
                             ?.firstOrNull()
                     }
 
-                // NoBars: seek thumbnails are no longer all loaded up front at full size; they load
-                // when the seek bar asks for them
+                // NoBars: all of the film's seek previews are fetched now, compressed (~3 MB), alongside the film;
+                // single pictures are cut out when needed (TrickplayCache)
+                if (trickPlayInfo != null) {
+                    val sourceUuid = mediaSource?.id?.toUUIDOrNull()
+                    val runMs = (item.data.runTimeTicks ?: 0L) / 10_000L
+                    TrickplayCache.load(item.id.toString() + "/" + (mediaSource?.id ?: ""), trickPlayInfo, runMs) { index ->
+                        getTrickplayUrl(index, trickPlayInfo, sourceUuid)
+                    }
+                    TrickplayCache.prepare(maxOf(positionMs, 0L), 10_000L, true, runMs)
+                } else {
+                    TrickplayCache.clear()
+                }
 
                 val chapters = Chapter.fromDto(base)
                 _state.update {

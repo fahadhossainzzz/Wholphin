@@ -258,6 +258,14 @@ fun PlaybackPageContent(
         (player as? MpvPlayer)?.subtitleDelay =
             state.currentPlayback?.subtitleDelay ?: Duration.ZERO
     }
+    // NoBars: while the film plays, keep the seek previews around the current position ready (30 ahead, 10 behind)
+    LaunchedEffect(state.currentMediaInfo.trickPlayInfo, player) {
+        if (state.currentMediaInfo.trickPlayInfo == null) return@LaunchedEffect
+        while (true) {
+            TrickplayCache.prepare(player.currentPosition, 10_000L, true, player.duration.coerceAtLeast(0L))
+            delay(30_000)
+        }
+    }
     // NoBars: subtitle delay for ExoPlayer: text subtitles shown by the app at (position - delay), see SubtitleShift.kt.
     // The whole subtitle is fetched only once a delay is actually set: for a subtitle inside the file, fetching it
     // makes Jellyfin read the entire film from the drive to pull the subtitles out, which stalled the start of

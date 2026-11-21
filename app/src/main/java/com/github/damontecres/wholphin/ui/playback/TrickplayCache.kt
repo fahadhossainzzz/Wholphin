@@ -16,7 +16,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.channels.Channel
@@ -24,16 +23,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.model.api.TrickplayInfo
 import timber.log.Timber
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.atomic.AtomicReferenceArray
-import kotlin.math.abs
 
 /** One seek-preview picture: [image] (a single picture, or a whole sheet) and the part of it to show. */
 class SeekPicture(
@@ -44,26 +39,18 @@ class SeekPicture(
 
 /**
  * NoBars: the seek previews of the film being played, done the way Netflix/Roku do it: all of the film's preview
- * sheets (Jellyfin's trickplay images, ~3 MB a film) are downloaded the moment the film starts, then two layers:
+ * sheets (Jellyfin's trickplay images, ~3 MB a film) are downloaded the moment the film starts and kept compressed;
+ * single full-size pictures are cut out on demand, the one under the frame first. Like ExoPlayer's scrubbing mode,
+ * a picture being cut is always finished and only the newest request waits (nothing in between is done), so holding
+ * the button never starves it. Then the neighbours, then 30 ahead / 10 behind.
  *
- * - soft: every sheet is opened once, at half size, in the background (~1 s, ~15 MB for 2 h); from then on every
- *   moment of the film has a picture instantly, however fast the button is held;
- * - sharp: full-size single pictures cut out on demand, the one under the frame first. Like ExoPlayer's scrubbing
- *   mode, a picture being cut is always finished and only the newest request waits (nothing in between is done),
- *   so holding the button never starves it. When the moving stops, the neighbours and then 30 ahead / 10 behind
- *   are sharpened.
- *
- * [picture] gives the sharp picture, else the soft one, else the nearest one there is: never an empty box (except
- * in the first second of a film). [version] changes whenever new pictures are ready, so the filmstrip redraws.
+ * [picture] gives the picture for a moment, else the nearest one there is. [version] changes whenever new pictures
+ * are ready, so the filmstrip redraws.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 object TrickplayCache {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sharpDispatcher = Dispatchers.Default.limitedParallelism(1)
-    private val softDispatcher =
-        Executors
-            .newSingleThreadExecutor { r -> Thread(r, "nobars-previews").apply { priority = Thread.MIN_PRIORITY } }
-            .asCoroutineDispatcher()
 
     @Volatile private var key: String? = null
 
@@ -71,9 +58,6 @@ object TrickplayCache {
 
     @Volatile private var sheets: Array<ByteArray?> = emptyArray()
 
-    @Volatile private var soft: AtomicReferenceArray<ImageBitmap?> = AtomicReferenceArray(0)
-
-    @Volatile private var softScale = 2
     private val decoders = ConcurrentHashMap<Int, BitmapRegionDecoder>()
     private val tiles =
         object : LruCache<Int, ImageBitmap>(6 * 1024 * 1024) {
@@ -96,7 +80,7 @@ object TrickplayCache {
         val durationMs: Long,
     )
 
-    /** Start of a film: fetch all its preview sheets (in parallel, in the background), then build the soft layer. */
+    /** Start of a film: fetch all its preview sheets (in parallel, in the background), then cut the pictures on screen. */
     fun load(
         itemKey: String,
         trickplay: TrickplayInfo,
@@ -111,10 +95,6 @@ object TrickplayCache {
         val perSheet = trickplay.tileWidth * trickplay.tileHeight
         val count = ((durationMs / trickplay.interval).toInt() / perSheet + 1).coerceIn(1, 60)
         sheets = arrayOfNulls(count)
-        soft = AtomicReferenceArray(count * perSheet)
-        // half size; a very long film at quarter size, so this layer stays under ~40 MB
-        val halfBytes = count.toLong() * (trickplay.width * trickplay.tileWidth / 2) * (trickplay.height * trickplay.tileHeight / 2) * 2
-        softScale = if (halfBytes > 40L * 1024 * 1024) 4 else 2
         val token = ServerAccess.token
         val myWake = Channel<Unit>(Channel.CONFLATED)
         wake = myWake
@@ -155,67 +135,7 @@ object TrickplayCache {
                 _version.value++
                 lastRequest?.let { pending.compareAndSet(null, it) } // sharpen what is on screen now
                 myWake.trySend(Unit)
-                withContext(softDispatcher) { buildSoft(newKey, trickplay, perSheet) }
             }
-    }
-
-    /** Open every sheet once at reduced size, starting with the one being watched, then outwards. */
-    private fun buildSoft(
-        forKey: String,
-        i: TrickplayInfo,
-        perSheet: Int,
-    ) {
-        val started = System.currentTimeMillis()
-        val here = ((pending.get()?.timeMs ?: lastTimeMs) / i.interval).toInt() / perSheet
-        val order = sheets.indices.sortedBy { abs(it - here) }
-        var bytes = 0L
-        var made = 0
-        for (s in order) {
-            if (key != forKey) return
-            val data = sheets.getOrNull(s) ?: continue
-            val opts =
-                BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.RGB_565
-                    inSampleSize = softScale
-                }
-            val bmp =
-                try {
-                    BitmapFactory.decodeByteArray(data, 0, data.size, opts)
-                } catch (e: Throwable) {
-                    Timber.w(e, "NoBars: soft preview sheet %s failed", s)
-                    null
-                } ?: continue
-            if (key != forKey) return
-            // cut the sheet into separate small pictures (drawn the same way as the sharp ones), sized from the
-            // sheet itself, trimmed at its edges rather than skipped
-            val scale = bmp.width.toDouble() / (i.width * i.tileWidth)
-            val tw = (i.width * scale).toInt().coerceAtLeast(1)
-            val th = (i.height * scale).toInt().coerceAtLeast(1)
-            for (t in 0 until perSheet) {
-                val x = (t % i.tileWidth) * tw
-                val y = (t / i.tileWidth) * th
-                if (x >= bmp.width || y >= bmp.height) continue
-                val piece =
-                    try {
-                        Bitmap.createBitmap(bmp, x, y, minOf(tw, bmp.width - x), minOf(th, bmp.height - y))
-                    } catch (e: Throwable) {
-                        null
-                    } ?: continue
-                val idx = s * perSheet + t
-                if (idx < soft.length()) soft.set(idx, piece.asImageBitmap())
-                bytes += piece.width.toLong() * piece.height * 2
-            }
-            bmp.recycle()
-            made++
-            _version.value++
-        }
-        Timber.i(
-            "NoBars: soft previews ready: %s sheets at 1/%s size, %s MB in %s ms",
-            made,
-            softScale,
-            bytes / (1024 * 1024),
-            System.currentTimeMillis() - started,
-        )
     }
 
     @Volatile private var lastTimeMs = 0L
@@ -231,7 +151,6 @@ object TrickplayCache {
         pending.set(null)
         lastRequest = null
         sheets = emptyArray()
-        soft = AtomicReferenceArray(0)
         decoders.values.forEach { runCatching { it.recycle() } }
         decoders.clear()
         tiles.evictAll()
@@ -239,8 +158,8 @@ object TrickplayCache {
     }
 
     /**
-     * The picture for this moment of the film: the sharp one if ready, else the soft one, else the nearest picture
-     * there is (null only before anything is ready).
+     * The picture for this moment of the film if it is ready, else the nearest picture there is (null only before
+     * anything is ready).
      */
     fun picture(timeMs: Long): SeekPicture? {
         val i = info ?: return null
@@ -249,38 +168,27 @@ object TrickplayCache {
             stats[0]++
             return whole(it)
         }
-        val layer = soft
-        if (index in 0 until layer.length()) {
-            layer.get(index)?.let {
-                stats[1]++
-                return whole(it)
-            }
-        }
-        // not ready (the first second of a film): the nearest picture there is
+        // not cut yet (a moment): the nearest picture there is
         for (d in 1..60) {
-            val near =
-                tiles.get(index - d) ?: tiles.get(index + d)
-                    ?: layer.getOrNull(index - d) ?: layer.getOrNull(index + d)
+            val near = tiles.get(index - d) ?: tiles.get(index + d)
             if (near != null) {
-                stats[2]++
+                stats[1]++
                 return whole(near)
             }
         }
-        stats[3]++
+        stats[2]++
         return null
     }
 
     private fun whole(img: ImageBitmap) = SeekPicture(img, IntOffset.Zero, IntSize(img.width, img.height))
 
-    private fun AtomicReferenceArray<ImageBitmap?>.getOrNull(i: Int): ImageBitmap? = if (i in 0 until length()) get(i) else null
-
-    // what the filmstrip boxes were given while seeking: sharp, soft, nearest, nothing
-    private val stats = IntArray(4)
+    // what the filmstrip boxes were given while seeking: their own picture, the nearest one, nothing
+    private val stats = IntArray(3)
 
     /** End of a seek: log what the boxes got (to check the previews from a playback report). */
     fun logSeekStats() {
         if (stats.sum() == 0) return
-        Timber.i("NoBars: seek pictures shown: sharp %s, soft %s, nearest %s, none %s", stats[0], stats[1], stats[2], stats[3])
+        Timber.i("NoBars: seek pictures shown: exact %s, nearest %s, none %s", stats[0], stats[1], stats[2])
         stats.fill(0)
     }
 

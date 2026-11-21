@@ -100,7 +100,8 @@ fun DpadSeekOverlay(
         ) {
             if (trickplayInfo != null && trickplayInfo.width > 0 && trickplayInfo.height > 0) {
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val w = maxWidth / 6
+                    val fullWidth = maxWidth
+                    val w = fullWidth / 6
                     val h = w * 9f / 16f
                     val gap = 8.dp
                     val selW = w * 1.08f
@@ -112,7 +113,7 @@ fun DpadSeekOverlay(
                             val selected = j == 0
                             val bw = if (selected) selW else w
                             val bh = if (selected) selH else h
-                            val centreX = maxWidth / 2 + (w + gap) * (j + slide)
+                            val centreX = fullWidth / 2 + (w + gap) * (j + slide)
                             FilmstripPicture(
                                 timeMs = time,
                                 info = trickplayInfo,

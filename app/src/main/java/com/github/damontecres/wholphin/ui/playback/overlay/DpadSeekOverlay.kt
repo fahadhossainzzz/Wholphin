@@ -162,10 +162,13 @@ fun DpadSeekOverlay(
     }
 }
 
-/** One picture of the filmstrip, filling a 16:9 box with rounded corners (grey until it is ready, then it fades in). */
+/**
+ * One picture of the filmstrip, filling a 16:9 box with rounded corners. It is grey only before any preview is
+ * ready (the first second of a film), then fades in; soft pictures turn sharp in place.
+ */
 @Composable
 private fun FilmstripPicture(
-    picture: androidx.compose.ui.graphics.ImageBitmap?,
+    picture: com.github.damontecres.wholphin.ui.playback.SeekPicture?,
     width: Dp,
     height: Dp,
     modifier: Modifier = Modifier,
@@ -182,14 +185,19 @@ private fun FilmstripPicture(
         if (picture != null) {
             Canvas(modifier = Modifier.size(width, height)) {
                 // cover the box, centred (wide films lose a little at the sides)
-                val s = max(size.width / picture.width, size.height / picture.height)
-                val dw = picture.width * s
-                val dh = picture.height * s
+                val sw = picture.srcSize.width
+                val sh = picture.srcSize.height
+                val s = max(size.width / sw, size.height / sh)
+                val dw = sw * s
+                val dh = sh * s
                 drawImage(
-                    image = picture,
+                    image = picture.image,
+                    srcOffset = picture.srcOffset,
+                    srcSize = picture.srcSize,
                     dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - dw) / 2).toInt(), ((size.height - dh) / 2).toInt()),
                     dstSize = androidx.compose.ui.unit.IntSize(dw.toInt(), dh.toInt()),
                     alpha = alpha,
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium,
                 )
             }
         }

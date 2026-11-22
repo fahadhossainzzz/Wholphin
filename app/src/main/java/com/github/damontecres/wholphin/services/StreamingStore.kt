@@ -134,6 +134,7 @@ object StreamingStore {
             NETFLIX -> "Netflix"
             CINEMA -> "Theatre"
             WATCHLIST -> "Watchlist"
+            "Trakt" -> "your phone (Trakt)"
             else -> "Prime Video"
         }
 

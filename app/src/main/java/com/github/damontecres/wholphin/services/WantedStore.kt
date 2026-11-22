@@ -90,7 +90,9 @@ object WantedStore {
         e: StreamingStore.Entry,
         from: String? = null,
     ): Boolean {
-        if (!loaded) load()
+        // NoBars: always the server's current list (titles added on the phone via Trakt arrive there), so a change
+        // here never overwrites them
+        load()
         val now = _items.value
         val adding = !contains(e)
         _items.value =

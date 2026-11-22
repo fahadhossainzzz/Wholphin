@@ -422,6 +422,7 @@ fun PersonPageContent(
         }
     }
     var focusedOnHeader by remember { mutableStateOf(true) }
+    val workRows = remember(work) { careerRows(work) }
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         userScrollEnabled = !focusedOnHeader,
@@ -509,7 +510,6 @@ fun PersonPageContent(
         }
         // NoBars: the career in rows like Trakt's split (no filter chips: on a remote, rows are reached by just
         // pressing down): Known for, Films, Series, As self, Behind the camera. Empty rows are left out.
-        val workRows = remember(work) { careerRows(work) }
         workRows.forEachIndexed { g, row ->
             item(key = "work-${row.title}") {
                 WorkRow(

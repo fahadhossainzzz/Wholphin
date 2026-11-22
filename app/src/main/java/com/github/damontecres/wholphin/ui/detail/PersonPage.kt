@@ -548,6 +548,7 @@ fun PersonPageContent(
 }
 
 /** NoBars: the person's whole career as a row of posters: upcoming first, then newest; ✓ marks what you have. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun WorkRow(
     work: List<com.github.damontecres.wholphin.ui.playback.overlay.Credit>,

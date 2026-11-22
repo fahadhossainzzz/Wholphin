@@ -507,14 +507,20 @@ fun PersonPageContent(
                 },
             )
         }
-        if (work.isNotEmpty()) {
-            item {
+        // NoBars: the career in rows like Trakt's split (no filter chips: on a remote, rows are reached by just
+        // pressing down): Known for, Films, Series, As self, Behind the camera. Empty rows are left out.
+        val workRows = remember(work) { careerRows(work) }
+        workRows.forEachIndexed { g, row ->
+            item(key = "work-${row.title}") {
                 WorkRow(
-                    work = work,
+                    title = row.title,
+                    work = row.items,
+                    showKind = row.mixed,
+                    rowIndex = WORK_ROW + g,
                     position = position,
                     focusRequester = focusRequester,
                     onClick = { index, c ->
-                        position = RowColumn(WORK_ROW, index)
+                        position = RowColumn(WORK_ROW + g, index)
                         onClickCredit(c)
                     },
                 )
@@ -547,20 +553,70 @@ fun PersonPageContent(
     }
 }
 
-/** NoBars: the person's whole career as a row of posters: upcoming first, then newest; ✓ marks what you have. */
+private typealias WorkCredit = com.github.damontecres.wholphin.ui.playback.overlay.Credit
+
+/** One career row: its title, its posters, and whether it mixes films and series (then each says which). */
+internal class CareerRow(
+    val title: String,
+    val items: List<WorkCredit>,
+    val mixed: Boolean,
+)
+
+private val SELF_ROLE = Regex("""^\s*(self|himself|herself|themselves|themself)\b|archive footage""", RegexOption.IGNORE_CASE)
+
+/**
+ * NoBars: the person's career (from TMDB, via our plugin) split like Trakt: the 10 best-known titles first, then
+ * films and series they act in, appearances as themselves (talk shows, documentaries, award shows), and work behind
+ * the camera. Within a row: upcoming first, then newest; in Series, real roles before one- or two-episode guest spots.
+ * Titles you have stay in (marked ✓), so each row is the complete list.
+ */
+internal fun careerRows(work: List<WorkCredit>): List<CareerRow> {
+    val withPoster = work.filter { it.poster != null }
+    val acting = withPoster.filter { !it.crew }
+    val self = acting.filter { SELF_ROLE.containsMatchIn(it.role) }
+    val roles = acting.filter { !SELF_ROLE.containsMatchIn(it.role) }
+    val films = roles.filter { !it.tv }.distinctBy { it.ownedKey }
+    val series =
+        roles
+            .filter { it.tv }
+            .distinctBy { it.ownedKey }
+            .sortedBy { (it.episodes ?: 3) < 3 } // stable: keeps newest-first within each part
+    // behind the camera: one poster per title, all its jobs together ("Director / Writer")
+    val crew =
+        withPoster
+            .filter { it.crew }
+            .groupBy { it.ownedKey }
+            .map { (_, same) -> same.first().copy(role = same.map { it.role }.filter { it.isNotBlank() }.distinct().joinToString(" / ")) }
+    val selfRows = self.distinctBy { it.ownedKey }
+    // known for: the most-voted titles they really worked on (not talk shows), only worth a row for a long career
+    val main = (films + series + crew).distinctBy { it.ownedKey }
+    val known = if (main.size > 12) main.filter { it.votes > 0 }.sortedByDescending { it.votes }.take(10) else emptyList()
+    return listOfNotNull(
+        CareerRow("Known for", known, mixed = true).takeIf { known.isNotEmpty() },
+        CareerRow("Films (${films.size})", films, mixed = false).takeIf { films.isNotEmpty() },
+        CareerRow("Series (${series.size})", series, mixed = false).takeIf { series.isNotEmpty() },
+        CareerRow("As themselves (${selfRows.size})", selfRows, mixed = true).takeIf { selfRows.isNotEmpty() },
+        CareerRow("Behind the camera (${crew.size})", crew, mixed = true).takeIf { crew.isNotEmpty() },
+    )
+}
+
+/** NoBars: one row of the person's career as posters; ✓ marks what you have, 🔖 what is on your Watchlist. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun WorkRow(
-    work: List<com.github.damontecres.wholphin.ui.playback.overlay.Credit>,
+    title: String,
+    work: List<WorkCredit>,
+    showKind: Boolean,
+    rowIndex: Int,
     position: RowColumn,
     focusRequester: FocusRequester,
-    onClick: (Int, com.github.damontecres.wholphin.ui.playback.overlay.Credit) -> Unit,
+    onClick: (Int, WorkCredit) -> Unit,
 ) {
     val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
-    val shown = remember(work) { work.filter { it.poster != null }.distinctBy { it.ownedKey } }
+    val shown = work
     androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "All work (${shown.size})",
+            text = title,
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(start = 24.dp),
         )
@@ -590,7 +646,7 @@ private fun WorkRow(
                                 .width(120.dp)
                                 .height(180.dp)
                                 .ifElse(
-                                    position.row == WORK_ROW && position.column == index,
+                                    position.row == rowIndex && position.column == index,
                                     Modifier.focusRequester(focusRequester),
                                 ),
                     ) {
@@ -601,7 +657,7 @@ private fun WorkRow(
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
                             )
-                            if (c.tv) {
+                            if (c.tv && showKind) {
                                 Text(
                                     text = "TV",
                                     style = MaterialTheme.typography.labelSmall,
@@ -652,7 +708,7 @@ private fun WorkRow(
                             append(
                                 listOfNotNull(
                                     c.year.ifBlank { "Upcoming" },
-                                    if (c.tv) "TV" else "Film",
+                                    if (!showKind) null else if (c.tv) "TV" else "Film",
                                     c.episodes?.let { "$it ep" },
                                     if (c.votes >= 20 && c.rating > 0f) "★ " + String.format(java.util.Locale.US, "%.1f", c.rating) else null,
                                 ).joinToString(" · "),
@@ -674,9 +730,17 @@ private fun WorkRow(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
                         modifier = Modifier.fillMaxWidth().enableMarquee(focused),
                     )
-                    if (c.role.isNotBlank()) {
+                    // "Self - Guest" → "Guest"; a plain "Himself" needs no second line
+                    val roleLine =
+                        when {
+                            c.crew -> c.role
+                            SELF_ROLE.containsMatchIn(c.role) && !c.role.contains("archive", ignoreCase = true) ->
+                                c.role.replace(Regex("""^\s*(self|himself|herself|themselves|themself)\s*[-–:,]?\s*""", RegexOption.IGNORE_CASE), "").trim()
+                            else -> if (c.role.isBlank()) "" else "as ${c.role}"
+                        }
+                    if (roleLine.isNotBlank()) {
                         Text(
-                            if (c.crew) c.role else "as ${c.role}",
+                            roleLine,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import com.github.damontecres.wholphin.ui.enableMarquee
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -562,20 +563,26 @@ private fun WorkRow(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(start = 24.dp),
         )
+        // NoBars: scrolls by whole posters, so none is ever left half under the menu strip
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val spec = remember(density) { with(density) { com.github.damontecres.wholphin.ui.util.WholeItemsScroll(24.dp.toPx(), (120.dp + 16.dp).toPx()) } }
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
         androidx.compose.foundation.lazy.LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 12.dp),
         ) {
             items(shown.size, key = { shown[it].key }) { index ->
                 val c = shown[index]
                 val owned = com.github.damontecres.wholphin.services.StreamingStore.owned.containsKey(c.ownedKey)
                 val onList = wanted.any { it.tmdb == c.tmdb && it.series == c.tv }
+                val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                val focused by interaction.collectIsFocusedAsState()
                 androidx.compose.foundation.layout.Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.width(120.dp),
                 ) {
                     androidx.tv.material3.Surface(
                         onClick = { onClick(index, c) },
+                        interactionSource = interaction,
                         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
                         modifier =
                             Modifier
@@ -608,6 +615,7 @@ private fun WorkRow(
                             if (owned || onList) {
                                 Text(
                                     text = if (owned) "✓" else "🔖",
+                                    style = MaterialTheme.typography.labelSmall,
                                     modifier =
                                         Modifier
                                             .align(Alignment.TopEnd)
@@ -618,7 +626,18 @@ private fun WorkRow(
                             }
                         }
                     }
-                    Text(c.title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                    // NoBars: like every other poster row: the text slides down when the poster grows (never covered),
+                    // centred, and a long title scrolls on the selected poster
+                    com.github.damontecres.wholphin.ui.cards.SlidingCardText(focused) {
+                    Text(
+                        c.title,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        modifier = Modifier.fillMaxWidth().enableMarquee(focused),
+                    )
                     // NoBars: plus your copy's size on disk, in light blue, for titles you have
                     val sizes by com.github.damontecres.wholphin.services.SizeStore.sizes
                         .collectAsState()
@@ -649,20 +668,26 @@ private fun WorkRow(
                         },
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                        modifier = Modifier.fillMaxWidth().enableMarquee(focused),
                     )
                     if (c.role.isNotBlank()) {
                         Text(
                             if (c.crew) c.role else "as ${c.role}",
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+                            modifier = Modifier.fillMaxWidth().enableMarquee(focused),
                         )
+                    }
                     }
                 }
             }
+        }
         }
     }
 }

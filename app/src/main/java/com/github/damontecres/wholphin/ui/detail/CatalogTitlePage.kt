@@ -325,6 +325,12 @@ private fun CatalogTitleContent(
             item {
                 Column(Modifier.padding(start = HeaderUtils.startPadding + 8.dp)) {
                     Text("More like this", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                    // NoBars: scrolls by whole posters (BannerCard 200 dp tall, 2:3 -> 133 dp wide, 14 dp apart)
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val spec = remember(density) {
+                        with(density) { com.github.damontecres.wholphin.ui.util.WholeItemsScroll(0f, (200.dp * 2f / 3f + 14.dp).toPx()) }
+                    }
+                    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
                         items(like) { other ->
                             val item = remember(other) { StreamingStore.toBaseItem(other, "like") }
@@ -346,6 +352,7 @@ private fun CatalogTitleContent(
                                 cardHeight = 200.dp,
                             )
                         }
+                    }
                     }
                 }
             }

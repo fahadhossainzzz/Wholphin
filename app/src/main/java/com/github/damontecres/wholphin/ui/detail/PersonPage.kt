@@ -448,7 +448,17 @@ fun PersonPageContent(
     LaunchedEffect(Unit) {
         history = com.github.damontecres.wholphin.services.HistoryStore.load()
     }
-    val personalRows = remember(work, wanted, history) { personalRows(work, wanted, history) }
+    val pageRows =
+        remember(work, wanted, history) {
+            val library = libraryRow(work)
+            val career = careerRows(work)
+            val mine = personalRows(work, wanted, history)
+            buildList {
+                if (library.isNotEmpty()) add(PageRow("In your library (${library.size})", library, mixed = true))
+                career.forEach { add(PageRow(it.title, it.items, it.mixed)) }
+                mine.forEach { add(PageRow(it.title, it.items, mixed = true, note = it.note)) }
+            }
+        }
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         // NoBars: always on. With scrolling off while the header had focus, the list couldn't build the next row when
@@ -480,86 +490,40 @@ fun PersonPageContent(
                         },
             )
         }
-        // NoBars: yours first: this person's titles on your Watchlist, and the ones you've watched (your Trakt history)
-        personalRows.forEachIndexed { g, row ->
-            item(key = "mine-${row.title}") {
-                WorkRow(
-                    title = row.title,
-                    work = row.items,
-                    showKind = true,
-                    rowIndex = MINE_ROW + g,
+        // NoBars: six rows at most, each only when it has something: In your library, Known for, All films, All TV,
+        // On your watchlist, Your history. (Discover and the separate Movies / TV Shows / Episodes rows are gone.)
+        val rows = pageRows
+        if (rows.isEmpty()) {
+            // no career from TMDB (a person without a TMDB number): your library's rows, as Jellyfin has them
+            item {
+                LoadingRow(
+                    title = rowTitle(stringResource(R.string.movies_title), movies),
+                    state = movies,
+                    rowIndex = MOVIE_ROW,
                     position = position,
                     focusRequester = focusRequester,
-                    onClick = { index, c ->
-                        position = RowColumn(MINE_ROW + g, index)
-                        onClickCredit(c)
-                    },
-                    note = row.note,
+                    onClickItem = onClickItem,
+                    onClickPosition = { position = it },
+                    showIfEmpty = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item {
+                LoadingRow(
+                    title = rowTitle(stringResource(R.string.tv_shows_title), series),
+                    state = series,
+                    rowIndex = SERIES_ROW,
+                    position = position,
+                    focusRequester = focusRequester,
+                    onClickItem = onClickItem,
+                    onClickPosition = { position = it },
+                    showIfEmpty = false,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
-        item {
-            LoadingRow(
-                title = rowTitle(stringResource(R.string.movies_title), movies),
-                state = movies,
-                rowIndex = MOVIE_ROW,
-                position = position,
-                focusRequester = focusRequester,
-                onClickItem = onClickItem,
-                onClickPosition = { position = it },
-                showIfEmpty = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        item {
-            LoadingRow(
-                title = rowTitle(stringResource(R.string.tv_shows_title), series),
-                state = series,
-                rowIndex = SERIES_ROW,
-                position = position,
-                focusRequester = focusRequester,
-                onClickItem = onClickItem,
-                onClickPosition = { position = it },
-                showIfEmpty = false,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        item {
-            LoadingRow(
-                title = rowTitle(stringResource(R.string.episodes), episodes),
-                state = episodes,
-                rowIndex = EPISODE_ROW,
-                position = position,
-                focusRequester = focusRequester,
-                onClickItem = onClickItem,
-                onClickPosition = { position = it },
-                showIfEmpty = false,
-                horizontalPadding = 24.dp,
-                modifier = Modifier.fillMaxWidth(),
-                cardContent = { index, item, mod, onClick, onLongClick ->
-                    SeasonCard(
-                        item = item,
-                        onClick = {
-                            position = RowColumn(EPISODE_ROW, index)
-                            onClick.invoke()
-                        },
-                        onLongClick = onLongClick,
-                        imageHeight = Cards.heightEpisode,
-                        aspectRatio = item?.aspectRatio ?: AspectRatios.FOUR_THREE,
-                        modifier =
-                            mod
-                                .ifElse(
-                                    position.row == EPISODE_ROW && position.column == index,
-                                    Modifier.focusRequester(focusRequester),
-                                ),
-                    )
-                },
-            )
-        }
-        // NoBars: the career in rows like Trakt's split (no filter chips: on a remote, rows are reached by just
-        // pressing down): Known for, Films, Series, As self, Behind the camera. Empty rows are left out.
-        workRows.forEachIndexed { g, row ->
-            item(key = "work-${row.title}") {
+        rows.forEachIndexed { g, row ->
+            item(key = "row-${row.title}") {
                 WorkRow(
                     title = row.title,
                     work = row.items,
@@ -571,30 +535,8 @@ fun PersonPageContent(
                         position = RowColumn(WORK_ROW + g, index)
                         onClickCredit(c)
                     },
-                )
-            }
-        }
-        if (discovered.isNotEmpty()) {
-            item {
-                DiscoverRow(
-                    row =
-                        DiscoverRowData(
-                            ResStringProvider(R.string.discover),
-                            DataLoadingState.Success(discovered),
-                            DiscoverRequestType.UNKNOWN,
-                        ),
-                    onClickItem = { index: Int, item: DiscoverItem ->
-                        position = RowColumn(DISCOVER_ROW, index)
-                        onClickDiscover.invoke(index, item)
-                    },
-                    onLongClickItem = { _, _ -> },
-                    onCardFocus = {},
-                    focusRequester = focusRequester,
-                    enableViewMore = enableViewMoreDiscover,
-                    onClickViewMore = {
-                        position = RowColumn(DISCOVER_ROW, discovered.size)
-                        onClickViewMoreDiscover.invoke()
-                    },
+                    note = row.note,
+                    watched = history.keys,
                 )
             }
         }
@@ -612,41 +554,87 @@ internal class CareerRow(
 
 private val SELF_ROLE = Regex("""^\s*(self|himself|herself|themselves|themself)\b|archive footage""", RegexOption.IGNORE_CASE)
 
+/** The acting part of a role, for line 2: "as Benoit Blanc", "Himself" / "Guest" (as themselves), or nothing. */
+private fun actingText(c: WorkCredit): String? {
+    val r = c.role.trim()
+    if (r.isBlank()) return null
+    if (SELF_ROLE.containsMatchIn(r) && !r.contains("archive", ignoreCase = true)) {
+        val rest = r.replace(Regex("""^\s*(self|himself|herself|themselves|themself)\s*[-–:,]?\s*""", RegexOption.IGNORE_CASE), "").trim()
+        return rest.ifBlank { r.substringBefore(" ").replaceFirstChar { it.uppercase() } }
+    }
+    return "as $r"
+}
+
 /**
- * NoBars: the person's career (from TMDB, via our plugin) split like Trakt: the 10 best-known titles first, then
- * films and series they act in, appearances as themselves (talk shows, documentaries, award shows), and work behind
- * the camera. Within a row: upcoming first, then newest; in Series, real roles before one- or two-episode guest spots.
- * Titles you have stay in (marked ✓), so each row is the complete list.
+ * NoBars: one poster per title, with every part they had in it on line 2 ("as James Bond", "Director · Writer",
+ * "as Benoit Blanc · Producer", "Himself"). The result is marked crew so line 2 shows the text as it is.
+ */
+private fun mergedCareer(work: List<WorkCredit>): List<WorkCredit> =
+    work
+        .filter { it.poster != null }
+        .groupBy { it.ownedKey }
+        .map { (_, cs) ->
+            val acting = cs.firstOrNull { !it.crew }
+            val jobs = cs.filter { it.crew }.flatMap { it.role.split(",", "/") }.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+            val base = acting ?: cs.first()
+            val parts = listOfNotNull(acting?.let(::actingText)) + jobs
+            base.copy(crew = true, role = parts.joinToString(" · "))
+        }
+
+/** Titles where they only appeared as themselves (talk shows, award shows, documentaries about others). */
+private fun selfOnlyKeys(work: List<WorkCredit>): Set<String> =
+    work
+        .groupBy { it.ownedKey }
+        .filter { (_, cs) -> cs.none { it.crew } && cs.all { SELF_ROLE.containsMatchIn(it.role) } }
+        .keys
+
+/**
+ * NoBars: the person's career in three rows. Known for: the titles that stand out (at least a quarter of the votes
+ * of their most-voted title; 5 to 20; only for a career longer than 12 titles). All films / All TV: everything, any
+ * role (acting, as themselves, behind the camera), one poster per title; upcoming first, then newest; in TV, real
+ * roles before one- or two-episode guest spots. Titles you have stay in (marked ✓), so the lists are complete.
  */
 internal fun careerRows(work: List<WorkCredit>): List<CareerRow> {
-    val withPoster = work.filter { it.poster != null }
-    val acting = withPoster.filter { !it.crew }
-    val self = acting.filter { SELF_ROLE.containsMatchIn(it.role) }
-    val roles = acting.filter { !SELF_ROLE.containsMatchIn(it.role) }
-    val films = roles.filter { !it.tv }.distinctBy { it.ownedKey }
-    val series =
-        roles
-            .filter { it.tv }
-            .distinctBy { it.ownedKey }
-            .sortedBy { (it.episodes ?: 3) < 3 } // stable: keeps newest-first within each part
-    // behind the camera: one poster per title, all its jobs together ("Director / Writer")
-    val crew =
-        withPoster
-            .filter { it.crew }
-            .groupBy { it.ownedKey }
-            .map { (_, same) -> same.first().copy(role = same.map { it.role }.filter { it.isNotBlank() }.distinct().joinToString(" / ")) }
-    val selfRows = self.distinctBy { it.ownedKey }
-    // known for: the most-voted titles they really worked on (not talk shows), only worth a row for a long career
-    val main = (films + series + crew).distinctBy { it.ownedKey }
-    val known = if (main.size > 12) main.filter { it.votes > 0 }.sortedByDescending { it.votes }.take(10) else emptyList()
+    val merged = mergedCareer(work)
+    val selfOnly = selfOnlyKeys(work)
+    val today = java.time.LocalDate.now().toString()
+    val order = compareByDescending<WorkCredit> { it.date.isEmpty() || it.date > today }.thenByDescending { it.date }
+    val films = merged.filter { !it.tv }.sortedWith(order)
+    val tvAll = merged.filter { it.tv }.sortedWith(order)
+    val guest = { c: WorkCredit -> c.ownedKey in selfOnly || (!c.role.contains(" · ") && (c.episodes ?: 3) < 3) }
+    val tv = tvAll.filterNot(guest) + tvAll.filter(guest)
+    // known for: real work (not talk-show spots), by votes (how many people rated it: fame over years, not this week)
+    val main = merged.filter { it.ownedKey !in selfOnly && it.votes > 0 }
+    val top = main.maxOfOrNull { it.votes } ?: 0
+    val known =
+        if (main.size <= 12 || top == 0) {
+            emptyList()
+        } else {
+            val byVotes = main.sortedByDescending { it.votes }
+            byVotes.filter { it.votes * 4 >= top }.take(20).let { if (it.size < 5) byVotes.take(5) else it }
+        }
     return listOfNotNull(
         CareerRow("Known for", known, mixed = true).takeIf { known.isNotEmpty() },
-        CareerRow("Films (${films.size})", films, mixed = false).takeIf { films.isNotEmpty() },
-        CareerRow("Series (${series.size})", series, mixed = false).takeIf { series.isNotEmpty() },
-        CareerRow("As themselves (${selfRows.size})", selfRows, mixed = true).takeIf { selfRows.isNotEmpty() },
-        CareerRow("Behind the camera (${crew.size})", crew, mixed = true).takeIf { crew.isNotEmpty() },
+        CareerRow("All films (${films.size})", films, mixed = false).takeIf { films.isNotEmpty() },
+        CareerRow("All TV (${tv.size})", tv, mixed = false).takeIf { tv.isNotEmpty() },
     )
 }
+
+/** NoBars: their titles that you have (your library), newest first. */
+internal fun libraryRow(work: List<WorkCredit>): List<WorkCredit> {
+    val today = java.time.LocalDate.now().toString()
+    return mergedCareer(work)
+        .filter { com.github.damontecres.wholphin.services.StreamingStore.owned.containsKey(it.ownedKey) }
+        .sortedWith(compareByDescending<WorkCredit> { it.date.isEmpty() || it.date > today }.thenByDescending { it.date })
+}
+
+/** One row of the person page: its name, posters, whether films and series mix, and an optional line 2. */
+internal class PageRow(
+    val title: String,
+    val items: List<WorkCredit>,
+    val mixed: Boolean,
+    val note: ((WorkCredit) -> String?)? = null,
+)
 
 /** A personal row: its titles and the second line under each poster. */
 internal class PersonalRow(
@@ -664,14 +652,14 @@ internal fun personalRows(
     wanted: List<com.github.damontecres.wholphin.services.StreamingStore.Entry>,
     history: Map<String, Pair<String, Int>>,
 ): List<PersonalRow> {
-    val titles = work.filter { it.poster != null }.distinctBy { it.ownedKey }
+    val titles = mergedCareer(work)
     val onList = wanted.map { (if (it.series) "tv:" else "movie:") + it.tmdb }
     val listed = titles.filter { it.ownedKey in onList }.sortedBy { onList.indexOf(it.ownedKey) }
     val watched = titles.filter { it.ownedKey in history }.sortedByDescending { history[it.ownedKey]?.first.orEmpty() }
-    fun role(c: WorkCredit) = if (c.crew) c.role else if (c.role.isBlank()) null else "as ${c.role}"
+    fun role(c: WorkCredit) = c.role.ifBlank { null }
     return listOfNotNull(
         PersonalRow("On your watchlist (${listed.size})", listed, ::role).takeIf { listed.isNotEmpty() },
-        PersonalRow("You've watched (${watched.size})", watched) { c ->
+        PersonalRow("Your history (${watched.size})", watched) { c ->
             history[c.ownedKey]?.let { (date, plays) ->
                 val d = runCatching { java.time.LocalDate.parse(date).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.UK)) }.getOrNull()
                 listOfNotNull(d?.let { "Watched $it" } ?: "Watched", if (plays > 1) "${plays}×" else null).joinToString(" · ")
@@ -692,6 +680,7 @@ private fun WorkRow(
     focusRequester: FocusRequester,
     onClick: (Int, WorkCredit) -> Unit,
     note: ((WorkCredit) -> String?)? = null,
+    watched: Set<String> = emptySet(),
 ) {
     val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
     val shown = work
@@ -750,9 +739,11 @@ private fun WorkRow(
                                             .padding(horizontal = 5.dp, vertical = 1.dp),
                                 )
                             }
-                            if (owned || onList) {
+                            val seen = c.ownedKey in watched
+                            if (owned || onList || seen) {
                                 Text(
-                                    text = if (owned) "✓" else "🔖",
+                                    // ✓ yours, 🔖 on your watchlist, 👁 you've watched it
+                                    text = listOfNotNull(if (owned) "✓" else null, if (onList) "🔖" else null, if (seen) "👁" else null).joinToString(" "),
                                     style = MaterialTheme.typography.labelSmall,
                                     modifier =
                                         Modifier

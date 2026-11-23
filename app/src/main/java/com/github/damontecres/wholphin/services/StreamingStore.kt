@@ -2,6 +2,8 @@ package com.github.damontecres.wholphin.services
 
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.util.WholphinDispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -543,8 +545,8 @@ object StreamingStore {
         saved: List<Entry>,
         pageRows: List<Row>?,
     ): List<Entry> =
-        kotlinx.coroutines.coroutineScope {
-            saved.map { kotlinx.coroutines.async { freshFor(it, pageRows) } }.map { it.await() }
+        coroutineScope {
+            saved.map { async { freshFor(it, pageRows) } }.map { it.await() }
         }
 
     /**

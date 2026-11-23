@@ -22,6 +22,8 @@ object PosterFacts {
         val budget: Long?,
         val year: Int?,
         val rt: Int?,
+        /** First release (films) / first episode (series), yyyy-MM-dd */
+        val releaseDate: String? = null,
     ) {
         val money: String?
             get() = gross?.let { BoxOffice.posterLabel(BoxOffice.Money(it, budget, year, source = "TMDB")) }
@@ -51,6 +53,7 @@ object PosterFacts {
                                 budget = f.optLong("b").takeIf { it > 0 },
                                 year = f.optInt("y").takeIf { it > 0 },
                                 rt = if (f.has("rt")) f.optInt("rt") else null,
+                                releaseDate = f.optString("rd").takeIf { it.length == 10 },
                             )
                     }
                     _version.value++

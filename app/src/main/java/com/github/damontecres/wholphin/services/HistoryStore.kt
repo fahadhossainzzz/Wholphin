@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.services
 
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -70,18 +71,81 @@ object HistoryStore {
         }
     }
 
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + WholphinDispatchers.IO)
+
+    /**
+     * Mark watched at once on the TV (the tick shows straight away) and send it to Trakt in the background; if Trakt
+     * doesn't take it, the tick is taken back and [onFail] is called (on the main thread).
+     */
+    fun markInBackground(
+        key: String,
+        whenWatched: String,
+        season: Int?,
+        episode: Int?,
+        onFail: () -> Unit,
+    ) {
+        val before = _state.value
+        val today = java.time.LocalDate.now().toString()
+        val day = if (whenWatched == "now") today else ""
+        _state.value =
+            when {
+                season == null -> before.copy(items = before.items + (key to (day to ((before.items[key]?.second ?: 0) + 1))))
+                episode == null -> before.copy(items = before.items + (key to (day to (before.items[key]?.second ?: 1))))
+                else ->
+                    before.copy(
+                        items = before.items + (key to (day to (before.items[key]?.second ?: 1))),
+                        episodes = before.episodes + (key to (before.episodes[key].orEmpty() + ("${season}x$episode" to day))),
+                    )
+            }
+        scope.launch {
+            if (!mark(key, whenWatched, season, episode, reload = false)) {
+                _state.value = before
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onFail() }
+            } else {
+                kotlinx.coroutines.delay(4_000) // the server refreshes its copy right after; then take the exact dates
+                load()
+            }
+        }
+    }
+
+    /** Remove from your history at once on the TV, and on Trakt in the background (put back if Trakt refuses). */
+    fun removeInBackground(
+        key: String,
+        season: Int?,
+        episode: Int?,
+        onFail: () -> Unit,
+    ) {
+        val before = _state.value
+        _state.value =
+            when {
+                season == null -> before.copy(items = before.items - key, episodes = before.episodes - key)
+                episode == null -> before.copy(episodes = before.episodes + (key to before.episodes[key].orEmpty().filterKeys { !it.startsWith("${season}x") }))
+                else -> before.copy(episodes = before.episodes + (key to (before.episodes[key].orEmpty() - "${season}x$episode")))
+            }
+        scope.launch {
+            if (!unmark(key, season, episode, reload = false)) {
+                _state.value = before
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { onFail() }
+            } else {
+                kotlinx.coroutines.delay(4_000)
+                load()
+            }
+        }
+    }
+
     /** Add a viewing to your Trakt history; [whenWatched]: now, released, unknown or yyyy-MM-dd. True when Trakt took it. */
     suspend fun mark(
         key: String,
         whenWatched: String,
         season: Int?,
         episode: Int?,
+        reload: Boolean = true,
     ): Boolean =
         withContext(WholphinDispatchers.IO) {
             val k = key.replace(":", "-")
             val q = "key=$k&when=$whenWatched" + (season?.let { "&season=$it" } ?: "") + (episode?.let { "&episode=$it" } ?: "")
             val ok = ServerAccess.post("/Plugins/ImdbRatings/History/Mark?$q") != null
-            load()
+            if (reload) load()
             ok
         }
 
@@ -90,12 +154,13 @@ object HistoryStore {
         key: String,
         season: Int?,
         episode: Int?,
+        reload: Boolean = true,
     ): Boolean =
         withContext(WholphinDispatchers.IO) {
             val k = key.replace(":", "-")
             val q = "key=$k" + (season?.let { "&season=$it" } ?: "") + (episode?.let { "&episode=$it" } ?: "")
             val ok = ServerAccess.post("/Plugins/ImdbRatings/History/Unmark?$q") != null
-            load()
+            if (reload) load()
             ok
         }
 }

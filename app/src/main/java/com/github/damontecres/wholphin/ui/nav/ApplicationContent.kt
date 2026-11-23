@@ -126,6 +126,8 @@ fun ApplicationContent(
         )
         // NoBars: "Mark watched…" (your Trakt history), over any page
         com.github.damontecres.wholphin.ui.components.TraktMarkHost()
+        // NoBars: the quick view for posters outside your library
+        com.github.damontecres.wholphin.ui.components.QuickViewHost(navigationManager)
     }
     }
 }

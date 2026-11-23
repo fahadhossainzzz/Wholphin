@@ -14,7 +14,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +32,6 @@ import com.github.damontecres.wholphin.services.HistoryStore
 import com.github.damontecres.wholphin.services.StreamingStore
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import org.jellyfin.sdk.model.api.BaseItemKind
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -83,6 +81,22 @@ object TraktMark {
     fun ask(item: BaseItem): Boolean = targetFor(item)?.also(::ask) != null
 
     fun watched(target: Target?): Boolean = target != null && HistoryStore.watched(target.key, target.season, target.episode)
+
+    /** For messages from places without a screen context (poster menus). Set by the app's root. */
+    @Volatile var appContext: android.content.Context? = null
+
+    /** Mark it watched (now / released): the tick at once, Trakt in the background, a message only if it fails. */
+    fun mark(
+        target: Target,
+        whenWatched: String,
+    ) {
+        appContext?.let { markWatched(it, target, whenWatched) }
+            ?: HistoryStore.markInBackground(target.key, whenWatched, target.season, target.episode) {}
+    }
+
+    fun remove(target: Target) {
+        appContext?.let { removeWatched(it, target) } ?: HistoryStore.removeInBackground(target.key, target.season, target.episode) {}
+    }
 }
 
 /** Whether a library poster's item is in your Trakt history (null: not a film, series, season or episode). */
@@ -99,36 +113,59 @@ fun traktWatched(item: BaseItem?): Boolean? {
     }
 }
 
-/** The dialog for "Mark watched…" (shown over any page; placed once in the app's root). */
+/** "On release (16 Jan 2026)" / "On its air date": the label for the second choice; null when it isn't out yet. */
+@Composable
+fun releaseLabel(target: TraktMark.Target): String? {
+    if (target.season != null) return if (target.episode != null) "Watched on its air date" else "Watched on air dates"
+    val factsVersion by com.github.damontecres.wholphin.services.PosterFacts.version.collectAsState()
+    LaunchedEffect(target.key) { com.github.damontecres.wholphin.services.PosterFacts.load(listOf(target.key)) }
+    val day = remember(target.key, factsVersion) { com.github.damontecres.wholphin.services.PosterFacts.get(target.key)?.releaseDate }
+    return when {
+        day == null -> null
+        day > LocalDate.now().toString() -> null
+        else -> "Watched on release (" + LocalDate.parse(day).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)) + ")"
+    }
+}
+
+/** Send a mark to Trakt: the tick shows at once; a message only if Trakt doesn't take it. */
+fun markWatched(
+    context: android.content.Context,
+    target: TraktMark.Target,
+    whenWatched: String,
+) {
+    HistoryStore.markInBackground(target.key, whenWatched, target.season, target.episode) {
+        Toast.makeText(context, "Trakt didn't take it" + (if (whenWatched == "released") " (no release date yet)" else "") + ". Try again in a moment.", Toast.LENGTH_SHORT).show()
+    }
+}
+
+fun removeWatched(
+    context: android.content.Context,
+    target: TraktMark.Target,
+) {
+    HistoryStore.removeInBackground(target.key, target.season, target.episode) {
+        Toast.makeText(context, "Trakt didn't remove it. Try again in a moment.", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * The small dialog for the watched button on library pages: Watched just now · Watched on release (date) · Remove from
+ * history (with a check first). Each choice closes it at once; Trakt gets it in the background.
+ */
 @Composable
 fun TraktMarkHost() {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { TraktMark.appContext = context.applicationContext }
     val target by TraktMark.request.collectAsState()
     val t = target ?: return
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val history by HistoryStore.state.collectAsState()
-    var step by remember(t) { mutableStateOf("when") }
-    var day by remember(t) { mutableStateOf(LocalDate.now()) }
-    var busy by remember(t) { mutableStateOf(false) }
-    val first = remember(t, step) { FocusRequester() }
-    LaunchedEffect(t, step) { first.tryRequestFocus() }
+    var confirmRemove by remember(t) { mutableStateOf(false) }
+    val first = remember(t, confirmRemove) { FocusRequester() }
+    LaunchedEffect(t, confirmRemove) { first.tryRequestFocus() }
     val inHistory = TraktMark.watched(t)
     val plays = if (t.season == null) history.items[t.key]?.second ?: 0 else 0
-    val lastDay = if (t.season == null) history.items[t.key]?.first else null
-
-    fun done(ok: Boolean, what: String) {
-        busy = false
-        Toast.makeText(context, if (ok) what else "Trakt didn't take it. Try again in a moment.", Toast.LENGTH_SHORT).show()
-        if (ok) TraktMark.request.value = null
-    }
-
-    fun mark(whenWatched: String) {
-        if (busy) return
-        busy = true
-        scope.launch { done(HistoryStore.mark(t.key, whenWatched, t.season, t.episode), "Added to your Trakt history") }
-    }
-
-    Dialog(onDismissRequest = { TraktMark.request.value = null }) {
+    val release = releaseLabel(t)
+    val close = { TraktMark.request.value = null }
+    Dialog(onDismissRequest = close) {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier =
@@ -137,72 +174,42 @@ fun TraktMarkHost() {
                     .background(Color(0xF0141414), RoundedCornerShape(12.dp))
                     .padding(20.dp),
         ) {
-            Text(
-                if (step == "remove") "Remove from your history?" else "Mark watched",
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-            )
-            Text(t.title, fontSize = 15.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 2)
+            Text(t.title, style = MaterialTheme.typography.titleLarge, color = Color.White, maxLines = 2)
             if (inHistory) {
-                val d = lastDay?.takeIf { it.isNotBlank() }?.let { runCatching { LocalDate.parse(it).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)) }.getOrNull() }
-                Text(
-                    "In your history" + (d?.let { ": watched $it" } ?: "") + (if (plays > 1) " · $plays×" else ""),
-                    fontSize = 13.sp,
-                    color = Color(0xFF9BE59B),
-                )
+                Text(watchedLine(history.items[t.key]) ?: "In your history", fontSize = 13.sp, color = Color(0xFF9BE59B))
             }
-            when (step) {
-                "when" -> {
-                    if (inHistory) Text("Watched again? Add another viewing:", fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
-                    Button(onClick = { mark("now") }, modifier = Modifier.focusRequester(first)) { Text("Just now") }
-                    Button(onClick = { mark("released") }) { Text("On its release date") }
-                    Button(onClick = { step = "pick" }) { Text("Pick a date…") }
-                    Button(onClick = { mark("unknown") }) { Text("Unknown date") }
-                    if (inHistory) {
-                        Button(onClick = { step = "remove" }) { Text("Remove from history…") }
-                    }
-                }
-                "pick" -> {
-                    @Composable
-                    fun adjuster(
-                        label: String,
-                        value: String,
-                        minus: () -> Unit,
-                        plus: () -> Unit,
-                        focus: Boolean = false,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(label, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.width(70.dp))
-                            Button(onClick = minus, modifier = if (focus) Modifier.focusRequester(first) else Modifier) { Text("−") }
-                            Text(value, color = Color.White, fontSize = 18.sp, modifier = Modifier.width(110.dp))
-                            Button(onClick = plus) { Text("+") }
-                        }
-                    }
-                    val today = LocalDate.now()
-                    adjuster("Day", day.dayOfMonth.toString(), { day = day.minusDays(1) }, { if (day < today) day = day.plusDays(1) }, focus = true)
-                    adjuster("Month", day.format(DateTimeFormatter.ofPattern("MMMM", Locale.UK)), { day = day.minusMonths(1) }, { day = minOf(today, day.plusMonths(1)) })
-                    adjuster("Year", day.year.toString(), { day = day.minusYears(1) }, { day = minOf(today, day.plusYears(1)) })
-                    Button(onClick = { mark(day.toString()) }) {
-                        Text("Watched on " + day.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)))
-                    }
-                    Button(onClick = { step = "when" }) { Text("Back") }
-                }
-                "remove" -> {
-                    Text(
-                        if (plays > 1) "This removes all $plays viewings from your Trakt history." else "This removes it from your Trakt history.",
-                        fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.8f),
-                    )
-                    Button(onClick = { step = "when" }, modifier = Modifier.focusRequester(first)) { Text("Keep it") }
+            if (!confirmRemove) {
+                Button(onClick = {
+                    markWatched(context, t, "now")
+                    close()
+                }, modifier = Modifier.focusRequester(first)) { Text("👁  Watched just now") }
+                release?.let {
                     Button(onClick = {
-                        if (!busy) {
-                            busy = true
-                            scope.launch { done(HistoryStore.unmark(t.key, t.season, t.episode), "Removed from your Trakt history") }
-                        }
-                    }) { Text("Remove") }
+                        markWatched(context, t, "released")
+                        close()
+                    }) { Text("👁  $it") }
                 }
+                if (inHistory) Button(onClick = { confirmRemove = true }) { Text("Remove from history…") }
+            } else {
+                Text(
+                    if (plays > 1) "Remove all $plays viewings from your Trakt history?" else "Remove it from your Trakt history?",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                )
+                Button(onClick = { confirmRemove = false }, modifier = Modifier.focusRequester(first)) { Text("Keep it") }
+                Button(onClick = {
+                    removeWatched(context, t)
+                    close()
+                }) { Text("Remove") }
             }
-            if (busy) Text("Sending to Trakt…", fontSize = 13.sp, color = Color.White.copy(alpha = 0.7f))
         }
     }
+}
+
+/** "Watched 12 Mar 2019 · 2×" (or just "Watched" when the date isn't known). */
+fun watchedLine(entry: Pair<String, Int>?): String? {
+    entry ?: return null
+    val (date, plays) = entry
+    val d = date.takeIf { it.isNotBlank() }?.let { runCatching { LocalDate.parse(it).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)) }.getOrNull() }
+    return listOfNotNull(d?.let { "Watched $it" } ?: "Watched", if (plays > 1) "$plays×" else null).joinToString(" · ")
 }

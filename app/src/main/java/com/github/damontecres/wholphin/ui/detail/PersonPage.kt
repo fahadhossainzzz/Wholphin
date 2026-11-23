@@ -241,8 +241,8 @@ class PersonViewModel
                         navigationManager.navigateTo(item.destination())
                         return@launchIO
                     }
-                    // any other title opens its full page (built on demand by the server's title service)
-                    navigationManager.navigateTo(Destination.CatalogTitle(c.tmdb, c.tv))
+                    // any other title: the quick view (its buttons; "View details" for the whole title page)
+                    com.github.damontecres.wholphin.ui.components.QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
                     return@launchIO
                 } catch (e: Exception) {
                     Timber.w(e, "NoBars: could not open %s", c.title)
@@ -716,9 +716,13 @@ private fun WorkRow(
                         onClick = { onClick(index, c) },
                         // NoBars: long press: "Mark watched…" (your Trakt history)
                         onLongClick = {
-                            com.github.damontecres.wholphin.ui.components.TraktMark.ask(
-                                com.github.damontecres.wholphin.ui.components.TraktMark.Target(c.ownedKey, c.title),
-                            )
+                            if (owned) {
+                                com.github.damontecres.wholphin.ui.components.TraktMark.ask(
+                                    com.github.damontecres.wholphin.ui.components.TraktMark.Target(c.ownedKey, c.title),
+                                )
+                            } else {
+                                com.github.damontecres.wholphin.ui.components.QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
+                            }
                         },
                         interactionSource = interaction,
                         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),

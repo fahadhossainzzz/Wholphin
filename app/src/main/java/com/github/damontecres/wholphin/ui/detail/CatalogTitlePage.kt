@@ -207,17 +207,19 @@ private fun CatalogTitleContent(
                         },
                         modifier = Modifier.firstOne(),
                     ) { Text(if (onList) "🔖  On Watchlist" else "＋  Watchlist") }
-                    // NoBars: your Trakt history
+                    // NoBars: your Trakt history: the tick at once, Trakt in the background
                     val history by com.github.damontecres.wholphin.services.HistoryStore.state.collectAsState()
-                    val histKey = (if (e.series) "tv:" else "movie:") + e.tmdb
-                    val seen = history.items[histKey]
-                    Button(
-                        onClick = {
-                            com.github.damontecres.wholphin.ui.components.TraktMark.ask(
-                                com.github.damontecres.wholphin.ui.components.TraktMark.Target(histKey, e.title),
-                            )
-                        },
-                    ) { Text(if (seen != null) "👁  Watched" + (if (seen.second > 1) " ${seen.second}×" else "") else "👁  Mark watched…") }
+                    val histTarget = com.github.damontecres.wholphin.ui.components.TraktMark.Target((if (e.series) "tv:" else "movie:") + e.tmdb, e.title)
+                    val seen = history.items[histTarget.key]
+                    Button(onClick = { com.github.damontecres.wholphin.ui.components.TraktMark.mark(histTarget, "now") }) { Text("👁  Watched just now") }
+                    com.github.damontecres.wholphin.ui.components.releaseLabel(histTarget)?.let { label ->
+                        Button(onClick = { com.github.damontecres.wholphin.ui.components.TraktMark.mark(histTarget, "released") }) { Text("👁  $label") }
+                    }
+                    if (seen != null) {
+                        Button(onClick = { com.github.damontecres.wholphin.ui.components.TraktMark.ask(histTarget) }) {
+                            Text("👁  " + (com.github.damontecres.wholphin.ui.components.watchedLine(seen) ?: "Watched") + " · Remove…")
+                        }
+                    }
                 }
             }
         }
@@ -377,13 +379,12 @@ private fun CatalogTitleContent(
                                 item = item,
                                 onClick = {
                                     val lib = other.libraryId
-                                    viewModel.navigationManager.navigateTo(
-                                        if (lib != null) {
-                                            Destination.MediaItem(lib, if (other.series) BaseItemKind.SERIES else BaseItemKind.MOVIE)
-                                        } else {
-                                            Destination.CatalogTitle(other.tmdb, other.series)
-                                        },
-                                    )
+                                    if (lib != null) {
+                                        viewModel.navigationManager.navigateTo(Destination.MediaItem(lib, if (other.series) BaseItemKind.SERIES else BaseItemKind.MOVIE))
+                                    } else {
+                                        // NoBars: the quick view; "View details" for its whole page
+                                        com.github.damontecres.wholphin.ui.components.QuickView.open(other)
+                                    }
                                 },
                                 onLongClick = {},
                                 aspectRatio = com.github.damontecres.wholphin.ui.AspectRatios.TALL,

@@ -243,13 +243,12 @@ fun AnyPersonPage(
                 work = work,
                 onClickCredit = { c ->
                     val lib = StreamingStore.ownedId(c.ownedKey)
-                    viewModel.navigationManager.navigateTo(
-                        if (lib != null) {
-                            Destination.MediaItem(lib, if (c.tv) BaseItemKind.SERIES else BaseItemKind.MOVIE)
-                        } else {
-                            Destination.CatalogTitle(c.tmdb, c.tv)
-                        },
-                    )
+                    if (lib != null) {
+                        viewModel.navigationManager.navigateTo(Destination.MediaItem(lib, if (c.tv) BaseItemKind.SERIES else BaseItemKind.MOVIE))
+                    } else {
+                        // the quick view (its buttons; "View details" for the whole title page)
+                        com.github.damontecres.wholphin.ui.components.QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
+                    }
                 },
                 extraLines = personExtraLines(p, work),
                 photos = p?.photos.orEmpty(),

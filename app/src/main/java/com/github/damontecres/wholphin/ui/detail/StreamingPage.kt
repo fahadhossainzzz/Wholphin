@@ -196,7 +196,7 @@ fun StreamingPage(
                 onFocusPosition = { position = it },
                 onClickItem = onClick,
                 // hold OK on any poster to add it to the Watchlist, or take it off
-                onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { toggle(it) } },
+                onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { longPress(it) { e -> toggle(e) } } },
                 onClickPlay = onClick,
                 showClock = preferences.appPreferences.interfacePreferences.showClock,
                 onUpdateBackdrop = viewModel::updateBackdrop,
@@ -228,19 +228,26 @@ fun StreamingPage(
 
 private const val MY_LIST_ROW = "my-list"
 
-/** NoBars: a title you have opens its library page (file, versions, Play); any other opens its title page. */
+/** NoBars: a title you have opens its library page (file, versions, Play); any other opens the quick view (its
+ * buttons, and "View details" for the whole title page). */
 private fun openTitle(
     viewModel: StreamingViewModel,
     entry: StreamingStore.Entry,
 ) {
     val lib = StreamingStore.libraryId(entry)
-    viewModel.navigationManager.navigateTo(
-        if (lib != null) {
-            Destination.MediaItem(lib, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE)
-        } else {
-            Destination.CatalogTitle(entry.tmdb, entry.series)
-        },
-    )
+    if (lib != null) {
+        viewModel.navigationManager.navigateTo(Destination.MediaItem(lib, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE))
+    } else {
+        com.github.damontecres.wholphin.ui.components.QuickView.open(entry)
+    }
+}
+
+/** NoBars: hold OK: the quick view for a title outside your library; for one you have, Watchlist on / off as before. */
+private fun longPress(
+    entry: StreamingStore.Entry,
+    toggle: (StreamingStore.Entry) -> Unit,
+) {
+    if (StreamingStore.libraryId(entry) == null) com.github.damontecres.wholphin.ui.components.QuickView.open(entry) else toggle(entry)
 }
 
 @Composable
@@ -795,7 +802,7 @@ private fun WatchlistRows(
             position = p
             onOpen(item)
         },
-        onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let(onToggle) },
+        onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { longPress(it) { e -> onToggle(e) } } },
         onClickPlay = { _, item -> onOpen(item) },
         showClock = false,
         onUpdateBackdrop = viewModel::updateBackdrop,
@@ -942,7 +949,7 @@ private fun WatchlistAll(
         com.github.damontecres.wholphin.ui.detail.CardGrid(
             pager = shown,
             onClickItem = { _, item -> onOpen(item) },
-            onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let(onToggle) },
+            onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { longPress(it) { e -> onToggle(e) } } },
             onClickPlay = { _, item -> onOpen(item) },
             letterPosition = { c -> shown.indexOfFirst { it.name?.uppercase(Locale.US)?.removePrefix("THE ")?.startsWith(c) == true }.coerceAtLeast(0) },
             gridFocusRequester = gridFocus,

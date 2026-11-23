@@ -586,16 +586,38 @@ private fun buildContextMenuItems(
         }
         // NoBars: "watched" on the TV means your Trakt history: films, series, seasons and episodes open "Mark
         // watched…" (when you watched it; remove from history); anything else keeps Jellyfin's played mark
-        if (TraktMark.targetFor(item) != null) {
+        val traktTarget = TraktMark.targetFor(item)
+        if (traktTarget != null) {
+            // NoBars: your Trakt history, straight from the menu (the tick shows at once; Trakt gets it in the background)
             add(
                 DialogItem(
-                    text = R.string.mark_watched,
-                    iconStringRes = if (inHistory) R.string.fa_eye else R.string.fa_eye_slash,
+                    text = "Watched just now",
+                    iconStringRes = R.string.fa_eye,
                     dismissOnClick = true,
                 ) {
-                    TraktMark.ask(item)
+                    TraktMark.mark(traktTarget, "now")
                 },
             )
+            add(
+                DialogItem(
+                    text = if (traktTarget.episode != null) "Watched on its air date" else if (traktTarget.season != null) "Watched on air dates" else "Watched on release date",
+                    iconStringRes = R.string.fa_eye,
+                    dismissOnClick = true,
+                ) {
+                    TraktMark.mark(traktTarget, "released")
+                },
+            )
+            if (inHistory) {
+                add(
+                    DialogItem(
+                        text = "Remove from history…",
+                        iconStringRes = R.string.fa_eye_slash,
+                        dismissOnClick = true,
+                    ) {
+                        TraktMark.ask(traktTarget) // asks first ("Remove all 2 viewings?")
+                    },
+                )
+            }
         } else {
             add(
                 DialogItem(

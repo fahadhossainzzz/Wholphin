@@ -182,8 +182,10 @@ configure<ApplicationExtension> {
             isEnable = !isBuildingBundle.get()
 
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = true
+            // NoBars: only what TVs run (32-bit and 64-bit ARM); no x86_64 (emulators) or universal APK, so the build
+            // packages less
+            include("armeabi-v7a", "arm64-v8a")
+            isUniversalApk = false
         }
     }
     packaging {
@@ -207,6 +209,8 @@ configure<ApplicationExtension> {
 
     lint {
         disable.add("MissingTranslation")
+        // NoBars: no lint pass in release builds (it only reports; real errors still stop the build) - 1.5 min saved
+        checkReleaseBuilds = false
     }
     androidResources {
         generateLocaleConfig = true

@@ -82,6 +82,8 @@ jobs:
             esac
           done
           sha256sum out/*.apk | tee out/SHA256SUMS.txt
+          # the name the M2 server gives the APK on HDD2 (it fetches each new build by itself), and this build's commit
+          { cat NOBARS_VERSION 2>/dev/null || echo "build"; echo "$GITHUB_SHA"; } > out/version.txt
           # R8 mapping, so crash stack traces in the TV's logs can be read
           m=$(find app/build/outputs/mapping -name mapping.txt | head -1)
           [ -n "$m" ] && gzip -c "$m" > out/mapping.txt.gz

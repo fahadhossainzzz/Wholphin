@@ -402,6 +402,7 @@ private const val SERIES_ROW = 2
 private const val EPISODE_ROW = 3
 private const val DISCOVER_ROW = EPISODE_ROW + 1
 private const val WORK_ROW = DISCOVER_ROW + 1
+private const val MINE_ROW = WORK_ROW + 50
 
 @Composable
 fun PersonPageContent(
@@ -442,6 +443,12 @@ fun PersonPageContent(
     }
     var focusedOnHeader by remember { mutableStateOf(true) }
     val workRows = remember(work) { careerRows(work) }
+    val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
+    var history by remember { mutableStateOf(com.github.damontecres.wholphin.services.HistoryStore.items) }
+    LaunchedEffect(Unit) {
+        history = com.github.damontecres.wholphin.services.HistoryStore.load()
+    }
+    val personalRows = remember(work, wanted, history) { personalRows(work, wanted, history) }
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         // NoBars: always on. With scrolling off while the header had focus, the list couldn't build the next row when
@@ -473,9 +480,22 @@ fun PersonPageContent(
                         },
             )
         }
-        if (photos.size > 1) {
-            item {
-                PersonPhotoRow(photos, Modifier.padding(start = 24.dp, bottom = 8.dp))
+        // NoBars: yours first: this person's titles on your Watchlist, and the ones you've watched (your Trakt history)
+        personalRows.forEachIndexed { g, row ->
+            item(key = "mine-${row.title}") {
+                WorkRow(
+                    title = row.title,
+                    work = row.items,
+                    showKind = true,
+                    rowIndex = MINE_ROW + g,
+                    position = position,
+                    focusRequester = focusRequester,
+                    onClick = { index, c ->
+                        position = RowColumn(MINE_ROW + g, index)
+                        onClickCredit(c)
+                    },
+                    note = row.note,
+                )
             }
         }
         item {
@@ -628,6 +648,38 @@ internal fun careerRows(work: List<WorkCredit>): List<CareerRow> {
     )
 }
 
+/** A personal row: its titles and the second line under each poster. */
+internal class PersonalRow(
+    val title: String,
+    val items: List<WorkCredit>,
+    val note: (WorkCredit) -> String?,
+)
+
+/**
+ * NoBars: the person's titles that are yours: on your Watchlist (newest first, as on the list), and in your watch
+ * history (your Trakt history; the last time you watched, most recent first).
+ */
+internal fun personalRows(
+    work: List<WorkCredit>,
+    wanted: List<com.github.damontecres.wholphin.services.StreamingStore.Entry>,
+    history: Map<String, Pair<String, Int>>,
+): List<PersonalRow> {
+    val titles = work.filter { it.poster != null }.distinctBy { it.ownedKey }
+    val onList = wanted.map { (if (it.series) "tv:" else "movie:") + it.tmdb }
+    val listed = titles.filter { it.ownedKey in onList }.sortedBy { onList.indexOf(it.ownedKey) }
+    val watched = titles.filter { it.ownedKey in history }.sortedByDescending { history[it.ownedKey]?.first.orEmpty() }
+    fun role(c: WorkCredit) = if (c.crew) c.role else if (c.role.isBlank()) null else "as ${c.role}"
+    return listOfNotNull(
+        PersonalRow("On your watchlist (${listed.size})", listed, ::role).takeIf { listed.isNotEmpty() },
+        PersonalRow("You've watched (${watched.size})", watched) { c ->
+            history[c.ownedKey]?.let { (date, plays) ->
+                val d = runCatching { java.time.LocalDate.parse(date).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.UK)) }.getOrNull()
+                listOfNotNull(d?.let { "Watched $it" } ?: "Watched", if (plays > 1) "${plays}×" else null).joinToString(" · ")
+            }
+        }.takeIf { watched.isNotEmpty() },
+    )
+}
+
 /** NoBars: one row of the person's career as posters; ✓ marks what you have, 🔖 what is on your Watchlist. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -639,6 +691,7 @@ private fun WorkRow(
     position: RowColumn,
     focusRequester: FocusRequester,
     onClick: (Int, WorkCredit) -> Unit,
+    note: ((WorkCredit) -> String?)? = null,
 ) {
     val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
     val shown = work
@@ -761,6 +814,7 @@ private fun WorkRow(
                     // "Self - Guest" → "Guest"; a plain "Himself" needs no second line
                     val roleLine =
                         when {
+                            note != null -> note(c).orEmpty()
                             c.crew -> c.role
                             SELF_ROLE.containsMatchIn(c.role) && !c.role.contains("archive", ignoreCase = true) ->
                                 c.role.replace(Regex("""^\s*(self|himself|herself|themselves|themself)\s*[-–:,]?\s*""", RegexOption.IGNORE_CASE), "").trim()

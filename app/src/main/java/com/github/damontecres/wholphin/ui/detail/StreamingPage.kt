@@ -923,76 +923,23 @@ private fun WatchlistAll(
             else -> emptyList()
         }
     }
-    var focused by remember { mutableStateOf<com.github.damontecres.wholphin.data.model.BaseItem?>(null) }
-    val gridFocus = remember { FocusRequester() }
-    // the grid remembers its poster; on landing (and after removing a poster) focus goes to it, never the menu
-    val landing = remember { takeFocus }
-    LaunchedEffect(refocus) {
-        if (landing || refocus > 0) {
-            repeat(20) {
-                kotlinx.coroutines.delay(50)
-                if (gridFocus.tryRequestFocus()) return@LaunchedEffect
-            }
-        }
-    }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    Column(modifier = modifier) {
-        com.github.damontecres.wholphin.ui.components.CollectionFolderHeader(
-            listIsNotEmpty = shown.isNotEmpty(),
-            showHeader = true,
-            showTitle = true,
-            playEnabled = false,
-            title = title,
-            sortAndDirection = sort,
-            onSortChange = { sort = it },
-            sortOptions = sortOptions,
-            getPossibleFilterValues = { possible(it) },
-            onClickShowViewOptions = {},
-            onClickPlayAll = {},
-            onClickRandom = { shown.randomOrNull()?.let(onOpen) },
-            currentFilter = filter,
-            filterOptions = filterOptions,
-            onFilterChange = { filter = it },
-            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-        )
-        com.github.damontecres.wholphin.ui.main.HomePageHeader(
-            item = focused,
-            showLogo = false,
-            modifier = Modifier.fillMaxWidth().height(HeaderUtils.browseHeight + 16.dp).padding(start = HeaderUtils.startPadding, top = 16.dp),
-        )
-        if (shown.isEmpty()) {
-            Text("Nothing on your Watchlist matches this filter.", color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
-        }
-        com.github.damontecres.wholphin.ui.detail.CardGrid(
-            pager = shown,
-            onClickItem = { _, item -> onOpen(item) },
-            onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { longPress(it) { e -> onToggle(e) } } },
-            onClickPlay = { _, item -> onOpen(item) },
-            letterPosition = { c -> shown.indexOfFirst { it.name?.uppercase(Locale.US)?.removePrefix("THE ")?.startsWith(c) == true }.coerceAtLeast(0) },
-            gridFocusRequester = gridFocus,
-            showJumpButtons = false,
-            showLetterButtons = false,
-            modifier = Modifier.fillMaxSize(),
-            positionCallback = { columns, pos ->
-                onShowTabs(pos < columns)
-                focused = shown.getOrNull(pos)
-                shown.getOrNull(pos)?.let(viewModel::updateBackdrop)
-            },
-            cardContent = { details ->
-                val width = with(density) { details.widthPx.toDp() }
-                com.github.damontecres.wholphin.ui.cards.BannerCard(
-                    name = details.item?.name,
-                    item = details.item,
-                    onClick = details.onClick,
-                    onLongClick = details.onLongClick,
-                    aspectRatio = com.github.damontecres.wholphin.ui.AspectRatios.TALL,
-                    cardHeight = if (details.widthPx > 0) width * 1.5f else 172.dp,
-                    modifier = details.mod,
-                )
-            },
-            columns = 6,
-        )
-    }
+    // the same grid as the Movies library (header, posters, View options)
+    com.github.damontecres.wholphin.ui.components.CatalogGrid(
+        title = title,
+        items = shown,
+        sort = sort,
+        onSortChange = { sort = it },
+        sortOptions = sortOptions,
+        filter = filter,
+        onFilterChange = { filter = it },
+        filterOptions = filterOptions,
+        getPossibleFilterValues = { possible(it) },
+        onClickItem = { _, item -> onOpen(item) },
+        onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { longPress(it) { e -> onToggle(e) } } },
+        onFocusItem = viewModel::updateBackdrop,
+        emptyText = "Nothing on your Watchlist matches this filter.",
+        modifier = modifier,
+    )
 }
 
 @Composable

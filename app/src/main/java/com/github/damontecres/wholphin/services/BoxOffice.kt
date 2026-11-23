@@ -77,7 +77,14 @@ object BoxOffice {
         id ?: return null
         _library.value[id.toString().replace("-", "")]?.let { return it }
         val e = StreamingStore.entries[id] ?: return null
-        if (e.gross == null && e.budget == null) return null
+        // a catalogue poster of a film you have: your copy's figures
+        StreamingStore.libraryId(e)?.let { lib -> _library.value[lib.toString().replace("-", "")]?.let { return it } }
+        if (e.gross == null && e.budget == null) {
+            // else the title's own figures from the server (TMDB), once they've been asked for
+            val f = PosterFacts.get((if (e.series) "tv:" else "movie:") + e.tmdb) ?: return null
+            if (f.gross == null && f.budget == null) return null
+            return Money(f.gross, f.budget, e.year ?: f.year, null, source = "TMDB")
+        }
         return Money(e.gross, e.budget, e.year, e.grossToday, source = "TMDB")
     }
 

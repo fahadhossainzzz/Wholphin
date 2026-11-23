@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,11 +50,19 @@ fun PosterRatingBand(
     if (!LocalInterfaceCustomization.current.showPosterRatings) return
     val dto = item?.data ?: return
     if (dto.type !in RATED_TYPES) return
-    val stars = dto.communityRating?.takeIf { it > 0f }
+    // NoBars: a catalogue poster (Watchlist, History…) fills in when its facts arrive from the server
+    val catalogue = com.github.damontecres.wholphin.services.StreamingStore.entries[dto.id]
+    val factsVersion by com.github.damontecres.wholphin.services.PosterFacts.version.collectAsState()
+    val facts =
+        remember(dto.id, factsVersion) {
+            catalogue?.let { com.github.damontecres.wholphin.services.PosterFacts.get((if (it.series) "tv:" else "movie:") + it.tmdb) }
+        }
+    val stars = dto.communityRating?.takeIf { it > 0f } ?: facts?.rating
     // NoBars: Jellyfin's own score, else the daily run's (OMDb / MDBList), else the audience 🍿 score
     val tomatoes =
         dto.criticRating?.takeIf { it >= 0f }
             ?: com.github.damontecres.wholphin.services.CriticFallback.tomatoes(dto.id)?.toFloat()
+            ?: facts?.rt?.toFloat()
     val popcorn = if (tomatoes == null) com.github.damontecres.wholphin.services.CriticFallback.popcorn(dto.id) else null
     // NoBars: worldwide box office in the middle slot, films only
     val money =
@@ -64,7 +74,7 @@ fun PosterRatingBand(
             null
         }
     if (stars == null && tomatoes == null && popcorn == null && money == null) return
-    val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.services.StreamingStore.votes(dto.id)
+    val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.services.StreamingStore.votes(dto.id) ?: facts?.votes
     RatingBand(stars, votes, money, tomatoes, popcorn, modifier)
 }
 

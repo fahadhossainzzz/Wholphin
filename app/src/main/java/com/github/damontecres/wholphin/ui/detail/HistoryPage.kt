@@ -167,6 +167,10 @@ fun HistoryPage(
     }
     var seeAll by remember { mutableStateOf<HistoryShelf.Row?>(null) }
     val r = rows.orEmpty()
+    // box office and 🍅 for the posters' bands (the rest comes with the rows)
+    LaunchedEffect(r) {
+        com.github.damontecres.wholphin.services.PosterFacts.load(r.flatMap { row -> row.items.map { (if (it.series) "tv:" else "movie:") + it.tmdb } }.distinct())
+    }
     val all = seeAll
     when {
         !loaded && rows == null -> LoadingPage(modifier)
@@ -271,75 +275,32 @@ private fun HistoryGrid(
         cards = emptyList()
         load(0)
     }
-    var focused by remember { mutableStateOf<BaseItem?>(null) }
-    val gridFocus = remember { FocusRequester() }
-    LaunchedEffect(row.id) {
-        repeat(30) {
-            kotlinx.coroutines.delay(60)
-            if (gridFocus.tryRequestFocus()) return@LaunchedEffect
-        }
-    }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    Column(modifier = modifier) {
-        com.github.damontecres.wholphin.ui.components.CollectionFolderHeader(
-            listIsNotEmpty = cards.isNotEmpty(),
-            showHeader = true,
-            showTitle = true,
-            playEnabled = false,
-            title = "${row.name} · ${cards.size}",
-            sortAndDirection = sort,
-            onSortChange = { sort = it },
-            sortOptions = sortOptions,
-            getPossibleFilterValues = { option ->
-                when (option) {
-                    WatchlistTypeFilter -> listOf(FilterValueOption("Films", "films"), FilterValueOption("Shows", "shows"))
-                    WatchlistGenreFilter -> genres.map { FilterValueOption(it, it) }
-                    else -> emptyList()
-                }
-            },
-            onClickShowViewOptions = {},
-            onClickPlayAll = {},
-            onClickRandom = { cards.filterNotNull().randomOrNull()?.let { openHistory(viewModel, it) } },
-            currentFilter = filter,
-            filterOptions = filterOptions,
-            onFilterChange = { filter = it },
-            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-        )
-        com.github.damontecres.wholphin.ui.main.HomePageHeader(
-            item = focused,
-            showLogo = false,
-            modifier = Modifier.fillMaxWidth().height(HeaderUtils.browseHeight + 16.dp).padding(start = HeaderUtils.startPadding, top = 16.dp),
-        )
-        CardGrid(
-            pager = cards,
-            onClickItem = { _, item -> openHistory(viewModel, item) },
-            onLongClickItem = { _, item -> historyMenu(item) },
-            onClickPlay = { _, item -> openHistory(viewModel, item) },
-            letterPosition = { 0 },
-            gridFocusRequester = gridFocus,
-            showJumpButtons = false,
-            showLetterButtons = false,
-            modifier = Modifier.fillMaxSize(),
-            positionCallback = { _, pos ->
-                focused = cards.getOrNull(pos)
-                focused?.let(viewModel::updateBackdrop)
-                // the page you're on and the next one
-                load(pos / 100)
-                if (pos % 100 > 60) load(pos / 100 + 1)
-            },
-            cardContent = { details ->
-                val width = with(density) { details.widthPx.toDp() }
-                com.github.damontecres.wholphin.ui.cards.BannerCard(
-                    name = details.item?.name,
-                    item = details.item,
-                    onClick = details.onClick,
-                    onLongClick = details.onLongClick,
-                    aspectRatio = com.github.damontecres.wholphin.ui.AspectRatios.TALL,
-                    cardHeight = if (details.widthPx > 0) width * 1.5f else 172.dp,
-                    modifier = details.mod,
-                )
-            },
-            columns = 6,
-        )
-    }
+    // the same grid as the Movies library (header, posters, View options); pages load as you scroll
+    com.github.damontecres.wholphin.ui.components.CatalogGrid(
+        title = "${row.name} · ${cards.size}",
+        items = cards,
+        sort = sort,
+        onSortChange = { sort = it },
+        sortOptions = sortOptions,
+        filter = filter,
+        onFilterChange = { filter = it },
+        filterOptions = filterOptions,
+        getPossibleFilterValues = { option ->
+            when (option) {
+                WatchlistTypeFilter -> listOf(FilterValueOption("Films", "films"), FilterValueOption("Shows", "shows"))
+                WatchlistGenreFilter -> genres.map { FilterValueOption(it, it) }
+                else -> emptyList()
+            }
+        },
+        onClickItem = { _, item -> openHistory(viewModel, item) },
+        onLongClickItem = { _, item -> historyMenu(item) },
+        onFocusItem = viewModel::updateBackdrop,
+        emptyText = "Nothing in this row matches this filter.",
+        modifier = modifier,
+        onPosition = { pos ->
+            // the page you're on and the next one
+            load(pos / 100)
+            if (pos % 100 > 60) load(pos / 100 + 1)
+        },
+    )
 }

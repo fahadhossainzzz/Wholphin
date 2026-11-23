@@ -180,47 +180,17 @@ private fun CatalogTitleContent(
                 if (e.overview.isNotBlank()) {
                     Text(e.overview, fontSize = 15.sp, color = Color.White.copy(alpha = 0.9f), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
-                    var firstUsed = false
-                    fun Modifier.firstOne(): Modifier =
-                        if (!firstUsed) {
-                            firstUsed = true
-                            this.focusRequester(first)
-                        } else {
-                            this
-                        }
-                    e.trailer?.let { key -> Button(onClick = { openTrailer(context, key) }, modifier = Modifier.firstOne()) { Text("▶  Trailer") } }
-                    openSvc?.let { svc ->
-                        Button(
-                            onClick = { WatchProviders.open(context, WatchProviders.Provider(0, svc, null), e.title, netflixId = e.netflixId) },
-                            modifier = Modifier.firstOne(),
-                        ) { Text("▶  " + shortService(svc)) }
-                    }
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                val now = WantedStore.toggle(e)
-                                android.widget.Toast
-                                    .makeText(context, if (now) "Added to your Watchlist" else "Removed from your Watchlist", android.widget.Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-                        },
-                        modifier = Modifier.firstOne(),
-                    ) { Text(if (onList) "🔖  On Watchlist" else "＋  Watchlist") }
-                    // NoBars: your Trakt history: the tick at once, Trakt in the background
-                    val history by com.github.damontecres.wholphin.services.HistoryStore.state.collectAsState()
-                    val histTarget = com.github.damontecres.wholphin.ui.components.TraktMark.Target((if (e.series) "tv:" else "movie:") + e.tmdb, e.title)
-                    val seen = history.items[histTarget.key]
-                    Button(onClick = { com.github.damontecres.wholphin.ui.components.TraktMark.mark(histTarget, "now") }) { Text("👁  Watched just now") }
-                    com.github.damontecres.wholphin.ui.components.releaseLabel(histTarget)?.let { label ->
-                        Button(onClick = { com.github.damontecres.wholphin.ui.components.TraktMark.mark(histTarget, "released") }) { Text("👁  $label") }
-                    }
-                    if (seen != null) {
-                        Button(onClick = { com.github.damontecres.wholphin.ui.components.TraktMark.ask(histTarget) }) {
-                            Text("👁  " + (com.github.damontecres.wholphin.ui.components.watchedLine(seen) ?: "Watched") + " · Remove…")
-                        }
-                    }
-                }
+                com.github.damontecres.wholphin.ui.components.TitleActions(
+                    tmdb = e.tmdb,
+                    series = e.series,
+                    title = e.title,
+                    entry = e,
+                    loading = false,
+                    firstFocus = first,
+                    poster = e.poster,
+                    width = 560.dp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
         // ---- journey

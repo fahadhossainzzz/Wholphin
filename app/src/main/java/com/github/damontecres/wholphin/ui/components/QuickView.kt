@@ -3,8 +3,6 @@ package com.github.damontecres.wholphin.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -77,7 +75,6 @@ object QuickView {
     fun open(e: StreamingStore.Entry) = open(e.tmdb, e.series, e.title, e.poster)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun QuickViewHost(navigationManager: NavigationManager) {
     val req by QuickView.request.collectAsState()
@@ -143,14 +140,14 @@ fun QuickViewHost(navigationManager: NavigationManager) {
                             .background(Color.White.copy(alpha = 0.08f)),
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
-                    Text(e?.title ?: r.title, style = MaterialTheme.typography.headlineSmall, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(e?.title ?: r.title, style = MaterialTheme.typography.headlineSmall, color = Color.White, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     val line =
                         listOfNotNull(
                             (e?.year ?: facts?.year)?.toString(),
                             if (r.series) e?.seasons?.let { "$it season${if (it == 1) "" else "s"}" } else e?.runtime?.let { if (it >= 60) "${it / 60}h ${it % 60}m" else "${it}m" },
                             e?.genres?.take(3)?.joinToString(", ")?.takeIf { it.isNotBlank() },
                         ).joinToString("  ·  ")
-                    if (line.isNotBlank()) Text(line, fontSize = 15.sp, color = Color.White.copy(alpha = 0.8f))
+                    Text(line, fontSize = 15.sp, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // ratings: IMDb (the server's database, as on every poster) · box office · 🍅
                     val stars = facts?.rating ?: e?.imdbRating
                     val votes = facts?.votes ?: e?.imdbVotes
@@ -162,7 +159,7 @@ fun QuickViewHost(navigationManager: NavigationManager) {
                             money,
                             rt?.let { "🍅 $it%" },
                         ).joinToString("    ")
-                    if (ratings.isNotBlank()) Text(ratings, fontSize = 15.sp, color = Color(0xFFF5C518))
+                    Text(ratings, fontSize = 15.sp, color = Color(0xFFF5C518), maxLines = 1)
                     // where it is, and what's yours
                     val status =
                         listOfNotNull(
@@ -170,10 +167,8 @@ fun QuickViewHost(navigationManager: NavigationManager) {
                             if (onList) "🔖 On your watchlist" else null,
                             seen?.let { "👁 " + (watchedLine(it) ?: "Watched") },
                         )
-                    status.forEach { Text(it, fontSize = 14.sp, color = Color(0xFFA5D6A7), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    e?.overview?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 4, overflow = TextOverflow.Ellipsis)
-                    }
+                    Text(status.joinToString("   "), fontSize = 14.sp, color = Color(0xFFA5D6A7), minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(e?.overview.orEmpty(), fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f), minLines = 4, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (confirmRemove) {
@@ -190,60 +185,20 @@ fun QuickViewHost(navigationManager: NavigationManager) {
                     }) { Text("Remove") }
                 }
             } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    var firstUsed = false
-                    fun Modifier.firstOne(): Modifier =
-                        if (!firstUsed) {
-                            firstUsed = true
-                            this.focusRequester(first)
-                        } else {
-                            this
-                        }
-                    val trailer = e?.trailer
-                    if (trailer != null) {
-                        Button(onClick = { openTrailer(context, trailer) }, modifier = Modifier.firstOne()) { Text("▶  Trailer") }
-                    } else if (loading) {
-                        // its place kept while the card arrives, so the buttons don't move
-                        Button(onClick = {}, enabled = false) { Text("▶  Trailer") }
-                    }
-                    if (e != null) {
-                        val svc = (e.services + e.ott.map { o -> o.first }).firstOrNull { s -> WatchProviders.canOpen(s) }
-                        if (svc != null) {
-                            Button(
-                                onClick = { WatchProviders.open(context, WatchProviders.Provider(0, svc, null), e.title, netflixId = e.netflixId) },
-                                modifier = Modifier.firstOne(),
-                            ) { Text("▶  " + shortService(svc)) }
-                        }
-                    }
-                    val listEntry =
-                        e ?: StreamingStore.Entry(
-                            tmdb = r.tmdb,
-                            series = r.series,
-                            title = r.title,
-                            year = facts?.year,
-                            poster = r.poster,
-                            overview = "",
-                            genres = emptyList(),
-                            runtime = null,
-                            seasons = null,
-                            imdbRating = null,
-                            imdbVotes = null,
-                            libraryId = null,
-                            rank = null,
-                        )
-                    Button(onClick = { scope.launch { WantedStore.toggle(listEntry) } }, modifier = Modifier.firstOne()) {
-                        Text(if (onList) "🔖  On watchlist ✓" else "＋  Watchlist")
-                    }
-                    Button(onClick = { TraktMark.mark(target, "now") }, modifier = Modifier.firstOne()) { Text("👁  Watched just now") }
-                    releaseLabel(target)?.let { label ->
-                        Button(onClick = { TraktMark.mark(target, "released") }) { Text("👁  $label") }
-                    }
-                    if (seen != null) Button(onClick = { confirmRemove = true }) { Text("Remove from history…") }
-                    Button(onClick = {
+                TitleActions(
+                    tmdb = r.tmdb,
+                    series = r.series,
+                    title = r.title,
+                    entry = e,
+                    loading = loading,
+                    firstFocus = first,
+                    poster = r.poster,
+                    onDetails = {
                         close()
                         navigationManager.navigateTo(Destination.CatalogTitle(r.tmdb, r.series))
-                    }) { Text("View details  →") }
-                }
+                    },
+                    onRemove = { confirmRemove = true },
+                )
             }
         }
     }

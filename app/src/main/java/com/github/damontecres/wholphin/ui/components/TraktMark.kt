@@ -49,6 +49,8 @@ object TraktMark {
         val title: String,
         val season: Int? = null,
         val episode: Int? = null,
+        /** open the dialog straight at "Remove it from your history?" */
+        val confirmRemove: Boolean = false,
     )
 
     val request = MutableStateFlow<Target?>(null)
@@ -158,7 +160,7 @@ fun TraktMarkHost() {
     val target by TraktMark.request.collectAsState()
     val t = target ?: return
     val history by HistoryStore.state.collectAsState()
-    var confirmRemove by remember(t) { mutableStateOf(false) }
+    var confirmRemove by remember(t) { mutableStateOf(t.confirmRemove) }
     val first = remember(t, confirmRemove) { FocusRequester() }
     LaunchedEffect(t, confirmRemove) { first.tryRequestFocus() }
     val inHistory = TraktMark.watched(t)
@@ -196,7 +198,7 @@ fun TraktMarkHost() {
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.85f),
                 )
-                Button(onClick = { confirmRemove = false }, modifier = Modifier.focusRequester(first)) { Text("Keep it") }
+                Button(onClick = { if (t.confirmRemove) close() else confirmRemove = false }, modifier = Modifier.focusRequester(first)) { Text("Keep it") }
                 Button(onClick = {
                     removeWatched(context, t)
                     close()

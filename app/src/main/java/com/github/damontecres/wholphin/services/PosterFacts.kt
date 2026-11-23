@@ -36,7 +36,7 @@ object PosterFacts {
 
     suspend fun load(keys: List<String>) =
         withContext(WholphinDispatchers.IO) {
-            val todo = keys.filter { it !in facts && asked.add(it) }
+            val todo = keys.filter { !facts.containsKey(it) && asked.add(it) }
             for (chunk in todo.chunked(60)) {
                 try {
                     val q = chunk.joinToString(",") { it.replace(":", "-") }

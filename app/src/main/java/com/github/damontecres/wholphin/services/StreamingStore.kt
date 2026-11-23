@@ -4,6 +4,7 @@ import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -153,10 +154,48 @@ object StreamingStore {
 
     fun libraryId(e: Entry): UUID? = e.libraryId ?: owned["${if (e.series) "tv" else "movie"}:${e.tmdb}"]?.let(::uuidFromHex)
 
+    // NoBars: the library list changes when the server adds a new import's facts (minutes after the import), so it is
+    // asked again at most every 2 minutes, and only re-read when the file changed (the server answers 304 otherwise)
+    @Volatile private var libraryModified = 0L
+
+    @Volatile private var libraryCheckedAt = 0L
+    private val libraryScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + WholphinDispatchers.IO)
+
+    /** Posters call this: re-read the library list in the background if the server's copy changed. */
+    fun refreshLibrarySoon() {
+        val now = System.currentTimeMillis()
+        if (now - libraryCheckedAt < 120_000) return
+        libraryCheckedAt = now
+        libraryScope.launch { loadLibrary() }
+    }
+
+    private fun fetchLibraryIfChanged(): String? {
+        val base = ServerAccess.baseUrl ?: return null
+        val t = ServerAccess.token ?: return null
+        val conn = java.net.URL(base.trimEnd('/') + "/Plugins/ImdbRatings/Streaming/library").openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 8_000
+        conn.readTimeout = 20_000
+        conn.setRequestProperty("Authorization", "MediaBrowser Token=\"$t\"")
+        conn.setRequestProperty("Accept", "application/json")
+        if (libraryModified > 0) conn.ifModifiedSince = libraryModified
+        return try {
+            if (conn.responseCode == 200) {
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                libraryModified = conn.lastModified
+                text
+            } else {
+                null // 304: unchanged
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     suspend fun loadLibrary() =
         withContext(WholphinDispatchers.IO) {
+            libraryCheckedAt = System.currentTimeMillis()
             try {
-                val json = JSONObject(ServerAccess.get("/Plugins/ImdbRatings/Streaming/library") ?: return@withContext)
+                val json = JSONObject(fetchLibraryIfChanged() ?: return@withContext)
                 logos = json.optJSONObject("logos")?.toStringMap() ?: emptyMap()
                 val items = json.optJSONObject("items") ?: JSONObject()
                 val map = HashMap<String, List<String>>()

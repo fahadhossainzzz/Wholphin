@@ -31,7 +31,10 @@ fun posterInfoText(
     item: BaseItem?,
     base: String? = null,
 ): AnnotatedString {
-    LaunchedEffect(Unit) { SizeStore.refreshSoon() }
+    LaunchedEffect(Unit) {
+        SizeStore.refreshSoon()
+        com.github.damontecres.wholphin.services.StreamingStore.refreshLibrarySoon()
+    }
     val sizes by SizeStore.sizes.collectAsState()
     if (item == null) return AnnotatedString("")
     val first =

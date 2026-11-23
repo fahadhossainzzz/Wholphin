@@ -958,9 +958,18 @@ private fun creditFacts(
         if (c.votes >= 20 && c.rating > 0f) add("★ " + String.format(Locale.US, "%.1f", c.rating))
     }.joinToString("  ·  ")
 
-/** NoBars: a title's trailer (YouTube key) from our plugin, which asks TMDB once and keeps it 30 days. */
+/**
+ * NoBars: a title's trailer (YouTube key): from the server's title service, the same answer every page uses (and the
+ * title's card is then ready if you open its page); else the plugin's own trailer lookup (kept 30 days).
+ */
 internal suspend fun trailerKey(c: Credit): String? =
     kotlinx.coroutines.withContext(com.github.damontecres.wholphin.util.WholphinDispatchers.IO) {
+        kotlinx.coroutines
+            .withTimeoutOrNull(5_000) {
+                com.github.damontecres.wholphin.services.StreamingStore
+                    .title(c.tmdb, c.tv)
+                    ?.trailer
+            }?.let { return@withContext it }
         try {
             com.github.damontecres.wholphin.services.ServerAccess
                 .get("/Plugins/ImdbRatings/Trailer/" + (if (c.tv) "tv-" else "movie-") + c.tmdb)

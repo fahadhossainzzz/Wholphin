@@ -210,6 +210,7 @@ fun ContextMenu(
                 resources = resources,
                 item = item,
                 watched = item.played,
+                inHistory = TraktMark.watched(TraktMark.targetFor(item)),
                 favorite = item.favorite,
                 seriesId = item.data.seriesId,
                 sourceId = chosenStreams?.source?.id?.toUUIDOrNull(),
@@ -365,6 +366,7 @@ private fun buildContextMenuItems(
     watched: Boolean,
     favorite: Boolean,
     canClearChosenStreams: Boolean,
+    inHistory: Boolean = false,
     actions: ContextMenuActions,
     onChooseVersion: () -> Unit,
     onChooseTracks: (MediaStreamType) -> Unit,
@@ -582,15 +584,29 @@ private fun buildContextMenuItems(
                 },
             )
         }
-        add(
-            DialogItem(
-                text = if (watched) R.string.mark_unwatched else R.string.mark_watched,
-                iconStringRes = if (watched) R.string.fa_eye else R.string.fa_eye_slash,
-                dismissOnClick = true,
-            ) {
-                actions.onClickWatch.invoke(item.id, !watched)
-            },
-        )
+        // NoBars: "watched" on the TV means your Trakt history: films, series, seasons and episodes open "Mark
+        // watched…" (when you watched it; remove from history); anything else keeps Jellyfin's played mark
+        if (TraktMark.targetFor(item) != null) {
+            add(
+                DialogItem(
+                    text = R.string.mark_watched,
+                    iconStringRes = if (inHistory) R.string.fa_eye else R.string.fa_eye_slash,
+                    dismissOnClick = true,
+                ) {
+                    TraktMark.ask(item)
+                },
+            )
+        } else {
+            add(
+                DialogItem(
+                    text = if (watched) R.string.mark_unwatched else R.string.mark_watched,
+                    iconStringRes = if (watched) R.string.fa_eye else R.string.fa_eye_slash,
+                    dismissOnClick = true,
+                ) {
+                    actions.onClickWatch.invoke(item.id, !watched)
+                },
+            )
+        }
         add(
             DialogItem(
                 text = if (favorite) R.string.remove_favorite else R.string.add_favorite,

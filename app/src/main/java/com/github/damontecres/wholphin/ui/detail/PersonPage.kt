@@ -444,9 +444,11 @@ fun PersonPageContent(
     var focusedOnHeader by remember { mutableStateOf(true) }
     val workRows = remember(work) { careerRows(work) }
     val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
-    var history by remember { mutableStateOf(com.github.damontecres.wholphin.services.HistoryStore.items) }
+    // your Trakt history: checked live when the page opens, and updated at once when you mark something on the TV
+    val historyState by com.github.damontecres.wholphin.services.HistoryStore.state.collectAsState()
+    val history = historyState.items
     LaunchedEffect(Unit) {
-        history = com.github.damontecres.wholphin.services.HistoryStore.load()
+        com.github.damontecres.wholphin.services.HistoryStore.load()
     }
     val pageRows =
         remember(work, wanted, history) {
@@ -684,6 +686,9 @@ private fun WorkRow(
 ) {
     val wanted by com.github.damontecres.wholphin.services.WantedStore.items.collectAsState()
     val shown = work
+    // NoBars: IMDb ★ and votes, box office and 🍅 for the band at the bottom of each poster (the whole row at once)
+    val factsVersion by com.github.damontecres.wholphin.services.PosterFacts.version.collectAsState()
+    LaunchedEffect(work) { com.github.damontecres.wholphin.services.PosterFacts.load(work.map { it.ownedKey }) }
     androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = title,
@@ -709,6 +714,12 @@ private fun WorkRow(
                 ) {
                     androidx.tv.material3.Surface(
                         onClick = { onClick(index, c) },
+                        // NoBars: long press: "Mark watched…" (your Trakt history)
+                        onLongClick = {
+                            com.github.damontecres.wholphin.ui.components.TraktMark.ask(
+                                com.github.damontecres.wholphin.ui.components.TraktMark.Target(c.ownedKey, c.title),
+                            )
+                        },
                         interactionSource = interaction,
                         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
                         modifier =
@@ -737,6 +748,18 @@ private fun WorkRow(
                                             .padding(4.dp)
                                             .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
                                             .padding(horizontal = 5.dp, vertical = 1.dp),
+                                )
+                            }
+                            // the same band as every other poster: ★ IMDb + votes · box office · 🍅
+                            val f = remember(c.ownedKey, factsVersion) { com.github.damontecres.wholphin.services.PosterFacts.get(c.ownedKey) }
+                            if (f != null) {
+                                com.github.damontecres.wholphin.ui.cards.RatingBand(
+                                    stars = f.rating,
+                                    votes = f.votes,
+                                    money = f.money,
+                                    tomatoes = f.rt?.toFloat(),
+                                    popcorn = null,
+                                    modifier = Modifier.align(Alignment.BottomCenter),
                                 )
                             }
                             val seen = c.ownedKey in watched
@@ -782,7 +805,7 @@ private fun WorkRow(
                                     c.year.ifBlank { "Upcoming" },
                                     if (!showKind) null else if (c.tv) "TV" else "Film",
                                     c.episodes?.let { "$it ep" },
-                                    if (c.votes >= 20 && c.rating > 0f) "★ " + String.format(java.util.Locale.US, "%.1f", c.rating) else null,
+                                    // (the rating is in the band now: IMDb's, as on every other poster)
                                 ).joinToString(" · "),
                             )
                             if (mine != null) {

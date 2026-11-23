@@ -82,13 +82,15 @@ fun ItemCardImage(
             }
         }
     Box(modifier = modifier) {
+        // NoBars: the watched tick is your Trakt history (films, series, seasons, episodes)
+        val inHistory = com.github.damontecres.wholphin.ui.components.traktWatched(item)
         ItemCardImage(
             imageUrl = imageUrl,
             name = name,
             showOverlay = showOverlay,
             favorite = favorite,
-            watched = watched,
-            unwatchedCount = unwatchedCount,
+            watched = inHistory ?: watched,
+            unwatchedCount = if (inHistory != null) -1 else unwatchedCount,
             watchedPercent = watchedPercent,
             numberOfVersions = numberOfVersions,
             modifier = Modifier.fillMaxSize(),

@@ -236,7 +236,10 @@ fun SeriesDetails(
                         viewModel.playNextUp()
                     }
                 },
-                watchOnClick = { showWatchConfirmation = true },
+                watchOnClick = {
+                    // NoBars: your Trakt history (the whole series)
+                    if (!com.github.damontecres.wholphin.ui.components.TraktMark.ask(series)) showWatchConfirmation = true
+                },
                 favoriteOnClick = {
                     val favorite = series.data.userData?.isFavorite ?: false
                     viewModel.setFavorite(series.id, !favorite, null)

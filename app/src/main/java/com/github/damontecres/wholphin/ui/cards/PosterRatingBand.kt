@@ -65,6 +65,23 @@ fun PosterRatingBand(
         }
     if (stars == null && tomatoes == null && popcorn == null && money == null) return
     val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.services.StreamingStore.votes(dto.id)
+    RatingBand(stars, votes, money, tomatoes, popcorn, modifier)
+}
+
+/**
+ * NoBars: the band itself, from values (any poster: library, catalogue, a person's career): ★ rating + votes, box
+ * office, 🍅 (or 🍿). The same look everywhere, so the numbers line up across a row.
+ */
+@Composable
+fun RatingBand(
+    stars: Float?,
+    votes: Int?,
+    money: String?,
+    tomatoes: Float?,
+    popcorn: Int?,
+    modifier: Modifier = Modifier,
+) {
+    if (stars == null && tomatoes == null && popcorn == null && money == null) return
 
     val main = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
     val starStyle = main.copy(color = FilledStarColor)

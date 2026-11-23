@@ -264,7 +264,8 @@ fun SeriesOverview(
                 watchOnClick = {
                     episodeList?.getOrNull(position.episodeRowIndex)?.let {
                         val played = it.data.userData?.played ?: false
-                        viewModel.setWatched(it.id, !played, position.episodeRowIndex)
+                        // NoBars: your Trakt history
+                        if (!com.github.damontecres.wholphin.ui.components.TraktMark.ask(it)) viewModel.setWatched(it.id, !played, position.episodeRowIndex)
                     }
                 },
                 favoriteOnClick = {

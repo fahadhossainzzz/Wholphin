@@ -193,7 +193,8 @@ fun MovieDetails(
                         )
                 },
                 watchOnClick = {
-                    viewModel.setWatched(movie.id, !movie.played)
+                    // NoBars: your Trakt history
+                    if (!com.github.damontecres.wholphin.ui.components.TraktMark.ask(movie)) viewModel.setWatched(movie.id, !movie.played)
                 },
                 favoriteOnClick = {
                     viewModel.setFavorite(movie.id, !movie.favorite)
@@ -347,7 +348,7 @@ fun MovieDetailsContent(
                     ExpandablePlayButtons(
                         title = movie.title ?: "",
                         resumePosition = resumePosition,
-                        watched = dto.userData?.played ?: false,
+                        watched = com.github.damontecres.wholphin.ui.components.traktWatched(movie) ?: (dto.userData?.played ?: false),
                         favorite = dto.userData?.isFavorite ?: false,
                         playOnClick = {
                             position = HEADER_ROW

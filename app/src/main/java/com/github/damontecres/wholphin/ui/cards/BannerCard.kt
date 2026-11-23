@@ -72,6 +72,8 @@ fun BannerCard(
     useSeriesForPrimary: Boolean = true,
     showInfoLine: Boolean = true,
 ) {
+    // NoBars: the watched tick is your Trakt history
+    val played = com.github.damontecres.wholphin.ui.components.traktWatched(item) ?: played
     val imageUrlService = LocalImageUrlService.current
     // NoBars: remember films shown in rows, so their page can open at once
     androidx.compose.runtime.remember(item?.id) {

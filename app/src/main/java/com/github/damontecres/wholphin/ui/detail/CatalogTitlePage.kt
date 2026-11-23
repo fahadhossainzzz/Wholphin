@@ -80,6 +80,7 @@ fun CatalogTitlePage(
     var page by remember(tmdb, series) { mutableStateOf<StreamingStore.TitlePage?>(null) }
     var searched by remember(tmdb, series) { mutableStateOf(cached != null) }
     LaunchedEffect(tmdb, series) {
+        com.github.damontecres.wholphin.services.HistoryStore.loadIfOld()
         val e = cached ?: StreamingStore.findEntry(tmdb, series)
         if (e != entry) entry = e
         searched = true
@@ -206,6 +207,17 @@ private fun CatalogTitleContent(
                         },
                         modifier = Modifier.firstOne(),
                     ) { Text(if (onList) "🔖  On Watchlist" else "＋  Watchlist") }
+                    // NoBars: your Trakt history
+                    val history by com.github.damontecres.wholphin.services.HistoryStore.state.collectAsState()
+                    val histKey = (if (e.series) "tv:" else "movie:") + e.tmdb
+                    val seen = history.items[histKey]
+                    Button(
+                        onClick = {
+                            com.github.damontecres.wholphin.ui.components.TraktMark.ask(
+                                com.github.damontecres.wholphin.ui.components.TraktMark.Target(histKey, e.title),
+                            )
+                        },
+                    ) { Text(if (seen != null) "👁  Watched" + (if (seen.second > 1) " ${seen.second}×" else "") else "👁  Mark watched…") }
                 }
             }
         }
@@ -337,6 +349,11 @@ private fun CatalogTitleContent(
         val like = page?.like.orEmpty()
         if (like.isNotEmpty()) {
             item {
+                // NoBars: the band on these posters too (IMDb ★ + votes, box office, 🍅), asked for the whole row
+                val factsVersion by com.github.damontecres.wholphin.services.PosterFacts.version.collectAsState()
+                LaunchedEffect(like) {
+                    com.github.damontecres.wholphin.services.PosterFacts.load(like.map { (if (it.series) "tv:" else "movie:") + it.tmdb })
+                }
                 Column(Modifier.padding(start = HeaderUtils.startPadding + 8.dp)) {
                     Text("More like this", style = MaterialTheme.typography.titleLarge, color = Color.White)
                     // NoBars: scrolls by whole posters (BannerCard 200 dp tall, 2:3 -> 133 dp wide, 14 dp apart)
@@ -347,7 +364,14 @@ private fun CatalogTitleContent(
                     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
                         items(like) { other ->
-                            val item = remember(other) { StreamingStore.toBaseItem(other, "like") }
+                            val item =
+                                remember(other, factsVersion) {
+                                    val f = com.github.damontecres.wholphin.services.PosterFacts.get((if (other.series) "tv:" else "movie:") + other.tmdb)
+                                    StreamingStore.toBaseItem(
+                                        if (f == null) other else other.copy(imdbRating = f.rating, imdbVotes = f.votes, rt = f.rt, gross = f.gross, budget = f.budget),
+                                        "like",
+                                    )
+                                }
                             BannerCard(
                                 name = other.title,
                                 item = item,

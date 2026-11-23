@@ -164,7 +164,8 @@ fun EpisodeDetails(
                         )
                 },
                 watchOnClick = {
-                    viewModel.setWatched(ep.id, !ep.played)
+                    // NoBars: your Trakt history
+                    if (!com.github.damontecres.wholphin.ui.components.TraktMark.ask(ep)) viewModel.setWatched(ep.id, !ep.played)
                 },
                 favoriteOnClick = {
                     viewModel.setFavorite(ep.id, !ep.favorite)
@@ -268,7 +269,7 @@ fun EpisodeDetailsContent(
                     ExpandablePlayButtons(
                         title = ep.title ?: "",
                         resumePosition = resumePosition,
-                        watched = dto.userData?.played ?: false,
+                        watched = com.github.damontecres.wholphin.ui.components.traktWatched(ep) ?: (dto.userData?.played ?: false),
                         favorite = dto.userData?.isFavorite ?: false,
                         playOnClick = {
                             position = HEADER_ROW

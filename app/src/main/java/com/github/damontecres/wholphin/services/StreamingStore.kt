@@ -637,6 +637,8 @@ object StreamingStore {
                 type = if (e.series) BaseItemKind.SERIES else BaseItemKind.MOVIE,
                 name = e.title,
                 productionYear = e.year,
+                // NoBars: so its poster shows the watched tick from your Trakt history, and its menu can mark it
+                providerIds = mapOf("Tmdb" to e.tmdb.toString()),
                 communityRating = e.imdbRating ?: e.tmdbRating,
                 criticRating = e.rt?.toFloat(),
                 overview = e.overview,

@@ -124,6 +124,8 @@ fun ApplicationContent(
                 }
             },
         )
+        // NoBars: "Mark watched…" (your Trakt history), over any page
+        com.github.damontecres.wholphin.ui.components.TraktMarkHost()
     }
     }
 }

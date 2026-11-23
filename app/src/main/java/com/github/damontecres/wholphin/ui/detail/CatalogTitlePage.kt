@@ -272,14 +272,8 @@ private fun CatalogTitleContent(
                     people = people,
                     title = com.github.damontecres.wholphin.R.string.nb_cast,
                     onClick = { person ->
-                        scope.launch {
-                            val id = findLibraryPerson(person.name ?: "")
-                            if (id != null) {
-                                viewModel.navigationManager.navigateTo(Destination.MediaItem(id, BaseItemKind.PERSON))
-                            } else {
-                                android.widget.Toast.makeText(context, "${person.name} isn't in your library", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                        val tmdbId = page?.castIds?.getOrNull(people.indexOf(person))
+                        scope.launch { openPerson(person.name ?: "", tmdbId, viewModel) { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show() } }
                     },
                     modifier = Modifier.fillMaxWidth().padding(start = HeaderUtils.startPadding),
                 )
@@ -293,10 +287,30 @@ private fun CatalogTitleContent(
             item {
                 NbSection("Crew") {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        crew.forEach { (job, names) ->
+                        crew.forEachIndexed { line, (job, names) ->
                             Column(Modifier.width(260.dp)) {
                                 Text(job, fontSize = 12.sp, color = Color.White.copy(alpha = 0.55f))
-                                Text(names.joinToString(", "), fontSize = 14.sp, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                // NoBars: each name opens that person's page (library or not)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    names.forEachIndexed { n, name ->
+                                        val tmdbId = page?.crewIds?.getOrNull(line)?.getOrNull(n)
+                                        androidx.tv.material3.Surface(
+                                            onClick = {
+                                                scope.launch { openPerson(name, tmdbId, viewModel) { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show() } }
+                                            },
+                                            shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(RoundedCornerShape(6.dp)),
+                                            colors =
+                                                androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                                                    containerColor = Color.White.copy(alpha = 0.06f),
+                                                    focusedContainerColor = Color.White,
+                                                    contentColor = Color.White,
+                                                    focusedContentColor = Color.Black,
+                                                ),
+                                        ) {
+                                            Text(name, fontSize = 14.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -417,6 +431,24 @@ private object MinimalScroll : androidx.compose.foundation.gestures.BringIntoVie
 }
 
 /** The person's id in your library (exact name), or null. */
+/**
+ * NoBars: open a person's page: your library's page when they're in it (it has your films too), else anyone's page by
+ * their TMDB number.
+ */
+private suspend fun openPerson(
+    name: String,
+    tmdbId: Int?,
+    viewModel: StreamingViewModel,
+    toast: (String) -> Unit,
+) {
+    val id = findLibraryPerson(name)
+    when {
+        id != null -> viewModel.navigationManager.navigateTo(Destination.MediaItem(id, BaseItemKind.PERSON))
+        tmdbId != null -> viewModel.navigationManager.navigateTo(Destination.AnyPerson(tmdbId, name))
+        else -> toast("$name isn't in your library")
+    }
+}
+
 private suspend fun findLibraryPerson(name: String): UUID? =
     kotlinx.coroutines.withContext(com.github.damontecres.wholphin.util.WholphinDispatchers.IO) {
         try {

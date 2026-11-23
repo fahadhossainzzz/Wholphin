@@ -166,6 +166,13 @@ sealed class Destination(
         val series: Boolean,
     ) : Destination(false)
 
+    /** NoBars: anyone's page by their TMDB number (a person outside your library) */
+    @Serializable
+    data class AnyPerson(
+        val tmdb: Int,
+        val name: String,
+    ) : Destination(false)
+
     @Serializable
     data object Discover : Destination(false)
 

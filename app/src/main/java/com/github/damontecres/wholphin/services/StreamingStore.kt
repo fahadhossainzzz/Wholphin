@@ -361,6 +361,10 @@ object StreamingStore {
         val crew: List<Pair<String, List<String>>>,
         val videos: List<Triple<String, String, String?>>,
         val like: List<Entry>,
+        /** NoBars: each cast member's TMDB number (null on pages saved before they were kept) */
+        val castIds: List<Int?> = emptyList(),
+        /** NoBars: the TMDB numbers of each crew line's names */
+        val crewIds: List<List<Int?>> = emptyList(),
     )
 
     private val pages =
@@ -384,8 +388,15 @@ object StreamingStore {
                             ServerAccess.get("/Plugins/ImdbRatings/Streaming/title/$key")
                         }
                         ?: return@withContext null
-                val o = JSONObject(text)
+                var o = JSONObject(text)
+                // a page saved before people's TMDB numbers were kept: rebuild it once (about a second)
+                val castArr = o.optJSONArray("cast")
+                if (castArr != null && castArr.length() > 0 && castArr.optJSONObject(0)?.has("i") == false) {
+                    ServerAccess.get("/Plugins/ImdbRatings/Title/$key?fresh=true")
+                    ServerAccess.get("/Plugins/ImdbRatings/Streaming/title/$key")?.let { o = JSONObject(it) }
+                }
                 fun list(k: String) = o.optJSONArray(k)?.toStringList().orEmpty()
+                fun idOf(x: Any?): Int? = (x as? Number)?.toInt()?.takeIf { it > 0 }
                 val page =
                     TitlePage(
                         tagline = o.str("tagline"),
@@ -416,6 +427,16 @@ object StreamingStore {
                         like =
                             o.optJSONArray("like")?.let { a ->
                                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let(::parseLike) }
+                            }.orEmpty(),
+                        castIds =
+                            o.optJSONArray("cast")?.let { a ->
+                                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i) }.map { c -> idOf(c.opt("i")) }
+                            }.orEmpty(),
+                        crewIds =
+                            o.optJSONArray("crew")?.let { a ->
+                                (0 until a.length()).mapNotNull { i ->
+                                    a.optJSONObject(i)?.let { c -> c.optJSONArray("ids")?.let { ids -> (0 until ids.length()).map { idOf(ids.opt(it)) } }.orEmpty() }
+                                }
                             }.orEmpty(),
                     )
                 synchronized(pages) { pages[key] = page }

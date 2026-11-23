@@ -163,12 +163,11 @@ class PersonViewModel
                             if (com.github.damontecres.wholphin.services.StreamingStore.owned.isEmpty()) {
                                 com.github.damontecres.wholphin.services.StreamingStore.loadLibrary()
                             }
-                            val credits =
+                            val json =
                                 dto.providerIds?.get("Tmdb")
                                     ?.let { com.github.damontecres.wholphin.services.ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
-                                    ?.let { com.github.damontecres.wholphin.ui.playback.overlay.parseCredits(it) }
-                                    .orEmpty()
-                            _state.update { it.copy(work = credits) }
+                            val credits = json?.let { com.github.damontecres.wholphin.ui.playback.overlay.parseCredits(it) }.orEmpty()
+                            _state.update { it.copy(work = credits, profile = json?.let(::parsePersonProfile)) }
                         } catch (e: Exception) {
                             Timber.w(e, "NoBars: all work unavailable")
                         }
@@ -269,6 +268,8 @@ data class PersonState(
     val discoverPerson: DiscoverItem? = null,
     val work: List<com.github.damontecres.wholphin.ui.playback.overlay.Credit> = emptyList(),
     val credit: com.github.damontecres.wholphin.ui.playback.overlay.Credit? = null,
+    /** NoBars: height, known for, other names and photos (TMDB / Trakt, via our plugin) */
+    val profile: PersonProfile? = null,
 )
 
 @Composable
@@ -317,9 +318,9 @@ fun PersonPage(
                 name = name,
                 overview = person.data.overview,
                 imageUrl = imageUrl,
-                birthdate = person.data.premiereDate?.toLocalDate(),
-                deathdate = person.data.endDate?.toLocalDate(),
-                birthPlace = person.data.productionLocations?.firstOrNull(),
+                birthdate = person.data.premiereDate?.toLocalDate() ?: state.profile?.born,
+                deathdate = person.data.endDate?.toLocalDate() ?: state.profile?.died,
+                birthPlace = person.data.productionLocations?.firstOrNull() ?: state.profile?.place,
                 favorite = person.favorite,
                 movies = state.movies,
                 series = state.series,
@@ -345,6 +346,8 @@ fun PersonPage(
                 enableViewMoreDiscover = state.discovered.size > discovered.size,
                 work = state.work,
                 onClickCredit = viewModel::openCredit,
+                extraLines = remember(state.profile, state.work) { personExtraLines(state.profile, state.work) },
+                photos = state.profile?.photos.orEmpty(),
                 modifier = modifier,
             )
             state.credit?.let { c ->
@@ -408,6 +411,9 @@ fun PersonPageContent(
     modifier: Modifier = Modifier,
     work: List<com.github.damontecres.wholphin.ui.playback.overlay.Credit> = emptyList(),
     onClickCredit: (com.github.damontecres.wholphin.ui.playback.overlay.Credit) -> Unit = {},
+    extraLines: List<String> = emptyList(),
+    photos: List<String> = emptyList(),
+    showFavorite: Boolean = true,
 ) {
     val focusRequester = remember { FocusRequester() }
     val headerFocusRequester = remember { FocusRequester() }
@@ -437,6 +443,8 @@ fun PersonPageContent(
                 favorite = favorite,
                 overviewOnClick = overviewOnClick,
                 favoriteOnClick = favoriteOnClick,
+                extraLines = extraLines,
+                showFavorite = showFavorite,
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -447,6 +455,11 @@ fun PersonPageContent(
                             focusedOnHeader = it.hasFocus
                         },
             )
+        }
+        if (photos.size > 1) {
+            item {
+                PersonPhotoRow(photos, Modifier.padding(start = 24.dp, bottom = 8.dp))
+            }
         }
         item {
             LoadingRow(
@@ -777,6 +790,8 @@ fun PersonHeader(
     overviewOnClick: () -> Unit,
     favoriteOnClick: () -> Unit,
     modifier: Modifier = Modifier,
+    extraLines: List<String> = emptyList(),
+    showFavorite: Boolean = true,
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     Row(
@@ -866,6 +881,16 @@ fun PersonHeader(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            // NoBars: known for, height, other names, years active and counts
+            extraLines.forEach { line ->
+                Text(
+                    text = line,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             val interactionSource = remember { MutableInteractionSource() }
             val buttonInteractionSource = remember { MutableInteractionSource() }
             val focused =
@@ -883,7 +908,7 @@ fun PersonHeader(
                 interactionSource = interactionSource,
                 modifier = Modifier.padding(top = 8.dp),
             )
-            ExpandableFaButton(
+            if (showFavorite) ExpandableFaButton(
                 title = if (favorite) R.string.remove_favorite else R.string.add_favorite,
                 iconStringRes = R.string.fa_heart,
                 onClick = favoriteOnClick,

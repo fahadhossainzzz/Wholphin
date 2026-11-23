@@ -362,6 +362,15 @@ fun DestinationContent(
             )
         }
 
+        is Destination.AnyPerson -> {
+            com.github.damontecres.wholphin.ui.detail.AnyPersonPage(
+                preferences = preferences,
+                tmdb = destination.tmdb,
+                name = destination.name,
+                modifier = modifier,
+            )
+        }
+
         is Destination.CatalogTitle -> {
             com.github.damontecres.wholphin.ui.detail.CatalogTitlePage(
                 tmdb = destination.tmdb,

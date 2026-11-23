@@ -32,6 +32,7 @@ import com.github.damontecres.wholphin.ui.cards.GridCard
 import com.github.damontecres.wholphin.ui.data.SortAndDirection
 import com.github.damontecres.wholphin.ui.detail.CardGrid
 import com.github.damontecres.wholphin.ui.main.HomePageHeader
+import com.github.damontecres.wholphin.ui.playback.scale
 import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.ui.util.ScrollToTopBringIntoViewSpec
 import kotlinx.serialization.json.Json
@@ -43,6 +44,7 @@ import org.jellyfin.sdk.model.api.ItemSortBy
  * the same grid with its "1 / 577" counter, and the same View options dialog. Scrolls on to the end.
  * The View options are shared by these grids and kept on the TV.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun CatalogGrid(
     title: String,

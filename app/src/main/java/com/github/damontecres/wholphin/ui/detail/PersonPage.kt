@@ -229,8 +229,7 @@ class PersonViewModel
             }
         }
 
-        /** NoBars: a title from "All work": yours opens its page; one on today's lists opens that title page;
-         * anything else shows its summary card (trailer, Watchlist). */
+        /** NoBars: a title from "All work": yours opens its library page; any other opens its full title page. */
         fun openCredit(c: com.github.damontecres.wholphin.ui.playback.overlay.Credit) {
             viewModelScope.launchIO {
                 try {
@@ -241,10 +240,9 @@ class PersonViewModel
                         navigationManager.navigateTo(item.destination())
                         return@launchIO
                     }
-                    if (com.github.damontecres.wholphin.services.StreamingStore.findEntry(c.tmdb, c.tv) != null) {
-                        navigationManager.navigateTo(Destination.CatalogTitle(c.tmdb, c.tv))
-                        return@launchIO
-                    }
+                    // any other title opens its full page (built on demand by the server's title service)
+                    navigationManager.navigateTo(Destination.CatalogTitle(c.tmdb, c.tv))
+                    return@launchIO
                 } catch (e: Exception) {
                     Timber.w(e, "NoBars: could not open %s", c.title)
                 }

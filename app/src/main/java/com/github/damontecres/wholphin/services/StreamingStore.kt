@@ -337,7 +337,15 @@ object StreamingStore {
             val key = "${if (series) "tv" else "movie"}-$tmdb"
             synchronized(pages) { pages[key] }?.let { return@withContext it }
             try {
-                val o = JSONObject(ServerAccess.get("/Plugins/ImdbRatings/Streaming/title/$key") ?: return@withContext null)
+                // NoBars: no page yet (a title outside today's lists): the title service builds it with the card
+                val text =
+                    ServerAccess.get("/Plugins/ImdbRatings/Streaming/title/$key")
+                        ?: run {
+                            title(tmdb, series) ?: return@withContext null
+                            ServerAccess.get("/Plugins/ImdbRatings/Streaming/title/$key")
+                        }
+                        ?: return@withContext null
+                val o = JSONObject(text)
                 fun list(k: String) = o.optJSONArray(k)?.toStringList().orEmpty()
                 val page =
                     TitlePage(
@@ -420,7 +428,10 @@ object StreamingStore {
             rows(service)?.asSequence()?.flatMap { it.items }?.firstOrNull(::match)?.let { return it }
         }
         WantedStore.load()
-        return WantedStore.items.value.firstOrNull(::match) ?: entries.values.firstOrNull(::match)
+        return WantedStore.items.value.firstOrNull(::match)
+            ?: entries.values.firstOrNull(::match)
+            // NoBars: any other title (a person's "All work", "More like this"): the server's title service
+            ?: title(tmdb, series)
     }
 
     private fun JSONObject.str(key: String): String? = optString(key).takeIf { it.isNotBlank() && it != "null" }

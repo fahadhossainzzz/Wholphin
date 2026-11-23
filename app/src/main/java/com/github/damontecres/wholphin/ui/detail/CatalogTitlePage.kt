@@ -91,7 +91,7 @@ fun CatalogTitlePage(
     val e = entry
     when {
         e == null && !searched -> LoadingPage(modifier)
-        e == null -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("This title isn't in today's lists any more.") }
+        e == null -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Couldn't load this title. Check that the server is on, then try again.") }
         else -> CatalogTitleContent(e, page, viewModel, modifier)
     }
 }

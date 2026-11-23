@@ -234,7 +234,7 @@ private fun HistoryGrid(
     // all the grid's places (null until loaded), and which pages of 100 have been asked for
     var cards by remember(row.id) { mutableStateOf<List<BaseItem?>>(row.items.map { StreamingStore.toBaseItem(it, "$HISTORY_ROW-${row.id}") }) }
     val asked = remember(row.id, sort, filter) { mutableSetOf<Int>() }
-    val query = { offset: Int ->
+    val query: suspend (Int) -> HistoryShelf.Page? = { offset ->
         val key =
             when (sort.sort) {
                 ItemSortBy.COMMUNITY_RATING -> "rating"

@@ -429,7 +429,9 @@ fun PersonPageContent(
     val workRows = remember(work) { careerRows(work) }
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        userScrollEnabled = !focusedOnHeader,
+        // NoBars: always on. With scrolling off while the header had focus, the list couldn't build the next row when
+        // it was just below the screen (a tall header, the photo row), so Down from the header did nothing.
+        userScrollEnabled = true,
         modifier = modifier,
     ) {
         item {

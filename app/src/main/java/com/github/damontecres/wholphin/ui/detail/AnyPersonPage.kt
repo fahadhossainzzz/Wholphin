@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,26 +132,54 @@ fun personExtraLines(
     return out
 }
 
-/** A short row of the person's other photos under the header (shown, not focused: they fit on one line). */
+/**
+ * A row of the person's other photos under the header. Each can be selected (so Down from the header always has
+ * somewhere to go) and opens large.
+ */
 @Composable
 fun PersonPhotoRow(
     photos: List<String>,
     modifier: Modifier = Modifier,
 ) {
     if (photos.size < 2) return
+    var open by remember(photos) { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = modifier) {
         Text("Photos", style = MaterialTheme.typography.titleLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            photos.drop(1).take(8).forEach { url ->
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+        ) {
+            items(photos.drop(1).size) { i ->
+                val url = photos.drop(1)[i]
+                androidx.tv.material3.Surface(
+                    onClick = { open = url },
+                    shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+                    modifier = Modifier.width(100.dp).height(150.dp),
+                ) {
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+    open?.let { url ->
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { open = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center,
+            ) {
                 AsyncImage(
-                    model = url,
+                    model = url.replace("/w185/", "/h632/"),
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .width(100.dp)
-                            .height(150.dp)
-                            .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
                 )
             }
         }

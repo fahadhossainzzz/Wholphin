@@ -709,6 +709,15 @@ private fun WorkRow(
                 val onList = wanted.any { it.tmdb == c.tmdb && it.series == c.tv }
                 val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 val focused by interaction.collectIsFocusedAsState()
+                // NoBars: stopped on a title outside your library: fetch its card now, so OK opens the quick view complete
+                if (!owned) {
+                    LaunchedEffect(focused) {
+                        if (focused) {
+                            kotlinx.coroutines.delay(330)
+                            com.github.damontecres.wholphin.services.StreamingStore.prefetch(c.tmdb, c.tv)
+                        }
+                    }
+                }
                 androidx.compose.foundation.layout.Column(
                     modifier = Modifier.width(120.dp),
                 ) {

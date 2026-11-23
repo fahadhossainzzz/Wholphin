@@ -547,14 +547,70 @@ object StreamingStore {
             }
         }
 
-    // NoBars: cards from the server's title service, kept 5 minutes here (the server keeps them 12 hours)
+    // NoBars: cards from the server's title service: kept in memory for the session and on the TV's own storage
+    // (12 hours), so a title you've seen opens at once, even after the app restarts. An older copy is shown at once
+    // and refreshed quietly behind it.
     private val titleCards = ConcurrentHashMap<String, Pair<Long, Entry>>()
     private val titleSlots = kotlinx.coroutines.sync.Semaphore(8)
+    private val refreshing = ConcurrentHashMap.newKeySet<String>()
+    private const val TITLE_FRESH_MS = 30 * 60_000L
+    private const val TITLE_KEEP_MS = 12 * 3_600_000L
+
+    /** The app's cache folder (set at start), for the cards kept on the TV. */
+    @Volatile var cacheDir: java.io.File? = null
+
+    private fun titleFile(key: String): java.io.File? = cacheDir?.let { java.io.File(it, "titles/$key.json") }
+
+    /** A title's card if it is already here (memory, or the TV's storage); never asks the server. */
+    fun peekTitle(
+        tmdb: Int,
+        series: Boolean,
+    ): Entry? {
+        val key = (if (series) "tv-" else "movie-") + tmdb
+        titleCards[key]?.let { return it.second }
+        val f = titleFile(key) ?: return null
+        return try {
+            if (!f.exists() || System.currentTimeMillis() - f.lastModified() > TITLE_KEEP_MS) return null
+            val e = parse(JSONObject(f.readText()))
+            if (e.tmdb != tmdb) return null
+            titleCards[key] = f.lastModified() to e
+            e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun fetchTitle(
+        key: String,
+        tmdb: Int,
+    ): Entry? {
+        titleSlots.acquire()
+        try {
+            val json = ServerAccess.get("/Plugins/ImdbRatings/Title/$key") ?: return null
+            val e = parse(JSONObject(json))
+            if (e.tmdb != tmdb) return null
+            titleCards[key] = System.currentTimeMillis() to e
+            try {
+                titleFile(key)?.let {
+                    it.parentFile?.mkdirs()
+                    it.writeText(json)
+                }
+            } catch (_: Exception) {
+            }
+            return e
+        } catch (ex: Exception) {
+            Timber.w(ex, "NoBars: title service unavailable for %s", key)
+            return null
+        } finally {
+            titleSlots.release()
+        }
+    }
 
     /**
      * Everything about one title from the server's title service (/Plugins/ImdbRatings/Title/movie-123): the card,
-     * ratings, where it streams (any service in India) and its My list status. Built on demand for a title the server
-     * hasn't seen (about a second), so a title added a moment ago already says "On Netflix". Null if unreachable.
+     * ratings, where it streams (any service in India) and its My list status. A copy kept here answers at once (and is
+     * refreshed behind it when older than 30 minutes); a title never seen is asked for (about 0.1 s, or ~1 s the first
+     * time the server sees it). Null if unreachable.
      */
     suspend fun title(
         tmdb: Int,
@@ -562,22 +618,43 @@ object StreamingStore {
     ): Entry? =
         withContext(WholphinDispatchers.IO) {
             val key = (if (series) "tv-" else "movie-") + tmdb
-            val kept = titleCards[key]
-            if (kept != null && System.currentTimeMillis() - kept.first < 300_000) return@withContext kept.second
-            titleSlots.acquire()
+            val kept = peekTitle(tmdb, series)
+            val at = titleCards[key]?.first ?: 0L
+            if (kept != null) {
+                if (System.currentTimeMillis() - at > TITLE_FRESH_MS && refreshing.add(key)) {
+                    libraryScope.launch {
+                        try {
+                            fetchTitle(key, tmdb)
+                        } finally {
+                            refreshing.remove(key)
+                        }
+                    }
+                }
+                return@withContext kept
+            }
+            fetchTitle(key, tmdb)
+        }
+
+    /** Fetch a title's card in the background before it is needed (a poster you've stopped on). */
+    fun prefetch(
+        tmdb: Int,
+        series: Boolean,
+    ) {
+        if (tmdb <= 0) return
+        val key = (if (series) "tv-" else "movie-") + tmdb
+        val at = titleCards[key]?.first
+        if (at != null && System.currentTimeMillis() - at < TITLE_FRESH_MS) return
+        if (!refreshing.add(key)) return
+        libraryScope.launch {
             try {
-                val json = ServerAccess.get("/Plugins/ImdbRatings/Title/$key") ?: return@withContext kept?.second
-                val e = parse(JSONObject(json))
-                if (e.tmdb != tmdb) return@withContext kept?.second
-                titleCards[key] = System.currentTimeMillis() to e
-                e
-            } catch (ex: Exception) {
-                Timber.w(ex, "NoBars: title service unavailable for %s", key)
-                kept?.second
+                val kept = peekTitle(tmdb, series)
+                val keptAt = titleCards[key]?.first ?: 0L
+                if (kept == null || System.currentTimeMillis() - keptAt > TITLE_FRESH_MS) fetchTitle(key, tmdb)
             } finally {
-                titleSlots.release()
+                refreshing.remove(key)
             }
         }
+    }
 
     /**
      * Today's card for a My list title: the title service (fresh within 12 hours, built at once for a new title),

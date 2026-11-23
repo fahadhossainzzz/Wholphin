@@ -85,9 +85,21 @@ fun QuickViewHost(navigationManager: NavigationManager) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val key = (if (r.series) "tv:" else "movie:") + r.tmdb
-    var entry by remember(r) { mutableStateOf(StreamingStore.cachedEntry(r.tmdb, r.series)) }
+    // what's already on the TV first (today's rows, or a card kept from before), then the title's own card: one small
+    // request (or none, when it was fetched while the poster was selected)
+    val base =
+        remember(r) {
+            StreamingStore.peekTitle(r.tmdb, r.series)
+                ?: StreamingStore.cachedEntry(r.tmdb, r.series)
+        }
+    var entry by remember(r) { mutableStateOf(base) }
+    var loading by remember(r) { mutableStateOf(base == null || base.trailer == null && base.services.isEmpty()) }
     LaunchedEffect(r) {
-        StreamingStore.findEntry(r.tmdb, r.series)?.let { entry = it }
+        StreamingStore.title(r.tmdb, r.series)?.let { card ->
+            // the card has everything; keep the row's own poster if the card has none
+            entry = if (card.poster == null && entry?.poster != null) card.copy(poster = entry?.poster) else card
+        }
+        loading = false
     }
     val factsVersion by PosterFacts.version.collectAsState()
     LaunchedEffect(r) {
@@ -187,7 +199,13 @@ fun QuickViewHost(navigationManager: NavigationManager) {
                         } else {
                             this
                         }
-                    e?.trailer?.let { k -> Button(onClick = { openTrailer(context, k) }, modifier = Modifier.firstOne()) { Text("▶  Trailer") } }
+                    val trailer = e?.trailer
+                    if (trailer != null) {
+                        Button(onClick = { openTrailer(context, trailer) }, modifier = Modifier.firstOne()) { Text("▶  Trailer") }
+                    } else if (loading) {
+                        // its place kept while the card arrives, so the buttons don't move
+                        Button(onClick = {}, enabled = false) { Text("▶  Trailer") }
+                    }
                     if (e != null) {
                         val svc = (e.services + e.ott.map { o -> o.first }).firstOrNull { s -> WatchProviders.canOpen(s) }
                         if (svc != null) {
@@ -197,10 +215,24 @@ fun QuickViewHost(navigationManager: NavigationManager) {
                             ) { Text("▶  " + shortService(svc)) }
                         }
                     }
-                    if (e != null) {
-                        Button(onClick = { scope.launch { WantedStore.toggle(e) } }, modifier = Modifier.firstOne()) {
-                            Text(if (onList) "🔖  On watchlist ✓" else "＋  Watchlist")
-                        }
+                    val listEntry =
+                        e ?: StreamingStore.Entry(
+                            tmdb = r.tmdb,
+                            series = r.series,
+                            title = r.title,
+                            year = facts?.year,
+                            poster = r.poster,
+                            overview = "",
+                            genres = emptyList(),
+                            runtime = null,
+                            seasons = null,
+                            imdbRating = null,
+                            imdbVotes = null,
+                            libraryId = null,
+                            rank = null,
+                        )
+                    Button(onClick = { scope.launch { WantedStore.toggle(listEntry) } }, modifier = Modifier.firstOne()) {
+                        Text(if (onList) "🔖  On watchlist ✓" else "＋  Watchlist")
                     }
                     Button(onClick = { TraktMark.mark(target, "now") }, modifier = Modifier.firstOne()) { Text("👁  Watched just now") }
                     releaseLabel(target)?.let { label ->

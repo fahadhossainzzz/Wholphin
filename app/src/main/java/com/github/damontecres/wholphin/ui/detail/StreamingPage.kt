@@ -193,7 +193,11 @@ fun StreamingPage(
             HomePageContent(
                 homeRows = current,
                 position = position,
-                onFocusPosition = { position = it },
+                onFocusPosition = {
+                    position = it
+                    // NoBars: fetch the selected title's card (trailer, where it streams) before OK is pressed
+                    prefetchAt(current, it)
+                },
                 onClickItem = onClick,
                 // hold OK on any poster to add it to the Watchlist, or take it off
                 onLongClickItem = { _, item -> StreamingStore.entries[item.id]?.let { longPress(it) { e -> toggle(e) } } },
@@ -240,6 +244,20 @@ private fun openTitle(
     } else {
         com.github.damontecres.wholphin.ui.components.QuickView.open(entry)
     }
+}
+
+private val prefetchHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+/** NoBars: once a poster has been selected for a third of a second, its card is fetched in the background. */
+private fun prefetchAt(
+    rows: List<HomeRowLoadingState>?,
+    at: RowColumn,
+) {
+    val item = (rows?.getOrNull(at.row) as? HomeRowLoadingState.Success)?.items?.getOrNull(at.column) ?: return
+    val entry = StreamingStore.entries[item.id] ?: return
+    if (StreamingStore.libraryId(entry) != null) return
+    prefetchHandler.removeCallbacksAndMessages(null)
+    prefetchHandler.postDelayed({ StreamingStore.prefetch(entry.tmdb, entry.series) }, 330)
 }
 
 /** NoBars: hold OK: the quick view for a title outside your library; for one you have, Watchlist on / off as before. */

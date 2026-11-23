@@ -71,6 +71,9 @@ fun ApplicationContent(
     viewModel: ApplicationContentViewModel = hiltViewModel(),
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    // NoBars: where title cards are kept on the TV (so titles open at once, even after a restart)
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { com.github.damontecres.wholphin.services.StreamingStore.cacheDir = appContext.cacheDir }
     LaunchedEffect(server.id, user.id) {
         com.github.damontecres.wholphin.services.ServerAccess.userId = user.id
         viewModel.loadImdbVotes()

@@ -164,6 +164,11 @@ class NavDrawerViewModel
                     navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.WATCHLIST))
                 }
 
+                NavDrawerItem.History -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.HISTORY))
+                }
+
                 NavDrawerItem.Discover -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -208,6 +213,7 @@ class NavDrawerViewModel
                             is NavDrawerItem.Prime -> Destination.Streaming(StreamingStore.PRIME)
                             is NavDrawerItem.Cinema -> Destination.Streaming(StreamingStore.CINEMA)
                             is NavDrawerItem.Watchlist -> Destination.Streaming(StreamingStore.WATCHLIST)
+                            is NavDrawerItem.History -> Destination.Streaming(StreamingStore.HISTORY)
                             else -> null
                         }
                     }
@@ -329,6 +335,14 @@ sealed interface NavDrawerItem {
             get() = "a_watchlist"
 
         override fun name(context: Context): String = "Watchlist"
+    }
+
+    /** NoBars: your Trakt watch history (Recently watched, then a row per year) */
+    object History : NavDrawerItem {
+        override val id: String
+            get() = "a_history"
+
+        override fun name(context: Context): String = "History"
     }
 }
 
@@ -786,6 +800,10 @@ fun NavigationDrawerScope.NavItem(
 
                 NavDrawerItem.Watchlist -> {
                     R.string.fa_bookmark
+                }
+
+                NavDrawerItem.History -> {
+                    R.string.fa_clock
                 }
 
                 is ServerNavDrawerItem -> {

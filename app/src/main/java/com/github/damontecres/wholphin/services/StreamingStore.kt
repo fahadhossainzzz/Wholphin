@@ -33,6 +33,9 @@ object StreamingStore {
     /** The Watchlist page in the menu */
     const val WATCHLIST = "watchlist"
 
+    /** The History page in the menu (your Trakt history) */
+    const val HISTORY = "history"
+
     /** Poster ids of the Watchlist row's own cards (they don't need the 🔖 mark) */
     private val watchlistCards = java.util.Collections.newSetFromMap(ConcurrentHashMap<UUID, Boolean>())
 
@@ -137,6 +140,7 @@ object StreamingStore {
             NETFLIX -> "Netflix"
             CINEMA -> "Theatre"
             WATCHLIST -> "Watchlist"
+            HISTORY -> "History"
             "Trakt" -> "your phone (Trakt)"
             else -> "Prime Video"
         }
@@ -726,13 +730,18 @@ object StreamingStore {
         )
     }
 
+    /** Release days shown on the Watchlist's Coming soon posters, by card id. */
+    val dateBadges = ConcurrentHashMap<UUID, String>()
+
     /** Small corner label on catalogue posters: the Top 10 rank, or ✓ when it's in your library. */
     fun badge(id: UUID?): String? {
+        dateBadges[id]?.let { return it }
         val e = id?.let { entries[it] } ?: return null
         val lib = libraryId(e)
         val base = when {
             e.rank != null -> "#${e.rank}" + (e.move?.takeIf { it != "=" }?.let { " $it" } ?: "") + if (lib != null) " ✓" else ""
-            lib != null && lib in WantedStore.watched.value -> "Watched ✓"
+            // watched = in your Trakt history
+            lib != null && HistoryStore.watched((if (e.series) "tv:" else "movie:") + e.tmdb, null, null) -> "Watched ✓"
             lib != null -> "✓"
             else -> e.badge
         }

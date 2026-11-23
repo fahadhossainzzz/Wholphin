@@ -474,14 +474,50 @@ object StreamingStore {
             }
         }
 
-    /** Today's card for a My list title: the morning check, else today's rows, else the copy saved when it was added. */
+    // NoBars: cards from the server's title service, kept 5 minutes here (the server keeps them 12 hours)
+    private val titleCards = ConcurrentHashMap<String, Pair<Long, Entry>>()
+    private val titleSlots = kotlinx.coroutines.sync.Semaphore(8)
+
+    /**
+     * Everything about one title from the server's title service (/Plugins/ImdbRatings/Title/movie-123): the card,
+     * ratings, where it streams (any service in India) and its My list status. Built on demand for a title the server
+     * hasn't seen (about a second), so a title added a moment ago already says "On Netflix". Null if unreachable.
+     */
+    suspend fun title(
+        tmdb: Int,
+        series: Boolean,
+    ): Entry? =
+        withContext(WholphinDispatchers.IO) {
+            val key = (if (series) "tv-" else "movie-") + tmdb
+            val kept = titleCards[key]
+            if (kept != null && System.currentTimeMillis() - kept.first < 300_000) return@withContext kept.second
+            titleSlots.acquire()
+            try {
+                val json = ServerAccess.get("/Plugins/ImdbRatings/Title/$key") ?: return@withContext kept?.second
+                val e = parse(JSONObject(json))
+                if (e.tmdb != tmdb) return@withContext kept?.second
+                titleCards[key] = System.currentTimeMillis() to e
+                e
+            } catch (ex: Exception) {
+                Timber.w(ex, "NoBars: title service unavailable for %s", key)
+                kept?.second
+            } finally {
+                titleSlots.release()
+            }
+        }
+
+    /**
+     * Today's card for a My list title: the title service (fresh within 12 hours, built at once for a new title),
+     * else the morning check, else today's rows, else the copy saved when it was added.
+     */
     suspend fun freshFor(
         saved: Entry,
         pageRows: List<Row>?,
     ): Entry {
         val list = rows(LIST)?.firstOrNull()?.items.orEmpty()
         val fresh =
-            list.firstOrNull { it.tmdb == saved.tmdb && it.series == saved.series }
+            kotlinx.coroutines.withTimeoutOrNull(6_000) { title(saved.tmdb, saved.series) }
+                ?: list.firstOrNull { it.tmdb == saved.tmdb && it.series == saved.series }
                 ?: pageRows.orEmpty().asSequence().flatMap { it.items }.firstOrNull { it.tmdb == saved.tmdb && it.series == saved.series }
                 ?: return saved
         return fresh.copy(
@@ -501,6 +537,15 @@ object StreamingStore {
     }
 
     fun fromJson(o: JSONObject): Entry = parse(o)
+
+    /** freshFor for a whole list at once (several titles asked in parallel). */
+    suspend fun freshForAll(
+        saved: List<Entry>,
+        pageRows: List<Row>?,
+    ): List<Entry> =
+        kotlinx.coroutines.coroutineScope {
+            saved.map { kotlinx.coroutines.async { freshFor(it, pageRows) } }.map { it.await() }
+        }
 
     /**
      * A poster card for a catalogue title: a made-up item that the normal row cards can show. The id

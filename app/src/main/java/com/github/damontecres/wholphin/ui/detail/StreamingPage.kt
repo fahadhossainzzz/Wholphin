@@ -135,7 +135,7 @@ fun StreamingPage(
     // today's card for each title on the list (the saved copy when it's gone from everywhere)
     var myList by remember(service) { mutableStateOf<List<StreamingStore.Entry>>(emptyList()) }
     LaunchedEffect(wanted, rawRows) {
-        myList = wanted.map { StreamingStore.freshFor(it, rawRows) }
+        myList = StreamingStore.freshForAll(wanted, rawRows)
     }
     val rows =
         remember(loadedRows, myList, watched, service) {
@@ -625,7 +625,7 @@ private fun WatchlistPage(
     var refocus by remember { mutableStateOf(0) }
     LaunchedEffect(wanted, ready) {
         if (ready) {
-            val fresh = wanted.map { StreamingStore.freshFor(it, null) }
+            val fresh = StreamingStore.freshForAll(wanted, null)
             if (fresh != list) list = fresh
             WatchlistMemo.list = fresh
             if (refocusPending) {

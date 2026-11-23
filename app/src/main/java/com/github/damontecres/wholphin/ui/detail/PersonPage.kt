@@ -170,6 +170,8 @@ class PersonViewModel
                             _state.update { it.copy(work = credits, profile = json?.let(::parsePersonProfile)) }
                         } catch (e: Exception) {
                             Timber.w(e, "NoBars: all work unavailable")
+                        } finally {
+                            _state.update { it.copy(profileReady = true) }
                         }
                     }
                     viewModelScope.launchIO {
@@ -270,6 +272,8 @@ data class PersonState(
     val credit: com.github.damontecres.wholphin.ui.playback.overlay.Credit? = null,
     /** NoBars: height, known for, other names and photos (TMDB / Trakt, via our plugin) */
     val profile: PersonProfile? = null,
+    /** NoBars: the profile/career answer has come back (or failed), so the header won't change any more */
+    val profileReady: Boolean = false,
 )
 
 @Composable
@@ -295,6 +299,17 @@ fun PersonPage(
         }
 
         is DataLoadingState.Success<BaseItem> -> {
+            // NoBars: show the page in one go: wait (at most a second) for the profile, so the extra header lines and
+            // the photos don't pop in and push everything down after it appears
+            var waited by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(1_000)
+                waited = true
+            }
+            if (!state.profileReady && !waited) {
+                LoadingPage(modifier)
+                return
+            }
             val person = st.data
             var showOverviewDialog by remember { mutableStateOf(false) }
             val name = remember(person) { person.name ?: person.id.toString() }

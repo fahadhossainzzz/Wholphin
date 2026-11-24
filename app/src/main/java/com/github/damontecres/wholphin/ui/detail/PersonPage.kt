@@ -607,18 +607,7 @@ internal fun careerRows(work: List<WorkCredit>): List<CareerRow> {
     val tvAll = merged.filter { it.tv }.sortedWith(order)
     val guest = { c: WorkCredit -> c.ownedKey in selfOnly || (!c.role.contains(" · ") && (c.episodes ?: 3) < 3) }
     val tv = tvAll.filterNot(guest) + tvAll.filter(guest)
-    // known for: real work (not talk-show spots), by votes (how many people rated it: fame over years, not this week)
-    val main = merged.filter { it.ownedKey !in selfOnly && it.votes > 0 }
-    val top = main.maxOfOrNull { it.votes } ?: 0
-    val known =
-        if (main.size <= 12 || top == 0) {
-            emptyList()
-        } else {
-            val byVotes = main.sortedByDescending { it.votes }
-            byVotes.filter { it.votes * 4 >= top }.take(20).let { if (it.size < 5) byVotes.take(5) else it }
-        }
     return listOfNotNull(
-        CareerRow("Known for", known, mixed = true).takeIf { known.isNotEmpty() },
         CareerRow("All films (${films.size})", films, mixed = false).takeIf { films.isNotEmpty() },
         CareerRow("All TV (${tv.size})", tv, mixed = false).takeIf { tv.isNotEmpty() },
     )
@@ -789,13 +778,13 @@ private fun WorkRow(
                             // the same band as every other poster: ★ IMDb + votes · box office · 🍅
                             val f = remember(c.ownedKey, factsVersion) { com.github.damontecres.wholphin.services.PosterFacts.get(c.ownedKey) }
                             // IMDb ★ and votes come with the career (at once); box office and 🍅 when the facts arrive
-                            if (f != null || c.imdbRating != null) {
+                            if (f != null || c.imdbRating != null || c.rt != null || c.pop != null) {
                                 com.github.damontecres.wholphin.ui.cards.RatingBand(
                                     stars = c.imdbRating ?: f?.rating,
                                     votes = c.imdbVotes ?: f?.votes,
                                     money = f?.money,
-                                    tomatoes = f?.rt?.toFloat(),
-                                    popcorn = null,
+                                    tomatoes = (c.rt ?: f?.rt)?.toFloat(),
+                                    popcorn = if (c.rt == null && f?.rt == null) c.pop else null,
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                 )
                             }

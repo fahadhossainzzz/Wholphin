@@ -39,6 +39,7 @@ import com.github.damontecres.wholphin.ui.tryRequestFocus
 import com.github.damontecres.wholphin.ui.util.StringStringProvider
 import com.github.damontecres.wholphin.util.HomeRowLoadingState
 import com.github.damontecres.wholphin.util.WholphinDispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.model.api.ItemSortBy
@@ -66,6 +67,10 @@ object HistoryShelf {
         val items: List<StreamingStore.Entry>,
         val genres: List<String>,
     )
+
+    /** The Films and TV shows rows: Total, one kind only. */
+    const val FILMS = "films"
+    const val SHOWS = "shows"
 
     /** The rows as last seen, so coming back to the page shows them at once. */
     @Volatile var rows: List<Row>? = null
@@ -103,12 +108,24 @@ object HistoryShelf {
             try {
                 val o = JSONObject(ServerAccess.get("/Plugins/ImdbRatings/History/Shelf") ?: return@withContext rows)
                 val a = o.optJSONArray("rows") ?: JSONArray()
-                (0 until a.length()).mapNotNull { i ->
-                    val r = a.optJSONObject(i) ?: return@mapNotNull null
-                    // the first row is everything you've watched: "Total"
-                    val id = r.optString("id")
-                    Row(id, if (id == "recent") "Total" else r.optString("name"), r.optInt("total"), entries(r.optJSONArray("items")))
-                }.also { rows = it }
+                val list =
+                    (0 until a.length()).mapNotNull { i ->
+                        val r = a.optJSONObject(i) ?: return@mapNotNull null
+                        // the first row is everything you've watched: "Total"
+                        val id = r.optString("id")
+                        Row(id, if (id == "recent") "Total" else r.optString("name"), r.optInt("total"), entries(r.optJSONArray("items")))
+                    }
+                // after Total: Films and TV shows (Total filtered by kind; the same request as the grid's Films / Shows filter)
+                val split =
+                    kotlinx.coroutines.coroutineScope {
+                        val films = async { page("recent", 0, 24, "watched", false, "movie", emptyList()) }
+                        val tv = async { page("recent", 0, 24, "watched", false, "tv", emptyList()) }
+                        listOfNotNull(
+                            films.await()?.takeIf { it.total > 0 }?.let { Row(FILMS, "Films", it.total, it.items) },
+                            tv.await()?.takeIf { it.total > 0 }?.let { Row(SHOWS, "TV shows", it.total, it.items) },
+                        )
+                    }
+                (list.take(1) + split + list.drop(1)).also { rows = it }
             } catch (_: Exception) {
                 rows
             }
@@ -233,7 +250,13 @@ private fun HistoryGrid(
 ) {
     val scope = rememberCoroutineScope()
     val sortOptions = remember { listOf(ItemSortBy.DATE_PLAYED, ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME, ItemSortBy.PREMIERE_DATE) }
-    val filterOptions = remember { listOf(WatchlistTypeFilter, WatchlistGenreFilter) }
+    // Films and TV shows are Total with the kind fixed (no Films / Shows filter there)
+    val fixedKind = when (row.id) {
+        HistoryShelf.FILMS -> "movie"
+        HistoryShelf.SHOWS -> "tv"
+        else -> null
+    }
+    val filterOptions = remember(fixedKind) { if (fixedKind != null) listOf(WatchlistGenreFilter) else listOf(WatchlistTypeFilter, WatchlistGenreFilter) }
     var sort by remember(row.id) { mutableStateOf(SortAndDirection(ItemSortBy.DATE_PLAYED, SortOrder.DESCENDING)) }
     var filter by remember(row.id) { mutableStateOf(GetItemsFilter()) }
     var genres by remember(row.id) { mutableStateOf<List<String>>(emptyList()) }
@@ -251,8 +274,8 @@ private fun HistoryGrid(
         // the server gives watched / rating / year newest-highest first and titles A to Z: the other way is "reverse"
         val natural = if (key == "title") SortOrder.ASCENDING else SortOrder.DESCENDING
         val x = filter.extra
-        val kind = x?.wlTypes?.takeIf { it.size == 1 }?.first()?.let { if (it == "shows") "tv" else "movie" }
-        HistoryShelf.page(row.id, offset, 100, key, sort.direction != natural, kind, x?.wlGenres.orEmpty())
+        val kind = fixedKind ?: x?.wlTypes?.takeIf { it.size == 1 }?.first()?.let { if (it == "shows") "tv" else "movie" }
+        HistoryShelf.page(if (fixedKind != null) "recent" else row.id, offset, 100, key, sort.direction != natural, kind, x?.wlGenres.orEmpty())
     }
     fun load(pageNo: Int) {
         if (!asked.add(pageNo)) return

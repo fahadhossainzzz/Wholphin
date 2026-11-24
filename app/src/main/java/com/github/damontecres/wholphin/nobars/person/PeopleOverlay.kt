@@ -108,7 +108,7 @@ data class PersonPanelState(
     /** NoBars: the profile (bio, dates, guest episodes) shown inside the panel instead of leaving the film. */
     val profileOpen: Boolean = false,
     val profileLoading: Boolean = false,
-    val profile: PersonProfile? = null,
+    val profile: OverlayPerson? = null,
     val episodes: List<BaseItem> = emptyList(),
     val bioExpanded: Boolean = false,
     /** NoBars: "All work": the person's whole career from TMDB (fetched by our plugin, kept 30 days on the server). */
@@ -191,7 +191,7 @@ internal fun parseCredits(json: String): List<Credit> {
     return acting.sortedWith(order) + behind.sortedWith(order)
 }
 
-data class PersonProfile(
+data class OverlayPerson(
     val overview: String?,
     val born: java.time.LocalDate?,
     val died: java.time.LocalDate?,
@@ -308,7 +308,7 @@ class PlayerPeopleViewModel
                 val info =
                     try {
                         val p = api.userLibraryApi.getItem(personId).content
-                        PersonProfile(
+                        OverlayPerson(
                             overview = p.overview?.trim()?.takeIf { it.isNotEmpty() },
                             born = p.premiereDate?.toLocalDate(),
                             died = p.endDate?.toLocalDate(),
@@ -316,7 +316,7 @@ class PlayerPeopleViewModel
                         )
                     } catch (e: Exception) {
                         Timber.w(e, "NoBars: could not load profile")
-                        PersonProfile(null, null, null, null)
+                        OverlayPerson(null, null, null, null)
                     }
                 val episodes =
                     try {
@@ -813,7 +813,7 @@ private fun bioChunks(text: String): List<String> {
 private val DAY = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
 
 /** NoBars: "Born 12 Mar 1975 (51) · London", or the years and age at death. */
-private fun lifeLine(p: PersonProfile): String? {
+private fun lifeLine(p: OverlayPerson): String? {
     val parts = mutableListOf<String>()
     val born = p.born
     when {

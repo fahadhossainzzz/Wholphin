@@ -35,7 +35,7 @@ import com.github.damontecres.wholphin.preferences.MediaExtensionStatus
 import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.preferences.get
 import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
-import com.github.damontecres.wholphin.services.stream.ElasticLoadControl
+import com.github.damontecres.wholphin.nobars.playback.ElasticLoadControl
 import com.github.damontecres.wholphin.nobars.playback.LeanExtractorsFactory
 import com.github.damontecres.wholphin.nobars.playback.NoDtsPassthrough
 import com.github.damontecres.wholphin.nobars.playback.PatientLoadErrorPolicy

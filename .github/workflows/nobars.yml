@@ -90,6 +90,8 @@ jobs:
           ls -la out
 
       - name: Publish release nobars-latest
+        # only the nobars branch publishes (other branches are compile checks)
+        if: github.ref == 'refs/heads/nobars'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

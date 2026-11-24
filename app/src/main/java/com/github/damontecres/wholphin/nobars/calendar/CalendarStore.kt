@@ -29,12 +29,12 @@ object CalendarStore {
 
     fun cached(month: YearMonth): CalMonth? = months[month]
 
-    /** The month (fresh if older than 10 minutes here); null if the server couldn't give it within ~2 minutes. */
+    /** The month (fresh if older than 10 minutes here); null if the server couldn't give it within ~3 minutes. */
     suspend fun load(month: YearMonth): CalMonth? =
         withContext(WholphinDispatchers.IO) {
             val have = months[month]
             if (have != null && System.currentTimeMillis() - (loadedAt[month] ?: 0) < 10 * 60_000) return@withContext have
-            repeat(12) { attempt ->
+            repeat(24) { attempt ->
                 val got = ServerAccess.get("/Plugins/ImdbRatings/Calendar/$month")?.let(::parseCalMonth)
                 if (got != null) {
                     months[month] = got

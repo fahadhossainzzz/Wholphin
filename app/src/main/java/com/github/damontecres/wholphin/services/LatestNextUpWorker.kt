@@ -69,7 +69,7 @@ class LatestNextUpWorker
         }
 
         companion object {
-            const val WORK_NAME = "LatestNextUpWorker"
+            const val WORK_NAME = "com.github.damontecres.wholphin.services.LatestNextUpWorker"
             const val PARAM_USER_ID = "userId"
             const val PARAM_SERVER_ID = "serverId"
         }

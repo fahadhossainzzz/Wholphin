@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -97,7 +98,9 @@ fun CalendarPage(
     var month by remember { mutableStateOf(CalendarMemo.month) }
     var data by remember(month) { mutableStateOf(CalendarStore.cached(month)) }
     var failed by remember(month) { mutableStateOf(false) }
-    var openDay by remember { mutableStateOf<LocalDate?>(null) }
+    // the open day's panel is remembered too: Back from a title comes back to it, on the same item
+    var openDay by remember { mutableStateOf(CalendarMemo.openDay?.takeIf { YearMonth.from(it) == CalendarMemo.month }) }
+    var refocus by remember { mutableStateOf(0) }
     LaunchedEffect(month) {
         CalendarMemo.month = month
         failed = false
@@ -107,9 +110,14 @@ fun CalendarPage(
     // the next month too, so ‹ › are quick
     LaunchedEffect(month) { CalendarStore.load(month.plusMonths(1)) }
     val today = LocalDate.now()
-    val focusDay = remember(month) { if (YearMonth.from(today) == month) today else month.atDay(1) }
-    val dayFocus = remember(month) { FocusRequester() }
-    LaunchedEffect(month, data != null) {
+    // the day you were on (in this month), else today, else the 1st
+    val focusDay =
+        remember(month, refocus) {
+            CalendarMemo.day?.takeIf { YearMonth.from(it) == month }
+                ?: if (YearMonth.from(today) == month) today else month.atDay(1)
+        }
+    val dayFocus = remember(month, refocus) { FocusRequester() }
+    LaunchedEffect(month, data != null, refocus) {
         repeat(20) {
             kotlinx.coroutines.delay(50)
             if (openDay == null && dayFocus.tryRequestFocus()) return@LaunchedEffect
@@ -170,6 +178,9 @@ fun CalendarPage(
                                         loading = data == null,
                                         onClick = {
                                             if (inMonth) {
+                                                CalendarMemo.day = day
+                                                CalendarMemo.openDay = day
+                                                CalendarMemo.item = 0
                                                 openDay = day
                                             } else {
                                                 month = YearMonth.from(day)
@@ -179,7 +190,8 @@ fun CalendarPage(
                                             Modifier
                                                 .weight(1f)
                                                 .fillMaxHeight()
-                                                .then(if (day == focusDay) Modifier.focusRequester(dayFocus) else Modifier),
+                                                .then(if (day == focusDay) Modifier.focusRequester(dayFocus) else Modifier)
+                                                .onFocusChanged { if (it.isFocused && inMonth) CalendarMemo.day = day },
                                     )
                                 }
                             }
@@ -189,13 +201,22 @@ fun CalendarPage(
             }
         }
         openDay?.let { day ->
-            BackHandler { openDay = null }
+            val close: () -> Unit = {
+                // back to the day it was opened from
+                CalendarMemo.openDay = null
+                CalendarMemo.day = day
+                openDay = null
+                refocus++
+            }
+            BackHandler { close() }
             CalendarDayPanel(
                 day = day,
                 items = data?.days?.get(day).orEmpty(),
                 onOpen = { openCalItem(navigationManager, it) },
                 onHold = ::holdCalItem,
-                onClose = { openDay = null },
+                onClose = close,
+                startIndex = CalendarMemo.item,
+                onFocusIndex = { CalendarMemo.item = it },
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
@@ -205,6 +226,11 @@ fun CalendarPage(
 /** The month you were on, so coming back from a title shows it again. */
 private object CalendarMemo {
     var month: YearMonth = YearMonth.now()
+
+    /** the day last selected, the day whose panel is open, and the item selected in it */
+    var day: LocalDate? = null
+    var openDay: LocalDate? = null
+    var item: Int = 0
 }
 
 @Composable

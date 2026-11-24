@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -50,8 +51,13 @@ fun CalendarDayPanel(
     onHold: (CalItem) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    startIndex: Int = 0,
+    onFocusIndex: (Int) -> Unit = {},
 ) {
+    // the item you were on (coming back from a title), else the first
+    val start = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
     val first = remember(day) { FocusRequester() }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = start)
     LaunchedEffect(day) {
         repeat(20) {
             kotlinx.coroutines.delay(40)
@@ -80,7 +86,7 @@ fun CalendarDayPanel(
                     Text("Nothing on this day.", modifier = Modifier.padding(12.dp), color = Color.White)
                 }
             }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(items) { i, it ->
                     Surface(
                         onClick = { onOpen(it) },
@@ -92,7 +98,11 @@ fun CalendarDayPanel(
                                 focusedContainerColor = Color(0xFF2A2A3A),
                             ),
                         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
-                        modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .then(if (i == start) Modifier.focusRequester(first) else Modifier)
+                                .onFocusChanged { f -> if (f.isFocused) onFocusIndex(i) },
                     ) {
                         Row(Modifier.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.width(40.dp)) {

@@ -696,6 +696,41 @@ object StreamingStore {
 
     fun fromJson(o: JSONObject): Entry = parse(o)
 
+    /**
+     * The Watchlist's titles with today's facts: the Mac checks the whole list each morning (the "list" lists), so
+     * only titles added since then fetch their own card. One request for the page instead of one per title.
+     */
+    suspend fun freshForWatchlist(saved: List<Entry>): List<Entry> =
+        coroutineScope {
+            val list = rows(LIST)?.firstOrNull()?.items.orEmpty().associateBy { it.series to it.tmdb }
+            saved
+                .map { e ->
+                    async {
+                        val checked = list[e.series to e.tmdb]
+                        if (checked != null) merge(e, checked) else freshFor(e, null)
+                    }
+                }.map { it.await() }
+        }
+
+    /** A saved title with fresher facts, keeping what only the saved copy knows. */
+    private fun merge(
+        saved: Entry,
+        fresh: Entry,
+    ): Entry =
+        fresh.copy(
+            rank = null,
+            move = null,
+            note = null,
+            added = saved.added,
+            from = saved.from,
+            netflixId = fresh.netflixId ?: saved.netflixId,
+            trailer = fresh.trailer ?: saved.trailer,
+            ott = fresh.ott.ifEmpty { saved.ott },
+            ottMore = if (fresh.ott.isEmpty()) saved.ottMore else fresh.ottMore,
+            services = fresh.services.ifEmpty { saved.services },
+            journey = fresh.journey.ifEmpty { saved.journey },
+        )
+
     /** freshFor for a whole list at once (several titles asked in parallel). */
     suspend fun freshForAll(
         saved: List<Entry>,

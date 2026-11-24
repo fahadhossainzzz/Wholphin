@@ -135,9 +135,9 @@ internal fun WatchlistPage(
     // Opens at once from the list already in memory (coming back from a title page shows the same rows, so the
     // remembered poster is still there); the server copy is refreshed quietly behind it.
     var ready by remember { mutableStateOf(WatchlistMemo.list != null) }
+    // the saved list is enough to show the page (one small request); fresh facts come in behind it
     LaunchedEffect(Unit) {
         WantedStore.load()
-        StreamingStore.rows(StreamingStore.LIST)
         ready = true
     }
     val wanted by WantedStore.items.collectAsState()
@@ -148,7 +148,10 @@ internal fun WatchlistPage(
     var refocus by remember { mutableStateOf(0) }
     LaunchedEffect(wanted, ready) {
         if (ready) {
-            val fresh = StreamingStore.freshForAll(wanted, null)
+            // first the saved titles as they are (instant), then this morning's check of the whole list, cards
+            // fetched only for titles added since
+            if (list.isEmpty() && wanted.isNotEmpty()) list = wanted
+            val fresh = StreamingStore.freshForWatchlist(wanted)
             if (fresh != list) list = fresh
             WatchlistMemo.list = fresh
             if (refocusPending) {

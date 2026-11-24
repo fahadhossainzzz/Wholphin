@@ -132,6 +132,9 @@ data class Credit(
     val episodes: Int?,
     val crew: Boolean,
     val about: String,
+    /** today's IMDb rating and votes (added by the server from its daily IMDb copy), when known */
+    val imdbRating: Float? = null,
+    val imdbVotes: Int? = null,
 ) {
     val key: String get() = (if (crew) "c" else "a") + (if (tv) "tv:" else "movie:") + tmdb
     val ownedKey: String get() = (if (tv) "tv:" else "movie:") + tmdb
@@ -163,6 +166,8 @@ internal fun parseCredits(json: String): List<Credit> {
                 episodes = if (c.has("eps")) c.optInt("eps") else null,
                 crew = crew,
                 about = c.optString("about"),
+                imdbRating = c.optDouble("ir").takeIf { !it.isNaN() && it > 0 }?.toFloat(),
+                imdbVotes = c.optInt("iv").takeIf { it > 0 },
             )
         }
     val acting =

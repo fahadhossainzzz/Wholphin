@@ -457,6 +457,8 @@ fun PersonPageContent(
             val mine = personalRows(work, wanted, history)
             buildList {
                 if (library.isNotEmpty()) add(PageRow("In your library (${library.size})", library, mixed = true))
+                val best = bestRatedRow(work)
+                if (best.isNotEmpty()) add(PageRow("Best rated on IMDb (${best.size})", best, mixed = true))
                 career.forEach { add(PageRow(it.title, it.items, it.mixed)) }
                 mine.forEach { add(PageRow(it.title, it.items, mixed = true, note = it.note)) }
             }
@@ -622,6 +624,27 @@ internal fun careerRows(work: List<WorkCredit>): List<CareerRow> {
     )
 }
 
+/** Titles where their only part is a cameo or uncredited (and no job behind the camera). */
+private val CAMEO_ROLE = Regex("""uncredited|cameo|special appearance""", RegexOption.IGNORE_CASE)
+
+private fun cameoKeys(work: List<WorkCredit>): Set<String> =
+    work
+        .groupBy { it.ownedKey }
+        .filter { (_, cs) -> cs.none { it.crew } && cs.all { CAMEO_ROLE.containsMatchIn(it.role) } }
+        .keys
+
+/**
+ * NoBars: Best rated on IMDb: every title of the career rated 6.0 or more by at least 1,000 IMDb users, highest first
+ * (more votes first on a tie). Ratings come with the career itself (the server's daily IMDb copy), so the row is
+ * there as the page opens. Talk-show spots, cameos and uncredited parts are left out.
+ */
+internal fun bestRatedRow(work: List<WorkCredit>): List<WorkCredit> {
+    val skip = selfOnlyKeys(work) + cameoKeys(work)
+    return mergedCareer(work)
+        .filter { it.ownedKey !in skip && (it.imdbRating ?: 0f) >= 6f && (it.imdbVotes ?: 0) >= 1000 }
+        .sortedWith(compareByDescending<WorkCredit> { it.imdbRating }.thenByDescending { it.imdbVotes })
+}
+
 /** NoBars: their titles that you have (your library), newest first. */
 internal fun libraryRow(work: List<WorkCredit>): List<WorkCredit> {
     val today = java.time.LocalDate.now().toString()
@@ -765,12 +788,13 @@ private fun WorkRow(
                             }
                             // the same band as every other poster: ★ IMDb + votes · box office · 🍅
                             val f = remember(c.ownedKey, factsVersion) { com.github.damontecres.wholphin.services.PosterFacts.get(c.ownedKey) }
-                            if (f != null) {
+                            // IMDb ★ and votes come with the career (at once); box office and 🍅 when the facts arrive
+                            if (f != null || c.imdbRating != null) {
                                 com.github.damontecres.wholphin.ui.cards.RatingBand(
-                                    stars = f.rating,
-                                    votes = f.votes,
-                                    money = f.money,
-                                    tomatoes = f.rt?.toFloat(),
+                                    stars = c.imdbRating ?: f?.rating,
+                                    votes = c.imdbVotes ?: f?.votes,
+                                    money = f?.money,
+                                    tomatoes = f?.rt?.toFloat(),
                                     popcorn = null,
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                 )

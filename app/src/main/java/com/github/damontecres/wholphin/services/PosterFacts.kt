@@ -39,7 +39,7 @@ object PosterFacts {
     suspend fun load(keys: List<String>) =
         withContext(WholphinDispatchers.IO) {
             val todo = keys.filter { !facts.containsKey(it) && asked.add(it) }
-            for (chunk in todo.chunked(60)) {
+            for (chunk in todo.chunked(300)) {
                 try {
                     val q = chunk.joinToString(",") { it.replace(":", "-") }
                     val o = JSONObject(ServerAccess.get("/Plugins/ImdbRatings/Facts?keys=$q") ?: continue)

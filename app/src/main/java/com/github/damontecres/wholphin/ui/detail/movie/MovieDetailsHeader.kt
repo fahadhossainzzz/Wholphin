@@ -1,6 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail.movie
 
-import com.github.damontecres.wholphin.ui.components.WatchProvidersLine
+import com.github.damontecres.wholphin.nobars.ui.WatchProvidersLine
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,10 +68,10 @@ fun MovieDetailsHeader(
             // (box office, director and tagline moved to the sections below)
             androidx.compose.foundation.layout.Row(Modifier.padding(start = HeaderUtils.startPadding)) {
                 QuickDetails(movie.ui.quickDetails, movie.timeRemainingOrRuntime, showRatings = false)
-                com.github.damontecres.wholphin.ui.components.NbGenresInline(movie)
+                com.github.damontecres.wholphin.nobars.ui.NbGenresInline(movie)
             }
-            com.github.damontecres.wholphin.ui.components.NbRatingChips(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
-            com.github.damontecres.wholphin.ui.components.NbBoxOfficeLine(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 2.dp))
+            com.github.damontecres.wholphin.nobars.ui.NbRatingChips(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
+            com.github.damontecres.wholphin.nobars.ui.NbBoxOfficeLine(movie, Modifier.padding(start = HeaderUtils.startPadding, top = 2.dp))
 
             VideoStreamDetails(
                 chosenStreams = chosenStreams,
@@ -82,7 +82,7 @@ fun MovieDetailsHeader(
                         top = 4.dp,
                     ),
             )
-            com.github.damontecres.wholphin.ui.components.NbFileChips(
+            com.github.damontecres.wholphin.nobars.ui.NbFileChips(
                 source = chosenStreams?.source ?: movie.data.mediaSources?.firstOrNull(),
                 added = movie.data.dateCreated,
                 modifier = Modifier.padding(start = HeaderUtils.startPadding, bottom = 16.dp),

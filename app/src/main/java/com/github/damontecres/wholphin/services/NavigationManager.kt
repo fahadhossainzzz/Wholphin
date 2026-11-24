@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.nobars.data.HomeRefresh
 import androidx.navigation3.runtime.NavBackStack
 import com.github.damontecres.wholphin.ui.nav.Destination
 import org.acra.ACRA
@@ -28,7 +29,7 @@ class NavigationManager
          */
         fun navigateTo(destination: Destination) {
             // NoBars: after playback, Home refreshes its rows when you come back
-            if (destination is Destination.Playback) com.github.damontecres.wholphin.services.HomeRefresh.dirty = true
+            if (destination is Destination.Playback) com.github.damontecres.wholphin.nobars.data.HomeRefresh.dirty = true
             backStack.add(destination)
             log()
         }

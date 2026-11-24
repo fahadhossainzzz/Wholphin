@@ -10,7 +10,7 @@ import java.util.UUID
 /**
  * NoBars: filters Jellyfin can't do by itself, shared by the library filter menu and custom Home rows. The parts
  * Jellyfin can do (subtitles, in progress, released within) go to the server; the rest is checked on the TV from a
- * light list of the matching items (see [com.github.damontecres.wholphin.services.NbQuery]).
+ * light list of the matching items (see [com.github.damontecres.wholphin.nobars.data.NbQuery]).
  */
 @Serializable
 data class NbExtraFilter(

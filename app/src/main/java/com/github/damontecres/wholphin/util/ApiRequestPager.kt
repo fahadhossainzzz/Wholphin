@@ -194,11 +194,11 @@ object MoneySortRequestHandler : RequestHandler<GetItemsRequest> {
     private suspend fun sortedIds(
         api: ApiClient,
         base: GetItemsRequest,
-        sort: com.github.damontecres.wholphin.services.MoneySort,
+        sort: com.github.damontecres.wholphin.nobars.data.MoneySort,
         descending: Boolean,
     ): List<UUID> =
         lock.withLock {
-            val money = com.github.damontecres.wholphin.services.BoxOffice.library.value
+            val money = com.github.damontecres.wholphin.nobars.data.BoxOffice.library.value
             val key = base to (money to (sort to descending))
             if (cachedFor == key) return@withLock cachedIds
             val all =
@@ -214,7 +214,7 @@ object MoneySortRequestHandler : RequestHandler<GetItemsRequest> {
                         ),
                     ).content.items
                     .map { it.id }
-            val valued = all.map { it to com.github.damontecres.wholphin.services.BoxOffice.sortValue(sort, money[it.toString().replace("-", "")]) }
+            val valued = all.map { it to com.github.damontecres.wholphin.nobars.data.BoxOffice.sortValue(sort, money[it.toString().replace("-", "")]) }
             val (known, unknown) = valued.partition { it.second != null }
             val ordered =
                 (if (descending) known.sortedByDescending { it.second!! } else known.sortedBy { it.second!! }) + unknown
@@ -250,7 +250,7 @@ object MoneySortRequestHandler : RequestHandler<GetItemsRequest> {
 }
 
 /**
- * NoBars: pages through a list worked out on the TV ([com.github.damontecres.wholphin.services.NbQuery]). The
+ * NoBars: pages through a list worked out on the TV ([com.github.damontecres.wholphin.nobars.data.NbQuery]). The
  * request's ids are the whole list in order; each page fetches its slice by id and keeps that order.
  */
 @Serializable

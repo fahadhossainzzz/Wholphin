@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback
 
+import com.github.damontecres.wholphin.nobars.playback.TrickplayCache
 import android.content.Context
 import android.media.MediaCodecList
 import android.os.Build
@@ -57,8 +58,8 @@ import com.github.damontecres.wholphin.services.RefreshRateService
 import com.github.damontecres.wholphin.services.ScreensaverService
 import com.github.damontecres.wholphin.services.StreamChoiceService
 import com.github.damontecres.wholphin.services.UserPreferencesService
-import com.github.damontecres.wholphin.services.stream.StallGuard
-import com.github.damontecres.wholphin.services.stream.StreamHealth
+import com.github.damontecres.wholphin.nobars.playback.StallGuard
+import com.github.damontecres.wholphin.nobars.playback.StreamHealth
 import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.gt
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
@@ -1122,7 +1123,7 @@ class PlaybackViewModel
                 audio?.displayTitle ?: "default",
                 subtitle?.displayTitle ?: "off",
                 playback?.playMethod?.serialName ?: "?",
-            ) + "\n" + com.github.damontecres.wholphin.ui.playback.overlay.PlaybackFacts.reportLines(playback).joinToString("\n") { "  $it" }
+            ) + "\n" + com.github.damontecres.wholphin.nobars.playback.PlaybackFacts.reportLines(playback).joinToString("\n") { "  $it" }
         }
 
         private suspend fun prefetchTrickplay(

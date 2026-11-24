@@ -36,10 +36,10 @@ import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.preferences.get
 import com.github.damontecres.wholphin.services.hilt.AuthOkHttpClient
 import com.github.damontecres.wholphin.services.stream.ElasticLoadControl
-import com.github.damontecres.wholphin.services.stream.LeanExtractorsFactory
-import com.github.damontecres.wholphin.services.stream.NoDtsPassthrough
-import com.github.damontecres.wholphin.services.stream.PatientLoadErrorPolicy
-import com.github.damontecres.wholphin.services.stream.StreamHealth
+import com.github.damontecres.wholphin.nobars.playback.LeanExtractorsFactory
+import com.github.damontecres.wholphin.nobars.playback.NoDtsPassthrough
+import com.github.damontecres.wholphin.nobars.playback.PatientLoadErrorPolicy
+import com.github.damontecres.wholphin.nobars.playback.StreamHealth
 import com.github.damontecres.wholphin.util.BitstreamFilter
 import com.github.damontecres.wholphin.util.BitstreamFilteringCodecAdapterFactory
 import com.github.damontecres.wholphin.util.DolbyVisionProfile7Conversion
@@ -334,7 +334,7 @@ class WholphinRenderersFactory(
     ) {
         val built = ArrayList<Renderer>()
         super.buildTextRenderers(context, output, outputLooper, extensionRendererMode, built)
-        built.forEach { out.add(com.github.damontecres.wholphin.services.stream.DelayedTextRenderer(it)) }
+        built.forEach { out.add(com.github.damontecres.wholphin.nobars.playback.DelayedTextRenderer(it)) }
     }
 
     // NoBars: DTS/TrueHD are decoded here instead of being handed to a TV that refuses them

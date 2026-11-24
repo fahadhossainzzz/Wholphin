@@ -7,7 +7,7 @@ import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.PlaylistItem
 import com.github.damontecres.wholphin.data.model.TrackIndex
-import com.github.damontecres.wholphin.services.ServerAccess
+import com.github.damontecres.wholphin.nobars.data.ServerAccess
 import com.github.damontecres.wholphin.services.getPreferredLanguage
 import com.github.damontecres.wholphin.ui.isNotNullOrBlank
 import com.github.damontecres.wholphin.ui.launchIO

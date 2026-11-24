@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.ui.formatDuration
-import com.github.damontecres.wholphin.ui.playback.TrickplayCache
+import com.github.damontecres.wholphin.nobars.playback.TrickplayCache
 import org.jellyfin.sdk.model.api.TrickplayInfo
 import kotlin.math.abs
 import kotlin.math.max
@@ -177,7 +177,7 @@ fun DpadSeekOverlay(
  */
 @Composable
 private fun FilmstripPicture(
-    picture: com.github.damontecres.wholphin.ui.playback.SeekPicture?,
+    picture: com.github.damontecres.wholphin.nobars.playback.SeekPicture?,
     width: Dp,
     height: Dp,
     modifier: Modifier = Modifier,

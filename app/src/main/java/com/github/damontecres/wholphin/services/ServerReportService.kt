@@ -5,8 +5,8 @@ import android.os.Build
 import com.github.damontecres.wholphin.BuildConfig
 import com.github.damontecres.wholphin.data.ServerRepository
 import com.github.damontecres.wholphin.services.hilt.IoCoroutineScope
-import com.github.damontecres.wholphin.services.stream.NoBarsLog
-import com.github.damontecres.wholphin.services.stream.StreamHealth
+import com.github.damontecres.wholphin.nobars.playback.NoBarsLog
+import com.github.damontecres.wholphin.nobars.playback.StreamHealth
 import com.github.damontecres.wholphin.ui.detail.DebugViewModel.Companion.getLogCatLines
 import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.ui.showToast

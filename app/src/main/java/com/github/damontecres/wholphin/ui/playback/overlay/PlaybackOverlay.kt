@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import com.github.damontecres.wholphin.nobars.person.PeopleRowOverlay
 import com.github.damontecres.wholphin.ui.playback.isBackKey
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onKeyEvent

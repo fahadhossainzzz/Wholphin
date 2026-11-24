@@ -49,14 +49,14 @@ val MovieSortOptions =
 object MoneySortCarrier {
     private val map =
         mapOf(
-            ItemSortBy.START_DATE to com.github.damontecres.wholphin.services.MoneySort.BOX_OFFICE,
-            ItemSortBy.AIR_TIME to com.github.damontecres.wholphin.services.MoneySort.TODAYS_MONEY,
-            ItemSortBy.VIDEO_BIT_RATE to com.github.damontecres.wholphin.services.MoneySort.BUDGET,
-            ItemSortBy.STUDIO to com.github.damontecres.wholphin.services.MoneySort.RETURN,
-            ItemSortBy.IS_FOLDER to com.github.damontecres.wholphin.services.MoneySort.YEAR_RANK,
+            ItemSortBy.START_DATE to com.github.damontecres.wholphin.nobars.data.MoneySort.BOX_OFFICE,
+            ItemSortBy.AIR_TIME to com.github.damontecres.wholphin.nobars.data.MoneySort.TODAYS_MONEY,
+            ItemSortBy.VIDEO_BIT_RATE to com.github.damontecres.wholphin.nobars.data.MoneySort.BUDGET,
+            ItemSortBy.STUDIO to com.github.damontecres.wholphin.nobars.data.MoneySort.RETURN,
+            ItemSortBy.IS_FOLDER to com.github.damontecres.wholphin.nobars.data.MoneySort.YEAR_RANK,
         )
 
-    fun of(sort: ItemSortBy?): com.github.damontecres.wholphin.services.MoneySort? = sort?.let { map[it] }
+    fun of(sort: ItemSortBy?): com.github.damontecres.wholphin.nobars.data.MoneySort? = sort?.let { map[it] }
 
     val options: List<ItemSortBy> = map.keys.toList()
 }
@@ -64,7 +64,7 @@ object MoneySortCarrier {
 /** NoBars: IMDb rating weighted by its number of votes (IMDb's Top 250 method), worked out on the TV */
 val WeightedImdbSort: ItemSortBy = ItemSortBy.NAME
 
-/** NoBars: size on disk (films: the file(s); shows: all episodes), worked out on the TV ([com.github.damontecres.wholphin.services.SizeStore]) */
+/** NoBars: size on disk (films: the file(s); shows: all episodes), worked out on the TV ([com.github.damontecres.wholphin.nobars.data.SizeStore]) */
 val SizeSort: ItemSortBy = ItemSortBy.SIMILARITY_SCORE
 
 /** NoBars: the Movies library's sort menu, with the weighted IMDb order and the money orders after the ratings. */

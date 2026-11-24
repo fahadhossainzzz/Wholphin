@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.cards
 
+import com.github.damontecres.wholphin.nobars.ui.PosterRatingBand
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,7 +87,7 @@ fun ItemCardImage(
         }
     Box(modifier = modifier) {
         // NoBars: the watched tick is your Trakt history (films, series, seasons, episodes)
-        val inHistory = com.github.damontecres.wholphin.ui.components.traktWatched(item)
+        val inHistory = com.github.damontecres.wholphin.nobars.ui.traktWatched(item)
         ItemCardImage(
             imageUrl = imageUrl,
             name = name,

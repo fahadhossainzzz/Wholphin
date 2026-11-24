@@ -266,14 +266,14 @@ class CollectionViewModel
             filter: GetItemsFilter?,
             types: List<BaseItemKind>,
         ): ApiRequestPager<GetItemsRequest> {
-            val tvSort = com.github.damontecres.wholphin.services.NbQuery.clientSort(sort?.sort)
+            val tvSort = com.github.damontecres.wholphin.nobars.data.NbQuery.clientSort(sort?.sort)
             val extra = filter?.extra
             val request = createGetItemsRequest(sort?.takeIf { tvSort == null }, filter, types)
             val useSeriesForPrimary = !state.value.viewOptions.separateTypes
-            if (com.github.damontecres.wholphin.services.NbQuery.needed(extra, sort?.sort)) {
+            if (com.github.damontecres.wholphin.nobars.data.NbQuery.needed(extra, sort?.sort)) {
                 // NoBars: weighted IMDb, the money orders and our own filters are worked out on the TV
                 val ids =
-                    com.github.damontecres.wholphin.services.NbQuery.orderedIds(
+                    com.github.damontecres.wholphin.nobars.data.NbQuery.orderedIds(
                         api,
                         request,
                         extra,

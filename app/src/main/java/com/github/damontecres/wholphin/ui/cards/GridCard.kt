@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.cards
 
+import com.github.damontecres.wholphin.nobars.ui.posterInfoText
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -54,7 +55,7 @@ fun GridCard(
     // NoBars: remember films shown in grids, so their page can open at once
     remember(item?.id) {
         if (item != null && item.type == org.jellyfin.sdk.model.api.BaseItemKind.MOVIE) {
-            com.github.damontecres.wholphin.services.ItemPreviewCache.put(item)
+            com.github.damontecres.wholphin.nobars.data.ItemPreviewCache.put(item)
         }
         0
     }

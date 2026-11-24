@@ -1,8 +1,8 @@
 package com.github.damontecres.wholphin.ui.nav
 
 import org.jellyfin.sdk.api.client.ApiClient
-import com.github.damontecres.wholphin.services.LocalImdbVotes
-import com.github.damontecres.wholphin.services.ImdbVotesStore
+import com.github.damontecres.wholphin.nobars.data.LocalImdbVotes
+import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
@@ -44,10 +44,10 @@ class ApplicationContentViewModel
     ) : ViewModel() {
         // NoBars: IMDb vote counts for the whole library, fetched once per session (about 30 KB)
         fun loadImdbVotes() {
-            com.github.damontecres.wholphin.services.ServerAccess.baseUrl = api.baseUrl
-            com.github.damontecres.wholphin.services.ServerAccess.token = api.accessToken
+            com.github.damontecres.wholphin.nobars.data.ServerAccess.baseUrl = api.baseUrl
+            com.github.damontecres.wholphin.nobars.data.ServerAccess.token = api.accessToken
             viewModelScope.launchIO { ImdbVotesStore.load(api.baseUrl, api.accessToken) }
-            viewModelScope.launchIO { com.github.damontecres.wholphin.services.StreamingStore.loadLibrary() }
+            viewModelScope.launchIO { com.github.damontecres.wholphin.nobars.data.StreamingStore.loadLibrary() }
         }
 
         fun clearBackdrop() {
@@ -73,9 +73,9 @@ fun ApplicationContent(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     // NoBars: where title cards are kept on the TV (so titles open at once, even after a restart)
     val appContext = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(Unit) { com.github.damontecres.wholphin.services.StreamingStore.cacheDir = appContext.cacheDir }
+    LaunchedEffect(Unit) { com.github.damontecres.wholphin.nobars.data.StreamingStore.cacheDir = appContext.cacheDir }
     LaunchedEffect(server.id, user.id) {
-        com.github.damontecres.wholphin.services.ServerAccess.userId = user.id
+        com.github.damontecres.wholphin.nobars.data.ServerAccess.userId = user.id
         viewModel.loadImdbVotes()
     }
     val imdbVotes by ImdbVotesStore.votes.collectAsState()
@@ -128,9 +128,9 @@ fun ApplicationContent(
             },
         )
         // NoBars: "Mark watched…" (your Trakt history), over any page
-        com.github.damontecres.wholphin.ui.components.TraktMarkHost()
+        com.github.damontecres.wholphin.nobars.ui.TraktMarkHost()
         // NoBars: the quick view for posters outside your library
-        com.github.damontecres.wholphin.ui.components.QuickViewHost(navigationManager)
+        com.github.damontecres.wholphin.nobars.ui.QuickViewHost(navigationManager)
     }
     }
 }

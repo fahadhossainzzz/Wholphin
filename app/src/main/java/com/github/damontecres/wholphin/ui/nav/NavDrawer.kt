@@ -1,7 +1,7 @@
 package com.github.damontecres.wholphin.ui.nav
 
 import androidx.compose.ui.draw.clip
-import com.github.damontecres.wholphin.services.StreamingStore
+import com.github.damontecres.wholphin.nobars.data.StreamingStore
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility

@@ -265,7 +265,7 @@ fun SeriesOverview(
                     episodeList?.getOrNull(position.episodeRowIndex)?.let {
                         val played = it.data.userData?.played ?: false
                         // NoBars: your Trakt history
-                        if (!com.github.damontecres.wholphin.ui.components.TraktMark.ask(it)) viewModel.setWatched(it.id, !played, position.episodeRowIndex)
+                        if (!com.github.damontecres.wholphin.nobars.ui.TraktMark.ask(it)) viewModel.setWatched(it.id, !played, position.episodeRowIndex)
                     }
                 },
                 favoriteOnClick = {

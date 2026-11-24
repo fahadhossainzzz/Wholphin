@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.main.settings
 
+import com.github.damontecres.wholphin.nobars.home.CustomRowEditor
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background

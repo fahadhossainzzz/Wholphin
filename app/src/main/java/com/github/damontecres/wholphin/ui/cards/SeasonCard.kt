@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.cards
 
+import com.github.damontecres.wholphin.nobars.ui.posterInfoText
+import com.github.damontecres.wholphin.nobars.ui.PosterRatingBand
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -58,8 +60,8 @@ fun SeasonCard(
         name = item?.name,
         imageUrl = imageUrl,
         isFavorite = item?.data?.userData?.isFavorite ?: false,
-        isPlayed = com.github.damontecres.wholphin.ui.components.traktWatched(item) ?: (item?.data?.userData?.played ?: false),
-        unplayedItemCount = if (com.github.damontecres.wholphin.ui.components.traktWatched(item) != null) 0 else (item?.data?.userData?.unplayedItemCount ?: 0),
+        isPlayed = com.github.damontecres.wholphin.nobars.ui.traktWatched(item) ?: (item?.data?.userData?.played ?: false),
+        unplayedItemCount = if (com.github.damontecres.wholphin.nobars.ui.traktWatched(item) != null) 0 else (item?.data?.userData?.unplayedItemCount ?: 0),
         playedPercentage = item?.data?.userData?.playedPercentage ?: 0.0,
         numberOfVersions = item?.data?.mediaSourceCount ?: 0,
         onClick = onClick,

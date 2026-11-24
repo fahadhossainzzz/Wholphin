@@ -194,7 +194,7 @@ fun MovieDetails(
                 },
                 watchOnClick = {
                     // NoBars: your Trakt history
-                    if (!com.github.damontecres.wholphin.ui.components.TraktMark.ask(movie)) viewModel.setWatched(movie.id, !movie.played)
+                    if (!com.github.damontecres.wholphin.nobars.ui.TraktMark.ask(movie)) viewModel.setWatched(movie.id, !movie.played)
                 },
                 favoriteOnClick = {
                     viewModel.setFavorite(movie.id, !movie.favorite)
@@ -348,7 +348,7 @@ fun MovieDetailsContent(
                     ExpandablePlayButtons(
                         title = movie.title ?: "",
                         resumePosition = resumePosition,
-                        watched = com.github.damontecres.wholphin.ui.components.traktWatched(movie) ?: (dto.userData?.played ?: false),
+                        watched = com.github.damontecres.wholphin.nobars.ui.traktWatched(movie) ?: (dto.userData?.played ?: false),
                         favorite = dto.userData?.isFavorite ?: false,
                         playOnClick = {
                             position = HEADER_ROW
@@ -408,8 +408,8 @@ fun MovieDetailsContent(
                 }
             }
             // NoBars "explore": the journey across the screen, then box office and where else to watch
-            item { com.github.damontecres.wholphin.ui.components.NbJourneySection(movie) }
-            item { com.github.damontecres.wholphin.ui.components.NbMoneyAndWhereSection(movie) }
+            item { com.github.damontecres.wholphin.nobars.ui.NbJourneySection(movie) }
+            item { com.github.damontecres.wholphin.nobars.ui.NbMoneyAndWhereSection(movie) }
             state.extras.letNotEmpty { extras ->
                 item {
                     ExtrasRow(
@@ -485,7 +485,7 @@ fun MovieDetailsContent(
                 }
             }
             // NoBars "reference": director, writers, studio, collection, tagline, file, drive, subtitles, date added
-            item { com.github.damontecres.wholphin.ui.components.NbAboutSection(movie, "About this film") }
+            item { com.github.damontecres.wholphin.nobars.ui.NbAboutSection(movie, "About this film") }
         }
     }
 }

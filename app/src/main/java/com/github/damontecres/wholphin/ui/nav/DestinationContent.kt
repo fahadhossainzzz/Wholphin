@@ -355,15 +355,15 @@ fun DestinationContent(
         }
 
         Destination.BrowseYears -> {
-            com.github.damontecres.wholphin.ui.detail.BrowseRowsPage(
-                mode = com.github.damontecres.wholphin.ui.detail.BrowseMode.YEARS,
+            com.github.damontecres.wholphin.nobars.catalog.BrowseRowsPage(
+                mode = com.github.damontecres.wholphin.nobars.catalog.BrowseMode.YEARS,
                 preferences = preferences,
                 modifier = modifier,
             )
         }
 
         is Destination.AnyPerson -> {
-            com.github.damontecres.wholphin.ui.detail.AnyPersonPage(
+            com.github.damontecres.wholphin.nobars.person.AnyPersonPage(
                 preferences = preferences,
                 tmdb = destination.tmdb,
                 name = destination.name,
@@ -372,7 +372,7 @@ fun DestinationContent(
         }
 
         is Destination.CatalogTitle -> {
-            com.github.damontecres.wholphin.ui.detail.CatalogTitlePage(
+            com.github.damontecres.wholphin.nobars.catalog.CatalogTitlePage(
                 tmdb = destination.tmdb,
                 series = destination.series,
                 modifier = modifier,
@@ -380,7 +380,7 @@ fun DestinationContent(
         }
 
         is Destination.Streaming -> {
-            com.github.damontecres.wholphin.ui.detail.StreamingPage(
+            com.github.damontecres.wholphin.nobars.catalog.StreamingPage(
                 service = destination.service,
                 preferences = preferences,
                 modifier = modifier,
@@ -388,8 +388,8 @@ fun DestinationContent(
         }
 
         Destination.BrowseGenres -> {
-            com.github.damontecres.wholphin.ui.detail.BrowseRowsPage(
-                mode = com.github.damontecres.wholphin.ui.detail.BrowseMode.GENRES,
+            com.github.damontecres.wholphin.nobars.catalog.BrowseRowsPage(
+                mode = com.github.damontecres.wholphin.nobars.catalog.BrowseMode.GENRES,
                 preferences = preferences,
                 modifier = modifier,
             )

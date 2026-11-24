@@ -412,13 +412,13 @@ class CollectionFolderViewModel
                             filter = filter,
                         )
                     // NoBars: our own filters and orders (money, weighted IMDb, streaming…) are worked out on the TV
-                    if (com.github.damontecres.wholphin.services.NbQuery.needed(filter.extra, sortAndDirection.sort)) {
+                    if (com.github.damontecres.wholphin.nobars.data.NbQuery.needed(filter.extra, sortAndDirection.sort)) {
                         val ids =
-                            com.github.damontecres.wholphin.services.NbQuery.orderedIds(
+                            com.github.damontecres.wholphin.nobars.data.NbQuery.orderedIds(
                                 api,
                                 request,
                                 filter.extra,
-                                com.github.damontecres.wholphin.services.NbQuery.clientSort(sortAndDirection.sort),
+                                com.github.damontecres.wholphin.nobars.data.NbQuery.clientSort(sortAndDirection.sort),
                                 sortAndDirection.direction != org.jellyfin.sdk.model.api.SortOrder.ASCENDING,
                             )
                         ApiRequestPager(
@@ -1075,7 +1075,7 @@ fun CollectionFolderViewContent(
 
                             // NoBars: sorted by size: the cards add it after the year
                             androidx.compose.runtime.CompositionLocalProvider(
-                                com.github.damontecres.wholphin.services.LocalShowSizeOnCards provides
+                                com.github.damontecres.wholphin.nobars.data.LocalShowSizeOnCards provides
                                     (state.sortAndDirection.sort == com.github.damontecres.wholphin.ui.data.SizeSort),
                             ) {
                             Box(Modifier.fillMaxSize()) {

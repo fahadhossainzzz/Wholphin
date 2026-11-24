@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import com.github.damontecres.wholphin.nobars.playback.PlaybackFacts
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.view.Display
@@ -30,7 +31,7 @@ import androidx.tv.material3.ProvideTextStyle
 import androidx.tv.material3.Text
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.preferences.PlayerBackend
-import com.github.damontecres.wholphin.services.stream.StreamHealth
+import com.github.damontecres.wholphin.nobars.playback.StreamHealth
 import com.github.damontecres.wholphin.ui.PreviewTvSpec
 import com.github.damontecres.wholphin.ui.formatBitrate
 import com.github.damontecres.wholphin.ui.formatBytes

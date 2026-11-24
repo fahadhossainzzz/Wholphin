@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.components
 
+import com.github.damontecres.wholphin.nobars.ui.TraktMark
 import android.content.res.Resources
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward

@@ -56,10 +56,10 @@ class WholphinApplication :
         super.onCreate()
         // NoBars: keep a log file on the TV, and record why the last run ended (memory kill, crash)
         Timber.plant(
-            com.github.damontecres.wholphin.services.stream.NoBarsLog
+            com.github.damontecres.wholphin.nobars.playback.NoBarsLog
                 .tree(this),
         )
-        com.github.damontecres.wholphin.services.stream.StallGuard
+        com.github.damontecres.wholphin.nobars.playback.StallGuard
             .logPreviousExits(this)
         if (BuildConfig.DEBUG) {
             StrictMode.setThreadPolicy(

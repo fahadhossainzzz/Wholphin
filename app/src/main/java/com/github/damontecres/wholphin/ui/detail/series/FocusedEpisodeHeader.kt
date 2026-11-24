@@ -50,7 +50,7 @@ fun FocusedEpisodeHeader(
                 modifier = Modifier.padding(start = HeaderUtils.startPadding),
             )
             // NoBars: the episode's file, drive and date added
-            com.github.damontecres.wholphin.ui.components.NbFileChips(
+            com.github.damontecres.wholphin.nobars.ui.NbFileChips(
                 source = chosenStreams?.source ?: dto.mediaSources?.firstOrNull(),
                 added = dto.dateCreated,
                 modifier = Modifier.padding(start = HeaderUtils.startPadding),

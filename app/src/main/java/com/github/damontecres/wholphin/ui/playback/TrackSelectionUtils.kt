@@ -7,7 +7,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
-import com.github.damontecres.wholphin.services.stream.LanguageKeep
+import com.github.damontecres.wholphin.nobars.playback.LanguageKeep
 import com.github.damontecres.wholphin.ui.indexOfFirstOrNull
 import org.jellyfin.sdk.model.api.MediaSourceInfo
 import org.jellyfin.sdk.model.api.MediaStream

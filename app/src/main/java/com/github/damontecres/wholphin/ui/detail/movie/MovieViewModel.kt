@@ -27,7 +27,7 @@ import com.github.damontecres.wholphin.services.TrailerService
 import com.github.damontecres.wholphin.services.UserPreferencesService
 import com.github.damontecres.wholphin.services.deleteItem
 import com.github.damontecres.wholphin.ui.ItemRowFields
-import com.github.damontecres.wholphin.ui.detail.deleteVersionOnServer
+import com.github.damontecres.wholphin.nobars.library.deleteVersionOnServer
 import com.github.damontecres.wholphin.ui.launchDefault
 import com.github.damontecres.wholphin.ui.launchIO
 import com.github.damontecres.wholphin.ui.letNotEmpty
@@ -109,7 +109,7 @@ class MovieViewModel
                 val started = System.currentTimeMillis()
                 // NoBars: open at once with what the row already showed; the full details replace it in a moment
                 if (_state.value.loading is DataLoadingState.Pending) {
-                    com.github.damontecres.wholphin.services.ItemPreviewCache.get(itemId)?.let { preview ->
+                    com.github.damontecres.wholphin.nobars.data.ItemPreviewCache.get(itemId)?.let { preview ->
                         _state.update { it.copy(loading = DataLoadingState.Success(preview)) }
                         backdropService.submit(preview)
                         Timber.i("NoBars timing: film page shown from the row's details at once")

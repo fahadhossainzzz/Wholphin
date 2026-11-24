@@ -1,6 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
-import com.github.damontecres.wholphin.services.LocalImdbVotes
+import com.github.damontecres.wholphin.nobars.data.LocalImdbVotes
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
@@ -287,18 +287,18 @@ fun Controller(
 private fun playerRatingLine(item: com.github.damontecres.wholphin.data.model.BaseItem): String? {
     val stars = item.data.communityRating?.takeIf { it > 0f }
     val tomatoes = item.data.criticRating?.takeIf { it >= 0f }
-    val votes = com.github.damontecres.wholphin.services.ImdbVotesStore.get(item.id)?.votes
+    val votes = com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.get(item.id)?.votes
     return buildList {
         stars?.let {
-            add("★ " + String.format(java.util.Locale.US, "%.1f", it) + (votes?.let { v -> " · " + com.github.damontecres.wholphin.services.ImdbVotesStore.short(v) + " votes" } ?: ""))
+            add("★ " + String.format(java.util.Locale.US, "%.1f", it) + (votes?.let { v -> " · " + com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.short(v) + " votes" } ?: ""))
         }
         if (tomatoes != null) {
             add("🍅 ${tomatoes.toInt()}%")
         } else {
-            com.github.damontecres.wholphin.services.CriticFallback.label(item.id)?.let { add(it) }
+            com.github.damontecres.wholphin.nobars.data.CriticFallback.label(item.id)?.let { add(it) }
         }
-        com.github.damontecres.wholphin.services.BoxOffice.forItem(item.id)?.let { m ->
-            com.github.damontecres.wholphin.services.BoxOffice.compact(m)?.let { add(it) }
+        com.github.damontecres.wholphin.nobars.data.BoxOffice.forItem(item.id)?.let { m ->
+            com.github.damontecres.wholphin.nobars.data.BoxOffice.compact(m)?.let { add(it) }
         }
     }.takeIf { it.isNotEmpty() }?.joinToString("   ")
 }

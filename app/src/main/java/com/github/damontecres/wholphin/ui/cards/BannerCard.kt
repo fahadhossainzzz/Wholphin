@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.cards
 
+import com.github.damontecres.wholphin.nobars.ui.posterInfoText
+import com.github.damontecres.wholphin.nobars.ui.PosterRatingBand
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -73,12 +75,12 @@ fun BannerCard(
     showInfoLine: Boolean = true,
 ) {
     // NoBars: the watched tick is your Trakt history
-    val played = com.github.damontecres.wholphin.ui.components.traktWatched(item) ?: played
+    val played = com.github.damontecres.wholphin.nobars.ui.traktWatched(item) ?: played
     val imageUrlService = LocalImageUrlService.current
     // NoBars: remember films shown in rows, so their page can open at once
     androidx.compose.runtime.remember(item?.id) {
         if (item != null && item.type == org.jellyfin.sdk.model.api.BaseItemKind.MOVIE && item.imageUrlOverride == null) {
-            com.github.damontecres.wholphin.services.ItemPreviewCache.put(item)
+            com.github.damontecres.wholphin.nobars.data.ItemPreviewCache.put(item)
         }
         0
     }
@@ -214,8 +216,8 @@ fun BannerCard(
                         .padding(bottom = if (playPercent > 0 && playPercent < 100) Cards.playedPercentHeight else 0.dp),
             )
             // NoBars: where a Theatre film is out on digital: one platform logo (+N more, listed in the panel)
-            com.github.damontecres.wholphin.services.StreamingStore.ottLogos(item?.id).firstOrNull()?.let { logo ->
-                val more = com.github.damontecres.wholphin.services.StreamingStore.ottMore(item?.id)
+            com.github.damontecres.wholphin.nobars.data.StreamingStore.ottLogos(item?.id).firstOrNull()?.let { logo ->
+                val more = com.github.damontecres.wholphin.nobars.data.StreamingStore.ottMore(item?.id)
                 androidx.compose.foundation.layout.Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier =
@@ -245,7 +247,7 @@ fun BannerCard(
                 }
             }
             // NoBars: Netflix Top 10 rank, or ✓ for a streaming title you already have
-            com.github.damontecres.wholphin.services.StreamingStore.badge(item?.id)?.let { badge ->
+            com.github.damontecres.wholphin.nobars.data.StreamingStore.badge(item?.id)?.let { badge ->
                 Text(
                     text = badge,
                     color = Color.White,

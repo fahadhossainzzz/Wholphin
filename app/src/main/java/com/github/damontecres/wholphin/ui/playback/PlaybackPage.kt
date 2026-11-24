@@ -1,10 +1,12 @@
 package com.github.damontecres.wholphin.ui.playback
 
+import com.github.damontecres.wholphin.nobars.playback.ZoomedContentScale
+import com.github.damontecres.wholphin.nobars.playback.TrickplayCache
 import com.github.damontecres.wholphin.R
 import androidx.compose.ui.res.stringResource
 import com.github.damontecres.wholphin.ui.playback.overlay.QuickSetting
-import com.github.damontecres.wholphin.ui.playback.overlay.PlayerPeopleViewModel
-import com.github.damontecres.wholphin.ui.playback.overlay.PersonPanel
+import com.github.damontecres.wholphin.nobars.person.PlayerPeopleViewModel
+import com.github.damontecres.wholphin.nobars.person.PersonPanel
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -269,11 +271,11 @@ fun PlaybackPageContent(
     // NoBars: subtitle delay for ExoPlayer is applied inside the player (DelayedTextRenderer): any subtitle the
     // player shows (inside the file, separate .srt, picture subtitles) moves by the delay, live, nothing fetched
     LaunchedEffect(state.currentPlayback?.subtitleDelay, player) {
-        com.github.damontecres.wholphin.services.stream.SubtitleOffset.delayUs =
+        com.github.damontecres.wholphin.nobars.playback.SubtitleOffset.delayUs =
             if (player is MpvPlayer) 0L else (state.currentPlayback?.subtitleDelay ?: Duration.ZERO).inWholeMicroseconds
     }
     androidx.compose.runtime.DisposableEffect(Unit) {
-        onDispose { com.github.damontecres.wholphin.services.stream.SubtitleOffset.delayUs = 0L }
+        onDispose { com.github.damontecres.wholphin.nobars.playback.SubtitleOffset.delayUs = 0L }
     }
 
     val presentationState = rememberPresentationState(player, false)

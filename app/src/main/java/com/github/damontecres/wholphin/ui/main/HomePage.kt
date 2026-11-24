@@ -351,7 +351,7 @@ fun HomePageContent(
     }
     Box(modifier = modifier) {
         // NoBars: what the server is preparing (a new download being made ready), top right
-        com.github.damontecres.wholphin.ui.components.PreparingBanner(
+        com.github.damontecres.wholphin.nobars.ui.PreparingBanner(
             Modifier
                 .align(Alignment.TopEnd)
                 .padding(top = 12.dp, end = 24.dp),
@@ -594,7 +594,7 @@ fun HomePageHeader(
         logoImageUrl = rememberLogoUrl(item),
         modifier = modifier,
         // NoBars: ratings · box office · your copy (or where to watch) in three labelled columns
-        facts = { com.github.damontecres.wholphin.ui.components.NbBrowseFacts(item) },
+        facts = { com.github.damontecres.wholphin.nobars.ui.NbBrowseFacts(item) },
     )
 }
 

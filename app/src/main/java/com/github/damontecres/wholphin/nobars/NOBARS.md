@@ -30,7 +30,7 @@ Everything of ours is under `nobars/`. The original app's files are changed only
 | `nobars/watchlist/` | The Watchlist page: rows Total · On Netflix · On Prime Video · In your library · Others · Best rated, and their See all grids |
 | `nobars/history/` | The History page (`HistoryPage`: Total · Films · TV shows · a row per year) and its data (`HistoryShelf`) |
 | `nobars/person/` | Anyone's page (`AnyPersonPage`), the career model (`Credit`), the cast overlay in the player (`PeopleOverlay`). The library's person page itself is the original `ui/detail/PersonPage.kt` with our rows (In your library · Best rated on IMDb · All films · All TV · On your watchlist · Your history) |
-| `nobars/calendar/` | The Calendar: `CalendarModels` (a day's items: yours · watched · world), `CalendarStore` (one month per request, kept while the app runs; today's count for the menu), `CalendarPage` (the month grid), `CalendarDayPanel` (OK on a day) |
+| `nobars/calendar/` | The Calendar: `CalendarModels` (a day's items: yours · watched · world), `CalendarStore` (one month per request, kept while the app runs; today's count for the menu), `CalendarPage` (the month grid, with the day pane always beside it), `CalendarDayPane` (the day you're on) |
 | `nobars/library/` | Deleting one version of a film (`DeleteVersion`) |
 | `nobars/home/` | The custom home-row editor (`CustomRowEditor`) |
 | `nobars/playback/` | Player add-ons: `StallGuard`, `ElasticLoadControl`, `UsbReadAhead`, `PatientLoadErrorPolicy`, `EndTolerantExtractor`, `LeanExtractorsFactory`, `NoDtsPassthrough`, `DelayedTextRenderer`, `LanguageKeep`, `StreamHealth`, `DiagCollector`, `NoBarsLog`, `TrickplayCache`, `ZoomedContentScale`, `PlaybackFacts` |

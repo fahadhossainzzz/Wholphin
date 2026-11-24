@@ -1,5 +1,10 @@
 package com.github.damontecres.wholphin.ui.nav
 
+import com.github.damontecres.wholphin.nobars.person.AnyPersonPage
+import com.github.damontecres.wholphin.nobars.catalog.BrowseMode
+import com.github.damontecres.wholphin.nobars.catalog.BrowseRowsPage
+import com.github.damontecres.wholphin.nobars.catalog.CatalogTitlePage
+import com.github.damontecres.wholphin.nobars.catalog.StreamingPage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
@@ -355,15 +360,15 @@ fun DestinationContent(
         }
 
         Destination.BrowseYears -> {
-            com.github.damontecres.wholphin.nobars.catalog.BrowseRowsPage(
-                mode = com.github.damontecres.wholphin.nobars.catalog.BrowseMode.YEARS,
+            BrowseRowsPage(
+                mode = BrowseMode.YEARS,
                 preferences = preferences,
                 modifier = modifier,
             )
         }
 
         is Destination.AnyPerson -> {
-            com.github.damontecres.wholphin.nobars.person.AnyPersonPage(
+            AnyPersonPage(
                 preferences = preferences,
                 tmdb = destination.tmdb,
                 name = destination.name,
@@ -372,7 +377,7 @@ fun DestinationContent(
         }
 
         is Destination.CatalogTitle -> {
-            com.github.damontecres.wholphin.nobars.catalog.CatalogTitlePage(
+            CatalogTitlePage(
                 tmdb = destination.tmdb,
                 series = destination.series,
                 modifier = modifier,
@@ -380,7 +385,7 @@ fun DestinationContent(
         }
 
         is Destination.Streaming -> {
-            com.github.damontecres.wholphin.nobars.catalog.StreamingPage(
+            StreamingPage(
                 service = destination.service,
                 preferences = preferences,
                 modifier = modifier,
@@ -388,8 +393,8 @@ fun DestinationContent(
         }
 
         Destination.BrowseGenres -> {
-            com.github.damontecres.wholphin.nobars.catalog.BrowseRowsPage(
-                mode = com.github.damontecres.wholphin.nobars.catalog.BrowseMode.GENRES,
+            BrowseRowsPage(
+                mode = BrowseMode.GENRES,
                 preferences = preferences,
                 modifier = modifier,
             )

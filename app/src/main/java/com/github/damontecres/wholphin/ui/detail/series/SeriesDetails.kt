@@ -1,5 +1,11 @@
 package com.github.damontecres.wholphin.ui.detail.series
 
+import com.github.damontecres.wholphin.nobars.ui.NbAboutSection
+import com.github.damontecres.wholphin.nobars.ui.NbGenresInline
+import com.github.damontecres.wholphin.nobars.ui.NbJourneySection
+import com.github.damontecres.wholphin.nobars.ui.NbMoneyAndWhereSection
+import com.github.damontecres.wholphin.nobars.ui.NbRatingChips
+import com.github.damontecres.wholphin.nobars.ui.TraktMark
 import com.github.damontecres.wholphin.nobars.ui.WatchProvidersLine
 import android.content.res.Resources
 import androidx.compose.animation.AnimatedVisibility
@@ -238,7 +244,7 @@ fun SeriesDetails(
                 },
                 watchOnClick = {
                     // NoBars: your Trakt history (the whole series)
-                    if (!com.github.damontecres.wholphin.nobars.ui.TraktMark.ask(series)) showWatchConfirmation = true
+                    if (!TraktMark.ask(series)) showWatchConfirmation = true
                 },
                 favoriteOnClick = {
                     val favorite = series.data.userData?.isFavorite ?: false
@@ -540,8 +546,8 @@ fun SeriesDetailsContent(
                     )
                 }
                 // NoBars: after the seasons, the journey and where else to watch
-                item { com.github.damontecres.wholphin.nobars.ui.NbJourneySection(series) }
-                item { com.github.damontecres.wholphin.nobars.ui.NbMoneyAndWhereSection(series) }
+                item { NbJourneySection(series) }
+                item { NbMoneyAndWhereSection(series) }
                 if (people.isNotEmpty()) {
                     item {
                         PersonRow(
@@ -649,7 +655,7 @@ fun SeriesDetailsContent(
                         )
                     }
                 }
-                item { com.github.damontecres.wholphin.nobars.ui.NbAboutSection(series, "About this show") }
+                item { NbAboutSection(series, "About this show") }
             }
         }
     }
@@ -684,9 +690,9 @@ fun SeriesDetailsHeader(
             // NoBars: meta line with genres; ratings as chips below
             androidx.compose.foundation.layout.Row(Modifier.padding(start = HeaderUtils.startPadding)) {
                 QuickDetails(series.ui.quickDetails, null, showRatings = false)
-                com.github.damontecres.wholphin.nobars.ui.NbGenresInline(series)
+                NbGenresInline(series)
             }
-            com.github.damontecres.wholphin.nobars.ui.NbRatingChips(series, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
+            NbRatingChips(series, Modifier.padding(start = HeaderUtils.startPadding, top = 4.dp))
             // studios and genres: genres in the meta line, studios under About
             dto.overview?.let { overview ->
                 OverviewText(

@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import com.github.damontecres.wholphin.data.model.Person
 import com.github.damontecres.wholphin.nobars.person.PeopleRowOverlay
 import com.github.damontecres.wholphin.ui.playback.isBackKey
 import androidx.compose.ui.input.key.type
@@ -99,8 +100,8 @@ fun PlaybackOverlay(
     trickplayUrlFor: (Int) -> String? = { null },
     onClickPlaylist: (BaseItem) -> Unit = {},
     quickSettings: List<QuickSetting> = emptyList(),
-    people: List<com.github.damontecres.wholphin.data.model.Person> = emptyList(),
-    onClickPerson: (com.github.damontecres.wholphin.data.model.Person) -> Unit = {},
+    people: List<Person> = emptyList(),
+    onClickPerson: (Person) -> Unit = {},
     returnToPersonId: java.util.UUID? = null,
     onReturnedToPerson: () -> Unit = {},
     seekBarInteractionSource: MutableInteractionSource = remember { MutableInteractionSource() },

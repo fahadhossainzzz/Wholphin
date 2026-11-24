@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.PLAYBACK
 import android.app.SearchManager
 import android.content.Intent
 import androidx.annotation.VisibleForTesting
@@ -200,7 +201,7 @@ class IntentService
             const val INTENT_SERVER_ID = "serverId"
             const val INTENT_USER_ID = "userId"
 
-            const val ACTION_PLAYBACK = "com.github.damontecres.wholphin.PLAYBACK"
+            const val ACTION_PLAYBACK = "PLAYBACK"
         }
     }
 

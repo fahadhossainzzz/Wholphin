@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.cards
 
+import com.github.damontecres.wholphin.ui.Cards
 import com.github.damontecres.wholphin.nobars.ui.posterInfoText
 import com.github.damontecres.wholphin.nobars.ui.PosterRatingBand
 import androidx.compose.animation.core.animateDpAsState
@@ -199,7 +200,7 @@ fun SeasonCard(
                             .padding(
                                 bottom =
                                     if (playedPercentage > 0 && playedPercentage < 100) {
-                                        com.github.damontecres.wholphin.ui.Cards.playedPercentHeight
+                                        Cards.playedPercentHeight
                                     } else {
                                         0.dp
                                     },

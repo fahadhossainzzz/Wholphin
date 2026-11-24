@@ -1,5 +1,19 @@
 package com.github.damontecres.wholphin.ui.detail
 
+import com.github.damontecres.wholphin.nobars.person.Credit
+import com.github.damontecres.wholphin.nobars.person.CreditSummary
+import com.github.damontecres.wholphin.nobars.data.HistoryStore
+import com.github.damontecres.wholphin.nobars.data.PosterFacts
+import com.github.damontecres.wholphin.nobars.ui.PosterSizeColor
+import com.github.damontecres.wholphin.nobars.ui.QuickView
+import com.github.damontecres.wholphin.nobars.ui.RatingBand
+import com.github.damontecres.wholphin.nobars.data.ServerAccess
+import com.github.damontecres.wholphin.nobars.data.SizeStore
+import com.github.damontecres.wholphin.ui.cards.SlidingCardText
+import com.github.damontecres.wholphin.nobars.data.StreamingStore
+import com.github.damontecres.wholphin.nobars.ui.TraktMark
+import com.github.damontecres.wholphin.nobars.data.WantedStore
+import com.github.damontecres.wholphin.nobars.ui.WholeItemsScroll
 import com.github.damontecres.wholphin.nobars.person.personExtraLines
 import com.github.damontecres.wholphin.nobars.person.parsePersonProfile
 import com.github.damontecres.wholphin.nobars.person.PersonProfile
@@ -163,12 +177,12 @@ class PersonViewModel
                     // NoBars: their whole career (from our plugin, which keeps it 30 days on the server)
                     viewModelScope.launchIO {
                         try {
-                            if (com.github.damontecres.wholphin.nobars.data.StreamingStore.owned.isEmpty()) {
-                                com.github.damontecres.wholphin.nobars.data.StreamingStore.loadLibrary()
+                            if (StreamingStore.owned.isEmpty()) {
+                                StreamingStore.loadLibrary()
                             }
                             val json =
                                 dto.providerIds?.get("Tmdb")
-                                    ?.let { com.github.damontecres.wholphin.nobars.data.ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
+                                    ?.let { ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
                             val credits = json?.let { com.github.damontecres.wholphin.nobars.person.parseCredits(it) }.orEmpty()
                             _state.update { it.copy(work = credits, profile = json?.let(::parsePersonProfile)) }
                         } catch (e: Exception) {
@@ -234,10 +248,10 @@ class PersonViewModel
         }
 
         /** NoBars: a title from "All work": yours opens its library page; any other opens its full title page. */
-        fun openCredit(c: com.github.damontecres.wholphin.nobars.person.Credit) {
+        fun openCredit(c: Credit) {
             viewModelScope.launchIO {
                 try {
-                    val hex = com.github.damontecres.wholphin.nobars.data.StreamingStore.owned[c.ownedKey]
+                    val hex = StreamingStore.owned[c.ownedKey]
                     if (hex != null && hex.length == 32) {
                         val id = UUID.fromString(hex.replaceFirst(Regex("(.{8})(.{4})(.{4})(.{4})(.{12})"), "$1-$2-$3-$4-$5"))
                         val item = BaseItem(api.userLibraryApi.getItem(id).content, false)
@@ -245,7 +259,7 @@ class PersonViewModel
                         return@launchIO
                     }
                     // any other title: the quick view (its buttons; "View details" for the whole title page)
-                    com.github.damontecres.wholphin.nobars.ui.QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
+                    QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
                     return@launchIO
                 } catch (e: Exception) {
                     Timber.w(e, "NoBars: could not open %s", c.title)
@@ -271,8 +285,8 @@ data class PersonState(
     val episodes: RowLoadingState = RowLoadingState.Pending,
     val discovered: List<DiscoverItem> = emptyList(),
     val discoverPerson: DiscoverItem? = null,
-    val work: List<com.github.damontecres.wholphin.nobars.person.Credit> = emptyList(),
-    val credit: com.github.damontecres.wholphin.nobars.person.Credit? = null,
+    val work: List<Credit> = emptyList(),
+    val credit: Credit? = null,
     /** NoBars: height, known for, other names and photos (TMDB / Trakt, via our plugin) */
     val profile: PersonProfile? = null,
     /** NoBars: the profile/career answer has come back (or failed), so the header won't change any more */
@@ -378,7 +392,7 @@ fun PersonPage(
                                 .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.9f), androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
                                 .padding(20.dp),
                     ) {
-                        com.github.damontecres.wholphin.nobars.person.CreditSummary(c, viewModel::closeCredit)
+                        CreditSummary(c, viewModel::closeCredit)
                     }
                 }
             }
@@ -428,8 +442,8 @@ fun PersonPageContent(
     onClickViewMoreDiscover: () -> Unit,
     enableViewMoreDiscover: Boolean,
     modifier: Modifier = Modifier,
-    work: List<com.github.damontecres.wholphin.nobars.person.Credit> = emptyList(),
-    onClickCredit: (com.github.damontecres.wholphin.nobars.person.Credit) -> Unit = {},
+    work: List<Credit> = emptyList(),
+    onClickCredit: (Credit) -> Unit = {},
     extraLines: List<String> = emptyList(),
     photos: List<String> = emptyList(),
     showFavorite: Boolean = true,
@@ -446,12 +460,12 @@ fun PersonPageContent(
     }
     var focusedOnHeader by remember { mutableStateOf(true) }
     val workRows = remember(work) { careerRows(work) }
-    val wanted by com.github.damontecres.wholphin.nobars.data.WantedStore.items.collectAsState()
+    val wanted by WantedStore.items.collectAsState()
     // your Trakt history: checked live when the page opens, and updated at once when you mark something on the TV
-    val historyState by com.github.damontecres.wholphin.nobars.data.HistoryStore.state.collectAsState()
+    val historyState by HistoryStore.state.collectAsState()
     val history = historyState.items
     LaunchedEffect(Unit) {
-        com.github.damontecres.wholphin.nobars.data.HistoryStore.load()
+        HistoryStore.load()
     }
     val pageRows =
         remember(work, wanted, history, name) {
@@ -550,7 +564,7 @@ fun PersonPageContent(
     }
 }
 
-private typealias WorkCredit = com.github.damontecres.wholphin.nobars.person.Credit
+private typealias WorkCredit = Credit
 
 /** One career row: its title, its posters, and whether it mixes films and series (then each says which). */
 internal class CareerRow(
@@ -660,7 +674,7 @@ internal fun bestRatedRow(
 internal fun libraryRow(work: List<WorkCredit>): List<WorkCredit> {
     val today = java.time.LocalDate.now().toString()
     return mergedCareer(work)
-        .filter { com.github.damontecres.wholphin.nobars.data.StreamingStore.owned.containsKey(it.ownedKey) }
+        .filter { StreamingStore.owned.containsKey(it.ownedKey) }
         .sortedWith(compareByDescending<WorkCredit> { it.date.isEmpty() || it.date > today }.thenByDescending { it.date })
 }
 
@@ -685,7 +699,7 @@ internal class PersonalRow(
  */
 internal fun personalRows(
     work: List<WorkCredit>,
-    wanted: List<com.github.damontecres.wholphin.nobars.data.StreamingStore.Entry>,
+    wanted: List<StreamingStore.Entry>,
     history: Map<String, Pair<String, Int>>,
 ): List<PersonalRow> {
     val titles = mergedCareer(work)
@@ -718,11 +732,11 @@ private fun WorkRow(
     note: ((WorkCredit) -> String?)? = null,
     watched: Set<String> = emptySet(),
 ) {
-    val wanted by com.github.damontecres.wholphin.nobars.data.WantedStore.items.collectAsState()
+    val wanted by WantedStore.items.collectAsState()
     val shown = work
     // NoBars: IMDb ★ and votes, box office and 🍅 for the band at the bottom of each poster (the whole row at once)
-    val factsVersion by com.github.damontecres.wholphin.nobars.data.PosterFacts.version.collectAsState()
-    LaunchedEffect(work) { com.github.damontecres.wholphin.nobars.data.PosterFacts.load(work.map { it.ownedKey }) }
+    val factsVersion by PosterFacts.version.collectAsState()
+    LaunchedEffect(work) { PosterFacts.load(work.map { it.ownedKey }) }
     androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = title,
@@ -731,7 +745,7 @@ private fun WorkRow(
         )
         // NoBars: scrolls by whole posters, so none is ever left half under the menu strip
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val spec = remember(density) { with(density) { com.github.damontecres.wholphin.nobars.ui.WholeItemsScroll(24.dp.toPx(), (120.dp + 16.dp).toPx()) } }
+        val spec = remember(density) { with(density) { WholeItemsScroll(24.dp.toPx(), (120.dp + 16.dp).toPx()) } }
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
         androidx.compose.foundation.lazy.LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -739,7 +753,7 @@ private fun WorkRow(
         ) {
             items(shown.size, key = { shown[it].key }) { index ->
                 val c = shown[index]
-                val owned = com.github.damontecres.wholphin.nobars.data.StreamingStore.owned.containsKey(c.ownedKey)
+                val owned = StreamingStore.owned.containsKey(c.ownedKey)
                 val onList = wanted.any { it.tmdb == c.tmdb && it.series == c.tv }
                 val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 val focused by interaction.collectIsFocusedAsState()
@@ -748,7 +762,7 @@ private fun WorkRow(
                     LaunchedEffect(focused) {
                         if (focused) {
                             kotlinx.coroutines.delay(330)
-                            com.github.damontecres.wholphin.nobars.data.StreamingStore.prefetch(c.tmdb, c.tv)
+                            StreamingStore.prefetch(c.tmdb, c.tv)
                         }
                     }
                 }
@@ -760,11 +774,11 @@ private fun WorkRow(
                         // NoBars: long press: "Mark watched…" (your Trakt history)
                         onLongClick = {
                             if (owned) {
-                                com.github.damontecres.wholphin.nobars.ui.TraktMark.ask(
-                                    com.github.damontecres.wholphin.nobars.ui.TraktMark.Target(c.ownedKey, c.title),
+                                TraktMark.ask(
+                                    TraktMark.Target(c.ownedKey, c.title),
                                 )
                             } else {
-                                com.github.damontecres.wholphin.nobars.ui.QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
+                                QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
                             }
                         },
                         interactionSource = interaction,
@@ -798,10 +812,10 @@ private fun WorkRow(
                                 )
                             }
                             // the same band as every other poster: ★ IMDb + votes · box office · 🍅
-                            val f = remember(c.ownedKey, factsVersion) { com.github.damontecres.wholphin.nobars.data.PosterFacts.get(c.ownedKey) }
+                            val f = remember(c.ownedKey, factsVersion) { PosterFacts.get(c.ownedKey) }
                             // IMDb ★ and votes come with the career (at once); box office and 🍅 when the facts arrive
                             if (f != null || c.imdbRating != null || c.rt != null || c.pop != null) {
-                                com.github.damontecres.wholphin.nobars.ui.RatingBand(
+                                RatingBand(
                                     stars = c.imdbRating ?: f?.rating,
                                     votes = c.imdbVotes ?: f?.votes,
                                     money = f?.money,
@@ -828,7 +842,7 @@ private fun WorkRow(
                     }
                     // NoBars: like every other poster row: the text slides down when the poster grows (never covered),
                     // centred, and a long title scrolls on the selected poster
-                    com.github.damontecres.wholphin.ui.cards.SlidingCardText(focused) {
+                    SlidingCardText(focused) {
                     Text(
                         c.title,
                         maxLines = 1,
@@ -839,11 +853,11 @@ private fun WorkRow(
                         modifier = Modifier.fillMaxWidth().enableMarquee(focused),
                     )
                     // NoBars: plus your copy's size on disk, in light blue, for titles you have
-                    val sizes by com.github.damontecres.wholphin.nobars.data.SizeStore.sizes
+                    val sizes by SizeStore.sizes
                         .collectAsState()
-                    androidx.compose.runtime.LaunchedEffect(Unit) { com.github.damontecres.wholphin.nobars.data.SizeStore.refreshSoon() }
+                    androidx.compose.runtime.LaunchedEffect(Unit) { SizeStore.refreshSoon() }
                     val mine =
-                        com.github.damontecres.wholphin.nobars.data.StreamingStore
+                        StreamingStore
                             .ownedId(c.ownedKey)
                             ?.let { sizes[it] }
                     Text(
@@ -860,10 +874,10 @@ private fun WorkRow(
                                 append(" · ")
                                 withStyle(
                                     androidx.compose.ui.text.SpanStyle(
-                                        color = com.github.damontecres.wholphin.nobars.ui.PosterSizeColor,
+                                        color = PosterSizeColor,
                                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                                     ),
-                                ) { append(com.github.damontecres.wholphin.nobars.data.SizeStore.label(mine, withEpisodes = false)) }
+                                ) { append(SizeStore.label(mine, withEpisodes = false)) }
                             }
                         },
                         maxLines = 1,

@@ -1,5 +1,13 @@
 package com.github.damontecres.wholphin.nobars.catalog
 
+import com.github.damontecres.wholphin.ui.AspectRatios
+import com.github.damontecres.wholphin.nobars.data.HistoryStore
+import com.github.damontecres.wholphin.nobars.data.PosterFacts
+import com.github.damontecres.wholphin.nobars.ui.QuickView
+import com.github.damontecres.wholphin.R
+import com.github.damontecres.wholphin.nobars.ui.TitleActions
+import com.github.damontecres.wholphin.nobars.ui.WholeItemsScroll
+import com.github.damontecres.wholphin.util.WholphinDispatchers
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,7 +88,7 @@ fun CatalogTitlePage(
     var page by remember(tmdb, series) { mutableStateOf<StreamingStore.TitlePage?>(null) }
     var searched by remember(tmdb, series) { mutableStateOf(cached != null) }
     LaunchedEffect(tmdb, series) {
-        com.github.damontecres.wholphin.nobars.data.HistoryStore.loadIfOld()
+        HistoryStore.loadIfOld()
         val e = cached ?: StreamingStore.findEntry(tmdb, series)
         if (e != entry) entry = e
         searched = true
@@ -180,7 +188,7 @@ private fun CatalogTitleContent(
                 if (e.overview.isNotBlank()) {
                     Text(e.overview, fontSize = 15.sp, color = Color.White.copy(alpha = 0.9f), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
-                com.github.damontecres.wholphin.nobars.ui.TitleActions(
+                TitleActions(
                     tmdb = e.tmdb,
                     series = e.series,
                     title = e.title,
@@ -254,7 +262,7 @@ private fun CatalogTitleContent(
                     }
                 PersonRow(
                     people = people,
-                    title = com.github.damontecres.wholphin.R.string.nb_cast,
+                    title = R.string.nb_cast,
                     onClick = { person ->
                         val tmdbId = page?.castIds?.getOrNull(people.indexOf(person))
                         scope.launch { openPerson(person.name ?: "", tmdbId, viewModel) { msg -> android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show() } }
@@ -322,23 +330,23 @@ private fun CatalogTitleContent(
         if (like.isNotEmpty()) {
             item {
                 // NoBars: the band on these posters too (IMDb ★ + votes, box office, 🍅), asked for the whole row
-                val factsVersion by com.github.damontecres.wholphin.nobars.data.PosterFacts.version.collectAsState()
+                val factsVersion by PosterFacts.version.collectAsState()
                 LaunchedEffect(like) {
-                    com.github.damontecres.wholphin.nobars.data.PosterFacts.load(like.map { (if (it.series) "tv:" else "movie:") + it.tmdb })
+                    PosterFacts.load(like.map { (if (it.series) "tv:" else "movie:") + it.tmdb })
                 }
                 Column(Modifier.padding(start = HeaderUtils.startPadding + 8.dp)) {
                     Text("More like this", style = MaterialTheme.typography.titleLarge, color = Color.White)
                     // NoBars: scrolls by whole posters (BannerCard 200 dp tall, 2:3 -> 133 dp wide, 14 dp apart)
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     val spec = remember(density) {
-                        with(density) { com.github.damontecres.wholphin.nobars.ui.WholeItemsScroll(0f, (200.dp * 2f / 3f + 14.dp).toPx()) }
+                        with(density) { WholeItemsScroll(0f, (200.dp * 2f / 3f + 14.dp).toPx()) }
                     }
                     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides spec) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
                         items(like) { other ->
                             val item =
                                 remember(other, factsVersion) {
-                                    val f = com.github.damontecres.wholphin.nobars.data.PosterFacts.get((if (other.series) "tv:" else "movie:") + other.tmdb)
+                                    val f = PosterFacts.get((if (other.series) "tv:" else "movie:") + other.tmdb)
                                     StreamingStore.toBaseItem(
                                         if (f == null) other else other.copy(imdbRating = f.rating, imdbVotes = f.votes, rt = f.rt, gross = f.gross, budget = f.budget),
                                         "like",
@@ -353,11 +361,11 @@ private fun CatalogTitleContent(
                                         viewModel.navigationManager.navigateTo(Destination.MediaItem(lib, if (other.series) BaseItemKind.SERIES else BaseItemKind.MOVIE))
                                     } else {
                                         // NoBars: the quick view; "View details" for its whole page
-                                        com.github.damontecres.wholphin.nobars.ui.QuickView.open(other)
+                                        QuickView.open(other)
                                     }
                                 },
                                 onLongClick = {},
-                                aspectRatio = com.github.damontecres.wholphin.ui.AspectRatios.TALL,
+                                aspectRatio = AspectRatios.TALL,
                                 cardHeight = 200.dp,
                             )
                         }
@@ -445,7 +453,7 @@ private suspend fun openPerson(
 }
 
 private suspend fun findLibraryPerson(name: String): UUID? =
-    kotlinx.coroutines.withContext(com.github.damontecres.wholphin.util.WholphinDispatchers.IO) {
+    kotlinx.coroutines.withContext(WholphinDispatchers.IO) {
         try {
             val user = ServerAccess.userId ?: return@withContext null
             val q = java.net.URLEncoder.encode(name, "UTF-8")

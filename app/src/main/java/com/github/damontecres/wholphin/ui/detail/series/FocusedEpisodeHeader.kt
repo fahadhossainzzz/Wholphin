@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail.series
 
+import com.github.damontecres.wholphin.nobars.ui.NbFileChips
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -50,7 +51,7 @@ fun FocusedEpisodeHeader(
                 modifier = Modifier.padding(start = HeaderUtils.startPadding),
             )
             // NoBars: the episode's file, drive and date added
-            com.github.damontecres.wholphin.nobars.ui.NbFileChips(
+            NbFileChips(
                 source = chosenStreams?.source ?: dto.mediaSources?.firstOrNull(),
                 added = dto.dateCreated,
                 modifier = Modifier.padding(start = HeaderUtils.startPadding),

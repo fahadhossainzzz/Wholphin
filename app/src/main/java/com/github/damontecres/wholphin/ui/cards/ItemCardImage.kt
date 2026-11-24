@@ -310,8 +310,8 @@ fun VersionBadge(count: Int) {
                 .padding(horizontal = 6.dp, vertical = 2.dp),
     ) {
         Text(
-            text = androidx.compose.ui.res.stringResource(com.github.damontecres.wholphin.R.string.fa_clone),
-            fontFamily = com.github.damontecres.wholphin.ui.FontAwesome,
+            text = androidx.compose.ui.res.stringResource(R.string.fa_clone),
+            fontFamily = FontAwesome,
             fontSize = 11.sp,
             color = androidx.compose.ui.graphics.Color.White,
         )

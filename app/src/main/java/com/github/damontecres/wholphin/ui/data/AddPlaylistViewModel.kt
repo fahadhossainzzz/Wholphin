@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.data
 
+import com.github.damontecres.wholphin.ui.detail.PlaylistDialog
 import android.content.Context
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
@@ -24,7 +25,7 @@ import javax.inject.Inject
 
 /**
  * A supplementary [ViewModel] for adding items to a server playlist
- * @see com.github.damontecres.wholphin.ui.detail.PlaylistDialog
+ * @see PlaylistDialog
  */
 @HiltViewModel
 class AddPlaylistViewModel

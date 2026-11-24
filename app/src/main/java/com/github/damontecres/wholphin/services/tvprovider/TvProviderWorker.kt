@@ -391,7 +391,7 @@ class TvProviderWorker
                 }.build()
 
         companion object {
-            const val WORK_NAME = "com.github.damontecres.wholphin.services.tvprovider.TvProviderWorker"
+            const val WORK_NAME = "TvProviderWorker"
             const val PARAM_USER_ID = "userId"
             const val PARAM_SERVER_ID = "serverId"
         }

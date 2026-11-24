@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.cards
 
+import com.github.damontecres.wholphin.ui.detail.CardGrid
+import com.github.damontecres.wholphin.nobars.data.ItemPreviewCache
 import com.github.damontecres.wholphin.nobars.ui.posterInfoText
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
@@ -35,7 +37,7 @@ import com.github.damontecres.wholphin.ui.enableMarquee
 import kotlinx.coroutines.delay
 
 /**
- * Card for use in [com.github.damontecres.wholphin.ui.detail.CardGrid]
+ * Card for use in [CardGrid]
  */
 @Composable
 fun GridCard(
@@ -55,7 +57,7 @@ fun GridCard(
     // NoBars: remember films shown in grids, so their page can open at once
     remember(item?.id) {
         if (item != null && item.type == org.jellyfin.sdk.model.api.BaseItemKind.MOVIE) {
-            com.github.damontecres.wholphin.nobars.data.ItemPreviewCache.put(item)
+            ItemPreviewCache.put(item)
         }
         0
     }

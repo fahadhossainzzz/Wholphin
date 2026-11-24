@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail.collection
 
+import com.github.damontecres.wholphin.ui.data.BoxSetSortOptions
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,7 +45,7 @@ fun CollectionButtons(
     moreOnClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val sortOptions = com.github.damontecres.wholphin.ui.data.BoxSetSortOptions.filter { it != org.jellyfin.sdk.model.api.ItemSortBy.DEFAULT }
+    val sortOptions = BoxSetSortOptions.filter { it != org.jellyfin.sdk.model.api.ItemSortBy.DEFAULT }
     val filterOptions = DefaultFilterOptions
     val firstFocus = remember { FocusRequester() }
     Row(

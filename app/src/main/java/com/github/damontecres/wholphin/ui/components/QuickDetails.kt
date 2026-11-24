@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.components
 
+import com.github.damontecres.wholphin.nobars.data.CriticFallback
+import com.github.damontecres.wholphin.nobars.data.StreamingStore
 import com.github.damontecres.wholphin.nobars.data.forItem
 import com.github.damontecres.wholphin.nobars.data.LocalImdbVotes
 import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
@@ -59,7 +61,7 @@ fun QuickDetails(
                 // NoBars: "7.8★ (1,234,567 votes)"
                 val votes =
                     LocalImdbVotes.current.forItem(details.itemId)?.votes
-                        ?: com.github.damontecres.wholphin.nobars.data.StreamingStore.votes(details.itemId)
+                        ?: StreamingStore.votes(details.itemId)
                 val rating =
                     details.communityRating?.let {
                         if (votes != null) {
@@ -77,7 +79,7 @@ fun QuickDetails(
                 // NoBars: the daily run's 🍅 (or audience 🍿) when Jellyfin has no critics' score
                 val critic =
                     details.criticRating
-                        ?: com.github.damontecres.wholphin.nobars.data.CriticFallback
+                        ?: CriticFallback
                             .label(details.itemId)
                             ?.let { androidx.compose.ui.text.AnnotatedString(it) }
                 QuickDetailsText(critic, Modifier, textStyle, inlineContentMap)

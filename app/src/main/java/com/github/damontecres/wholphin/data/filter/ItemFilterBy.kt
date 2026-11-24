@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.data.filter
 
+import com.github.damontecres.wholphin.data.model.NbExtraFilter
 import androidx.annotation.StringRes
 import com.github.damontecres.wholphin.R
 import com.github.damontecres.wholphin.data.model.GetItemsFilter
@@ -245,9 +246,9 @@ sealed interface NbUuidListFilter : NbFilterBy<List<UUID>>
 
 sealed interface NbStringListFilter : NbFilterBy<List<String>>
 
-private fun GetItemsFilter.extraOrEmpty() = extra ?: com.github.damontecres.wholphin.data.model.NbExtraFilter()
+private fun GetItemsFilter.extraOrEmpty() = extra ?: NbExtraFilter()
 
-private fun GetItemsFilter.withExtra(change: (com.github.damontecres.wholphin.data.model.NbExtraFilter) -> com.github.damontecres.wholphin.data.model.NbExtraFilter) =
+private fun GetItemsFilter.withExtra(change: (NbExtraFilter) -> NbExtraFilter) =
     copy(extra = change(extraOrEmpty()).orNull())
 
 data object TagFilter : NbStringListFilter {

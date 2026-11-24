@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui
 
+import com.github.damontecres.wholphin.ui.cards.ItemRow
+import com.github.damontecres.wholphin.ui.cards.SeasonCard
 import android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -70,7 +72,7 @@ val SlimItemFields =
     )
 
 /**
- * ItemFields for displaying items in rows such as in a [com.github.damontecres.wholphin.ui.cards.ItemRow] with [com.github.damontecres.wholphin.ui.cards.SeasonCard]
+ * ItemFields for displaying items in rows such as in a [ItemRow] with [SeasonCard]
  */
 val ItemRowFields = SlimItemFields + ItemFields.PRIMARY_IMAGE_ASPECT_RATIO
 

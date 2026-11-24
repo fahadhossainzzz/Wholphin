@@ -5,6 +5,7 @@
 
 package com.github.damontecres.wholphin.data.model
 
+import com.github.damontecres.wholphin.services.SuggestionService
 import com.github.damontecres.wholphin.preferences.PrefContentScale
 import com.github.damontecres.wholphin.ui.AspectRatio
 import com.github.damontecres.wholphin.ui.Cards
@@ -155,7 +156,7 @@ sealed interface HomeRowConfig {
     }
 
     /**
-     * Fetch suggestions from [com.github.damontecres.wholphin.services.SuggestionService] for the given parent ID
+     * Fetch suggestions from [SuggestionService] for the given parent ID
      */
     @Serializable
     @SerialName("Suggestions")

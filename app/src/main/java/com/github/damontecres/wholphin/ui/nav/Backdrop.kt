@@ -2,6 +2,7 @@
 
 package com.github.damontecres.wholphin.ui.nav
 
+import com.github.damontecres.wholphin.services.BackdropService
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -40,7 +41,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * Shows the current backdrop images provided by [com.github.damontecres.wholphin.services.BackdropService]
+ * Shows the current backdrop images provided by [BackdropService]
  */
 @Composable
 fun Backdrop(

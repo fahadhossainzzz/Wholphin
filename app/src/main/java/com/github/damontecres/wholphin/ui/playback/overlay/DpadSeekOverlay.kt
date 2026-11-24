@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import com.github.damontecres.wholphin.nobars.playback.SeekPicture
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -177,7 +178,7 @@ fun DpadSeekOverlay(
  */
 @Composable
 private fun FilmstripPicture(
-    picture: com.github.damontecres.wholphin.nobars.playback.SeekPicture?,
+    picture: SeekPicture?,
     width: Dp,
     height: Dp,
     modifier: Modifier = Modifier,

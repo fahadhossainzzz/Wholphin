@@ -1,5 +1,9 @@
 package com.github.damontecres.wholphin.ui.detail.movie
 
+import com.github.damontecres.wholphin.nobars.ui.NbAboutSection
+import com.github.damontecres.wholphin.nobars.ui.NbJourneySection
+import com.github.damontecres.wholphin.nobars.ui.NbMoneyAndWhereSection
+import com.github.damontecres.wholphin.nobars.ui.TraktMark
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -194,7 +198,7 @@ fun MovieDetails(
                 },
                 watchOnClick = {
                     // NoBars: your Trakt history
-                    if (!com.github.damontecres.wholphin.nobars.ui.TraktMark.ask(movie)) viewModel.setWatched(movie.id, !movie.played)
+                    if (!TraktMark.ask(movie)) viewModel.setWatched(movie.id, !movie.played)
                 },
                 favoriteOnClick = {
                     viewModel.setFavorite(movie.id, !movie.favorite)
@@ -408,8 +412,8 @@ fun MovieDetailsContent(
                 }
             }
             // NoBars "explore": the journey across the screen, then box office and where else to watch
-            item { com.github.damontecres.wholphin.nobars.ui.NbJourneySection(movie) }
-            item { com.github.damontecres.wholphin.nobars.ui.NbMoneyAndWhereSection(movie) }
+            item { NbJourneySection(movie) }
+            item { NbMoneyAndWhereSection(movie) }
             state.extras.letNotEmpty { extras ->
                 item {
                     ExtrasRow(
@@ -485,7 +489,7 @@ fun MovieDetailsContent(
                 }
             }
             // NoBars "reference": director, writers, studio, collection, tagline, file, drive, subtitles, date added
-            item { com.github.damontecres.wholphin.nobars.ui.NbAboutSection(movie, "About this film") }
+            item { NbAboutSection(movie, "About this film") }
         }
     }
 }

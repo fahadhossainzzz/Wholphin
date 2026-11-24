@@ -1,5 +1,12 @@
 package com.github.damontecres.wholphin.nobars.catalog
 
+import com.github.damontecres.wholphin.services.BackdropService
+import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.nobars.data.BoxOffice
+import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
+import com.github.damontecres.wholphin.nobars.ui.QuickView
+import com.github.damontecres.wholphin.nobars.data.ServerAccess
+import com.github.damontecres.wholphin.util.WholphinDispatchers
 import com.github.damontecres.wholphin.nobars.watchlist.WatchlistPage
 import com.github.damontecres.wholphin.nobars.history.HistoryPage
 import android.view.Gravity
@@ -84,14 +91,14 @@ class StreamingViewModel
     @Inject
     constructor(
         val navigationManager: NavigationManager,
-        private val backdropService: com.github.damontecres.wholphin.services.BackdropService,
+        private val backdropService: BackdropService,
     ) : ViewModel() {
         init {
             viewModelScope.launch { backdropService.clearBackdrop() }
         }
 
         /** NoBars: the banner follows the selected poster, as in the library (TMDB's background picture). */
-        fun updateBackdrop(item: com.github.damontecres.wholphin.data.model.BaseItem) {
+        fun updateBackdrop(item: BaseItem) {
             val url = StreamingStore.entries[item.id]?.backdrop ?: return
             viewModelScope.launch { backdropService.submit(item.id.toString(), url) }
         }
@@ -190,7 +197,7 @@ fun StreamingPage(
         }
 
         else -> {
-            val onClick = { clicked: RowColumn, item: com.github.damontecres.wholphin.data.model.BaseItem ->
+            val onClick = { clicked: RowColumn, item: BaseItem ->
                 position = clicked
                 // NoBars: a title you have opens its library page; any other opens its title page
                 StreamingStore.entries[item.id]?.let { entry -> openTitle(viewModel, entry) }
@@ -248,7 +255,7 @@ internal fun openTitle(
     if (lib != null) {
         viewModel.navigationManager.navigateTo(Destination.MediaItem(lib, if (entry.series) BaseItemKind.SERIES else BaseItemKind.MOVIE))
     } else {
-        com.github.damontecres.wholphin.nobars.ui.QuickView.open(entry)
+        QuickView.open(entry)
     }
 }
 
@@ -271,7 +278,7 @@ internal fun longPress(
     entry: StreamingStore.Entry,
     toggle: (StreamingStore.Entry) -> Unit,
 ) {
-    if (StreamingStore.libraryId(entry) == null) com.github.damontecres.wholphin.nobars.ui.QuickView.open(entry) else toggle(entry)
+    if (StreamingStore.libraryId(entry) == null) QuickView.open(entry) else toggle(entry)
 }
 
 @Composable
@@ -377,7 +384,7 @@ internal fun StreamingPanel(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        val votes = { v: Int? -> v?.let { " · ${com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.short(it)}" } ?: "" }
+                        val votes = { v: Int? -> v?.let { " · ${ImdbVotesStore.short(it)}" } ?: "" }
                         entry.imdbRating?.let { r -> Chip("IMDb " + String.format(Locale.US, "%.1f", r) + votes(entry.imdbVotes), Color(0xFFF5C518), Color.Black) }
                             ?: entry.tmdbRating?.let { r -> Chip("TMDB " + String.format(Locale.US, "%.1f", r) + votes(entry.tmdbVotes), Color(0xFF01B4E4), Color.Black) }
                         entry.rt?.let { Chip("🍅 $it%", Color(0xFFFA320A).copy(alpha = 0.85f), Color.White) }
@@ -528,9 +535,9 @@ internal fun StreamingPanel(
                         entry.date?.let { Text(it, fontSize = 14.sp, color = Color(0xFF90CAF9)) }
                     }
                     if (entry.gross != null || entry.budget != null) {
-                        com.github.damontecres.wholphin.nobars.data.BoxOffice
+                        BoxOffice
                             .line(
-                                com.github.damontecres.wholphin.nobars.data.BoxOffice
+                                BoxOffice
                                     .Money(entry.gross, entry.budget, entry.year, entry.grossToday, grossLocal = entry.grossLocal),
                             )?.let {
                                 SectionLabel("Box office")
@@ -711,7 +718,7 @@ private fun JourneyTimeline(steps: List<StreamingStore.JourneyStep>) {
                                 )
                             }
                             Text(
-                                "  week by week · last " + com.github.damontecres.wholphin.nobars.data.BoxOffice.short(step.weekly.last()),
+                                "  week by week · last " + BoxOffice.short(step.weekly.last()),
                                 fontSize = 12.sp,
                                 color = Color.White.copy(alpha = 0.6f),
                             )
@@ -739,14 +746,14 @@ private suspend fun loadOwnedCopy(
     id: java.util.UUID,
     series: Boolean,
 ): OwnedCopy? =
-    kotlinx.coroutines.withContext(com.github.damontecres.wholphin.util.WholphinDispatchers.IO) {
+    kotlinx.coroutines.withContext(WholphinDispatchers.IO) {
         try {
-            val user = com.github.damontecres.wholphin.nobars.data.ServerAccess.userId ?: return@withContext null
+            val user = ServerAccess.userId ?: return@withContext null
             val hex = id.toString().replace("-", "")
             if (series) {
-                val show = org.json.JSONObject(com.github.damontecres.wholphin.nobars.data.ServerAccess.get("/Users/$user/Items/$hex") ?: return@withContext null)
+                val show = org.json.JSONObject(ServerAccess.get("/Users/$user/Items/$hex") ?: return@withContext null)
                 val next =
-                    com.github.damontecres.wholphin.nobars.data.ServerAccess
+                    ServerAccess
                         .get("/Shows/NextUp?userId=$user&seriesId=$hex&limit=1&enableResumable=true")
                         ?.let { org.json.JSONObject(it).optJSONArray("Items")?.optJSONObject(0) }
                 val played = show.optJSONObject("UserData")?.optBoolean("Played") == true
@@ -763,7 +770,7 @@ private suspend fun loadOwnedCopy(
                     facts = null,
                 )
             } else {
-                val o = org.json.JSONObject(com.github.damontecres.wholphin.nobars.data.ServerAccess.get("/Users/$user/Items/$hex?fields=MediaSources") ?: return@withContext null)
+                val o = org.json.JSONObject(ServerAccess.get("/Users/$user/Items/$hex?fields=MediaSources") ?: return@withContext null)
                 val ud = o.optJSONObject("UserData")
                 val ticks = ud?.optLong("PlaybackPositionTicks") ?: 0L
                 val runTicks = o.optLong("RunTimeTicks").takeIf { it > 0 }

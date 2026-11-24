@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.detail
 
+import com.github.damontecres.wholphin.data.filter.NbTvFilterOptions
+import com.github.damontecres.wholphin.ui.data.TvLibrarySortOptions
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -100,8 +102,8 @@ fun CollectionFolderTv(
                         ),
                     showTitle = false,
                     recursive = true,
-                    sortOptions = com.github.damontecres.wholphin.ui.data.TvLibrarySortOptions,
-                    filterOptions = com.github.damontecres.wholphin.data.filter.NbTvFilterOptions,
+                    sortOptions = TvLibrarySortOptions,
+                    filterOptions = NbTvFilterOptions,
                     defaultViewOptions = ViewOptionsPoster,
                     modifier =
                         Modifier

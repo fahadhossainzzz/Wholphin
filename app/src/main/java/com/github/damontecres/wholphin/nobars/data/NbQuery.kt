@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.nobars.data
 
+import com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
+import com.github.damontecres.wholphin.ui.data.SizeSort
 import com.github.damontecres.wholphin.data.model.NbExtraFilter
 import com.github.damontecres.wholphin.ui.data.MoneySortCarrier
 import org.jellyfin.sdk.api.client.ApiClient
@@ -19,12 +21,12 @@ enum class ClientSort { WEIGHTED_IMDB, BOX_OFFICE, TODAYS_MONEY, BUDGET, RETURN,
  * NoBars: the filter engine behind the library filter menu's own filters and custom Home rows.
  * Jellyfin does what it can (the request); then one light request lists every matching item (ids and a few fields,
  * a few KB), which is filtered and ordered here; the posters are then fetched page by page by id
- * ([com.github.damontecres.wholphin.util.OrderedIdsRequestHandler]).
+ * ([OrderedIdsRequestHandler]).
  */
 object NbQuery {
     fun clientSort(sort: ItemSortBy?): ClientSort? {
         if (sort == ItemSortBy.NAME) return ClientSort.WEIGHTED_IMDB
-        if (sort == com.github.damontecres.wholphin.ui.data.SizeSort) return ClientSort.SIZE
+        if (sort == SizeSort) return ClientSort.SIZE
         return when (MoneySortCarrier.of(sort)) {
             MoneySort.BOX_OFFICE -> ClientSort.BOX_OFFICE
             MoneySort.TODAYS_MONEY -> ClientSort.TODAYS_MONEY

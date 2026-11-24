@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.nobars.history
 
+import com.github.damontecres.wholphin.nobars.ui.CatalogGrid
+import com.github.damontecres.wholphin.nobars.data.PosterFacts
 import com.github.damontecres.wholphin.nobars.catalog.openTitle
 import com.github.damontecres.wholphin.nobars.catalog.StreamingViewModel
 import androidx.compose.foundation.layout.Box
@@ -83,7 +85,7 @@ fun HistoryPage(
     val r = rows.orEmpty()
     // box office and 🍅 for the posters' bands (the rest comes with the rows)
     LaunchedEffect(r) {
-        com.github.damontecres.wholphin.nobars.data.PosterFacts.load(r.flatMap { row -> row.items.map { (if (it.series) "tv:" else "movie:") + it.tmdb } }.distinct())
+        PosterFacts.load(r.flatMap { row -> row.items.map { (if (it.series) "tv:" else "movie:") + it.tmdb } }.distinct())
     }
     val all = seeAll
     when {
@@ -196,7 +198,7 @@ private fun HistoryGrid(
         load(0)
     }
     // the same grid as the Movies library (header, posters, View options); pages load as you scroll
-    com.github.damontecres.wholphin.nobars.ui.CatalogGrid(
+    CatalogGrid(
         title = "${row.name} · ${cards.size}",
         items = cards,
         sort = sort,

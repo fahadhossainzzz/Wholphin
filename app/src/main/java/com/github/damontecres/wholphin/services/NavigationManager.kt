@@ -25,11 +25,11 @@ class NavigationManager
             destination !is Destination.Home && backStack.size == 2 && backStack.lastOrNull() == destination && destination == drawerRoot
 
         /**
-         * Go to the specified [com.github.damontecres.wholphin.ui.nav.Destination]
+         * Go to the specified [Destination]
          */
         fun navigateTo(destination: Destination) {
             // NoBars: after playback, Home refreshes its rows when you come back
-            if (destination is Destination.Playback) com.github.damontecres.wholphin.nobars.data.HomeRefresh.dirty = true
+            if (destination is Destination.Playback) HomeRefresh.dirty = true
             backStack.add(destination)
             log()
         }

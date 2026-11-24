@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.detail.episode
 
+import com.github.damontecres.wholphin.nobars.ui.TraktMark
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -165,7 +166,7 @@ fun EpisodeDetails(
                 },
                 watchOnClick = {
                     // NoBars: your Trakt history
-                    if (!com.github.damontecres.wholphin.nobars.ui.TraktMark.ask(ep)) viewModel.setWatched(ep.id, !ep.played)
+                    if (!TraktMark.ask(ep)) viewModel.setWatched(ep.id, !ep.played)
                 },
                 favoriteOnClick = {
                     viewModel.setFavorite(ep.id, !ep.favorite)

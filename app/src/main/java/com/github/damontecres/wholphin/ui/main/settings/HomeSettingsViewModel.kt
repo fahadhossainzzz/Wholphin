@@ -1,5 +1,10 @@
 package com.github.damontecres.wholphin.ui.main.settings
 
+import com.github.damontecres.wholphin.services.FilterOptionCache
+import com.github.damontecres.wholphin.data.model.GetItemsFilter
+import com.github.damontecres.wholphin.data.model.HomeGetItemsFilter
+import com.github.damontecres.wholphin.data.filter.ItemFilterBy
+import com.github.damontecres.wholphin.ui.data.SortAndDirection
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Immutable
@@ -89,7 +94,7 @@ class HomeSettingsViewModel
         private val backdropService: BackdropService,
         private val seerrServerRepository: SeerrServerRepository,
         private val serverPluginApi: ServerPluginApi,
-        private val filterOptionCache: com.github.damontecres.wholphin.services.FilterOptionCache,
+        private val filterOptionCache: FilterOptionCache,
         val preferencesDataStore: DataStore<AppPreferences>,
         val navigationManager: NavigationManager,
     ) : ViewModel() {
@@ -948,12 +953,12 @@ class HomeSettingsViewModel
                 HomeRowConfig.GetItems(
                     name = NEW_CUSTOM_ROW,
                     filter =
-                        com.github.damontecres.wholphin.data.model.HomeGetItemsFilter(
+                        HomeGetItemsFilter(
                             includeItemTypes = listOf(BaseItemKind.MOVIE),
                             recursive = true,
-                            libraryFilter = com.github.damontecres.wholphin.data.model.GetItemsFilter(),
+                            libraryFilter = GetItemsFilter(),
                             sort =
-                                com.github.damontecres.wholphin.ui.data.SortAndDirection(
+                                SortAndDirection(
                                     org.jellyfin.sdk.model.api.ItemSortBy.DATE_CREATED,
                                     org.jellyfin.sdk.model.api.SortOrder.DESCENDING,
                                 ),
@@ -1022,7 +1027,7 @@ class HomeSettingsViewModel
         }
 
         /** The choices of a filter, across all libraries. */
-        suspend fun filterValues(option: com.github.damontecres.wholphin.data.filter.ItemFilterBy<*>) =
+        suspend fun filterValues(option: ItemFilterBy<*>) =
             filterOptionCache.getFilterOptionValues(null, option)
 
         /** People (actors, directors…) whose name matches. */

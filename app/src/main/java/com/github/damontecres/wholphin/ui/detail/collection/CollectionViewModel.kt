@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.detail.collection
 
+import com.github.damontecres.wholphin.nobars.data.NbQuery
+import com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
 import android.content.Context
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
@@ -266,14 +268,14 @@ class CollectionViewModel
             filter: GetItemsFilter?,
             types: List<BaseItemKind>,
         ): ApiRequestPager<GetItemsRequest> {
-            val tvSort = com.github.damontecres.wholphin.nobars.data.NbQuery.clientSort(sort?.sort)
+            val tvSort = NbQuery.clientSort(sort?.sort)
             val extra = filter?.extra
             val request = createGetItemsRequest(sort?.takeIf { tvSort == null }, filter, types)
             val useSeriesForPrimary = !state.value.viewOptions.separateTypes
-            if (com.github.damontecres.wholphin.nobars.data.NbQuery.needed(extra, sort?.sort)) {
+            if (NbQuery.needed(extra, sort?.sort)) {
                 // NoBars: weighted IMDb, the money orders and our own filters are worked out on the TV
                 val ids =
-                    com.github.damontecres.wholphin.nobars.data.NbQuery.orderedIds(
+                    NbQuery.orderedIds(
                         api,
                         request,
                         extra,
@@ -283,7 +285,7 @@ class CollectionViewModel
                 return ApiRequestPager(
                     api,
                     request.copy(ids = ids, sortBy = null, sortOrder = null),
-                    com.github.damontecres.wholphin.util.OrderedIdsRequestHandler,
+                    OrderedIdsRequestHandler,
                     viewModelScope,
                     useSeriesForPrimary = useSeriesForPrimary,
                 ).init()

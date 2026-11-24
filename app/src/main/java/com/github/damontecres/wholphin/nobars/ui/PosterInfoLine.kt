@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.ui
 
+import com.github.damontecres.wholphin.nobars.data.PreparingStore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,7 +34,7 @@ fun posterInfoText(
 ): AnnotatedString {
     LaunchedEffect(Unit) {
         SizeStore.refreshSoon()
-        com.github.damontecres.wholphin.nobars.data.StreamingStore.refreshLibrarySoon()
+        StreamingStore.refreshLibrarySoon()
     }
     val sizes by SizeStore.sizes.collectAsState()
     if (item == null) return AnnotatedString("")
@@ -45,7 +46,7 @@ fun posterInfoText(
         }
     val ownId = StreamingStore.entries[item.id]?.let { StreamingStore.libraryId(it) } ?: item.id
     val size = sizes[ownId]
-    val preparingItems by com.github.damontecres.wholphin.nobars.data.PreparingStore.items.collectAsState()
+    val preparingItems by PreparingStore.items.collectAsState()
     val preparing = preparingItems.any { it.id == item.id }
     return buildAnnotatedString {
         append(first.orEmpty())

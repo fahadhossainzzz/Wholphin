@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin
 
+import com.github.damontecres.wholphin.nobars.playback.NoBarsLog
+import com.github.damontecres.wholphin.nobars.playback.StallGuard
 import android.app.Application
 import android.os.Build
 import android.os.StrictMode
@@ -56,10 +58,10 @@ class WholphinApplication :
         super.onCreate()
         // NoBars: keep a log file on the TV, and record why the last run ended (memory kill, crash)
         Timber.plant(
-            com.github.damontecres.wholphin.nobars.playback.NoBarsLog
+            NoBarsLog
                 .tree(this),
         )
-        com.github.damontecres.wholphin.nobars.playback.StallGuard
+        StallGuard
             .logPreviousExits(this)
         if (BuildConfig.DEBUG) {
             StrictMode.setThreadPolicy(

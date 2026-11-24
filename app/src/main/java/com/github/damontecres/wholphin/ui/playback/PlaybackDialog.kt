@@ -88,10 +88,10 @@ data class PlaybackSettings(
 /**
  * Centralized UI component for displaying dialogs during playback
  *
- * Typically, the user will click something generating a [com.github.damontecres.wholphin.ui.playback.overlay.PlaybackAction] which translates into the
+ * Typically, the user will click something generating a [PlaybackAction] which translates into the
  * [PlaybackDialogType] determining which dialog is shown by this component.
  *
- * @see com.github.damontecres.wholphin.ui.playback.overlay.PlaybackAction
+ * @see PlaybackAction
  */
 @Composable
 fun PlaybackDialog(

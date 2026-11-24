@@ -1,5 +1,9 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
+import com.github.damontecres.wholphin.nobars.data.BoxOffice
+import com.github.damontecres.wholphin.nobars.data.CriticFallback
+import com.github.damontecres.wholphin.ui.components.FilledStarColor
+import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
 import com.github.damontecres.wholphin.nobars.data.LocalImdbVotes
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
@@ -211,7 +215,7 @@ fun Controller(
                             text = line,
                             style = MaterialTheme.typography.titleMedium,
                             fontSize = subtitleTextSize,
-                            color = com.github.damontecres.wholphin.ui.components.FilledStarColor,
+                            color = FilledStarColor,
                             maxLines = 1,
                         )
                     }
@@ -284,21 +288,21 @@ fun Controller(
 }
 
 /** NoBars: the rating shown next to the film's name in the player. */
-private fun playerRatingLine(item: com.github.damontecres.wholphin.data.model.BaseItem): String? {
+private fun playerRatingLine(item: BaseItem): String? {
     val stars = item.data.communityRating?.takeIf { it > 0f }
     val tomatoes = item.data.criticRating?.takeIf { it >= 0f }
-    val votes = com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.get(item.id)?.votes
+    val votes = ImdbVotesStore.get(item.id)?.votes
     return buildList {
         stars?.let {
-            add("★ " + String.format(java.util.Locale.US, "%.1f", it) + (votes?.let { v -> " · " + com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.short(v) + " votes" } ?: ""))
+            add("★ " + String.format(java.util.Locale.US, "%.1f", it) + (votes?.let { v -> " · " + ImdbVotesStore.short(v) + " votes" } ?: ""))
         }
         if (tomatoes != null) {
             add("🍅 ${tomatoes.toInt()}%")
         } else {
-            com.github.damontecres.wholphin.nobars.data.CriticFallback.label(item.id)?.let { add(it) }
+            CriticFallback.label(item.id)?.let { add(it) }
         }
-        com.github.damontecres.wholphin.nobars.data.BoxOffice.forItem(item.id)?.let { m ->
-            com.github.damontecres.wholphin.nobars.data.BoxOffice.compact(m)?.let { add(it) }
+        BoxOffice.forItem(item.id)?.let { m ->
+            BoxOffice.compact(m)?.let { add(it) }
         }
     }.takeIf { it.isNotEmpty() }?.joinToString("   ")
 }

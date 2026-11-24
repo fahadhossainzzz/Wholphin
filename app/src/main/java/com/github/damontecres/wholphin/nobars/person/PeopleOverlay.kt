@@ -1,5 +1,12 @@
 package com.github.damontecres.wholphin.nobars.person
 
+import com.github.damontecres.wholphin.nobars.data.BoxOffice
+import com.github.damontecres.wholphin.nobars.data.CriticFallback
+import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
+import com.github.damontecres.wholphin.nobars.data.ServerAccess
+import com.github.damontecres.wholphin.nobars.data.StreamingStore
+import com.github.damontecres.wholphin.nobars.data.WantedStore
+import com.github.damontecres.wholphin.util.WholphinDispatchers
 import com.github.damontecres.wholphin.ui.playback.overlay.OverlayViewState
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -290,11 +297,11 @@ class PlayerPeopleViewModel
             viewModelScope.launchIO {
                 val credits =
                     try {
-                        if (com.github.damontecres.wholphin.nobars.data.StreamingStore.owned.isEmpty()) {
-                            com.github.damontecres.wholphin.nobars.data.StreamingStore.loadLibrary()
+                        if (StreamingStore.owned.isEmpty()) {
+                            StreamingStore.loadLibrary()
                         }
                         val tmdb = api.userLibraryApi.getItem(personId).content.providerIds?.get("Tmdb")
-                        tmdb?.let { com.github.damontecres.wholphin.nobars.data.ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
+                        tmdb?.let { ServerAccess.get("/Plugins/ImdbRatings/Person/$it") }
                             ?.let(::parseCredits)
                     } catch (e: Exception) {
                         Timber.w(e, "NoBars: could not load all work")
@@ -308,7 +315,7 @@ class PlayerPeopleViewModel
 
         /** A title from "All work": one you have opens like the library list; others show their summary. */
         fun selectCredit(credit: Credit) {
-            val hex = com.github.damontecres.wholphin.nobars.data.StreamingStore.owned[credit.ownedKey]
+            val hex = StreamingStore.owned[credit.ownedKey]
             if (hex == null || hex.length != 32) {
                 _panel.update { it?.copy(workSelected = credit, workFocus = credit.key) }
                 return
@@ -495,7 +502,7 @@ fun PersonPanel(
                     }
                     if (!state.loading) {
                         androidx.compose.runtime.remember(state.items) {
-                            com.github.damontecres.wholphin.nobars.data.BoxOffice.totals(state.items)
+                            BoxOffice.totals(state.items)
                         }?.let {
                             Text(text = it, fontSize = 13.sp, color = Color(0xFF9BE59B), maxLines = 2)
                         }
@@ -806,7 +813,7 @@ private fun WorkView(
     state: PersonPanelState,
     onSelectCredit: (Credit) -> Unit,
 ) {
-    val wanted by com.github.damontecres.wholphin.nobars.data.WantedStore.items.collectAsState()
+    val wanted by WantedStore.items.collectAsState()
     val rows =
         remember(state.work, state.workLoading) {
             buildList {
@@ -885,11 +892,11 @@ private fun WorkView(
 
 private fun creditFacts(
     c: Credit,
-    wanted: List<com.github.damontecres.wholphin.nobars.data.StreamingStore.Entry>,
+    wanted: List<StreamingStore.Entry>,
 ): String =
     buildList {
         when {
-            com.github.damontecres.wholphin.nobars.data.StreamingStore.owned.containsKey(c.ownedKey) -> add("✓ In your library")
+            StreamingStore.owned.containsKey(c.ownedKey) -> add("✓ In your library")
             wanted.any { it.tmdb == c.tmdb && it.series == c.tv } -> add("🔖 Watchlist")
         }
         if (c.year.isNotBlank()) add(c.year) else add("Upcoming")
@@ -903,15 +910,15 @@ private fun creditFacts(
  * title's card is then ready if you open its page); else the plugin's own trailer lookup (kept 30 days).
  */
 internal suspend fun trailerKey(c: Credit): String? =
-    kotlinx.coroutines.withContext(com.github.damontecres.wholphin.util.WholphinDispatchers.IO) {
+    kotlinx.coroutines.withContext(WholphinDispatchers.IO) {
         kotlinx.coroutines
             .withTimeoutOrNull(5_000) {
-                com.github.damontecres.wholphin.nobars.data.StreamingStore
+                StreamingStore
                     .title(c.tmdb, c.tv)
                     ?.trailer
             }?.let { return@withContext it }
         try {
-            com.github.damontecres.wholphin.nobars.data.ServerAccess
+            ServerAccess
                 .get("/Plugins/ImdbRatings/Trailer/" + (if (c.tv) "tv-" else "movie-") + c.tmdb)
                 ?.let { org.json.JSONObject(it).optString("key").takeIf { k -> k.isNotBlank() && k != "null" } }
         } catch (e: Exception) {
@@ -929,7 +936,7 @@ internal fun CreditSummary(
     val first = remember { FocusRequester() }
     LaunchedEffect(c.key) { first.tryRequestFocus() }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val wanted by com.github.damontecres.wholphin.nobars.data.WantedStore.items.collectAsState()
+    val wanted by WantedStore.items.collectAsState()
     val onList = wanted.any { it.tmdb == c.tmdb && it.series == c.tv }
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Thumb(c.posterLarge, large = true)
@@ -955,8 +962,8 @@ internal fun CreditSummary(
             onClick = {
                 scope.launch {
                     val entry =
-                        com.github.damontecres.wholphin.nobars.data.StreamingStore.cachedEntry(c.tmdb, c.tv)
-                            ?: com.github.damontecres.wholphin.nobars.data.StreamingStore.Entry(
+                        StreamingStore.cachedEntry(c.tmdb, c.tv)
+                            ?: StreamingStore.Entry(
                                 tmdb = c.tmdb,
                                 series = c.tv,
                                 title = c.title,
@@ -973,7 +980,7 @@ internal fun CreditSummary(
                                 tmdbRating = c.rating.takeIf { c.votes >= 20 && it > 0f },
                                 tmdbVotes = c.votes.takeIf { it > 0 },
                             )
-                    com.github.damontecres.wholphin.nobars.data.WantedStore.toggle(entry, "people")
+                    WantedStore.toggle(entry, "people")
                 }
             },
             modifier = Modifier.focusRequester(first),
@@ -1109,14 +1116,14 @@ private fun facts(
         item.data.productionYear?.let { add(it.toString()) }
         if (item.type == BaseItemKind.SERIES) add("TV show")
         item.data.communityRating?.takeIf { it > 0f }?.let {
-            val votes = com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.get(item.id)?.votes
-            add("★ " + String.format(Locale.US, "%.1f", it) + (votes?.let { v -> " (" + com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.short(v) + ")" } ?: ""))
+            val votes = ImdbVotesStore.get(item.id)?.votes
+            add("★ " + String.format(Locale.US, "%.1f", it) + (votes?.let { v -> " (" + ImdbVotesStore.short(v) + ")" } ?: ""))
         }
         item.data.criticRating?.takeIf { it >= 0f }?.let { add("🍅 ${it.toInt()}%") }
-            ?: com.github.damontecres.wholphin.nobars.data.CriticFallback.label(item.id)?.let { add(it) }
+            ?: CriticFallback.label(item.id)?.let { add(it) }
         if (withRuntime) {
-            com.github.damontecres.wholphin.nobars.data.BoxOffice.forItem(item.id)?.let { m ->
-                com.github.damontecres.wholphin.nobars.data.BoxOffice.compact(m)?.let { add(it) }
+            BoxOffice.forItem(item.id)?.let { m ->
+                BoxOffice.compact(m)?.let { add(it) }
             }
             item.data.runTimeTicks?.let { ticks ->
                 val min = ticks / 600_000_000L

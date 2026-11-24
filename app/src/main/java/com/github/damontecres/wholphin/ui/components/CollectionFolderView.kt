@@ -1,5 +1,9 @@
 package com.github.damontecres.wholphin.ui.components
 
+import com.github.damontecres.wholphin.nobars.data.LocalShowSizeOnCards
+import com.github.damontecres.wholphin.nobars.data.NbQuery
+import com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
+import com.github.damontecres.wholphin.ui.data.SizeSort
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -412,19 +416,19 @@ class CollectionFolderViewModel
                             filter = filter,
                         )
                     // NoBars: our own filters and orders (money, weighted IMDb, streaming…) are worked out on the TV
-                    if (com.github.damontecres.wholphin.nobars.data.NbQuery.needed(filter.extra, sortAndDirection.sort)) {
+                    if (NbQuery.needed(filter.extra, sortAndDirection.sort)) {
                         val ids =
-                            com.github.damontecres.wholphin.nobars.data.NbQuery.orderedIds(
+                            NbQuery.orderedIds(
                                 api,
                                 request,
                                 filter.extra,
-                                com.github.damontecres.wholphin.nobars.data.NbQuery.clientSort(sortAndDirection.sort),
+                                NbQuery.clientSort(sortAndDirection.sort),
                                 sortAndDirection.direction != org.jellyfin.sdk.model.api.SortOrder.ASCENDING,
                             )
                         ApiRequestPager(
                             api,
                             request.copy(ids = ids, sortBy = null, sortOrder = null),
-                            com.github.damontecres.wholphin.util.OrderedIdsRequestHandler,
+                            OrderedIdsRequestHandler,
                             viewModelScope,
                             useSeriesForPrimary = useSeriesForPrimary,
                         )
@@ -1075,8 +1079,8 @@ fun CollectionFolderViewContent(
 
                             // NoBars: sorted by size: the cards add it after the year
                             androidx.compose.runtime.CompositionLocalProvider(
-                                com.github.damontecres.wholphin.nobars.data.LocalShowSizeOnCards provides
-                                    (state.sortAndDirection.sort == com.github.damontecres.wholphin.ui.data.SizeSort),
+                                LocalShowSizeOnCards provides
+                                    (state.sortAndDirection.sort == SizeSort),
                             ) {
                             Box(Modifier.fillMaxSize()) {
                                 if (state.viewOptions.type == ViewOptionsType.GRID) {

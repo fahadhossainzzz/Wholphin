@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.main
 
+import com.github.damontecres.wholphin.nobars.data.HomeRefresh
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -116,7 +117,7 @@ class HomeViewModel
 
         fun init() {
             // NoBars: coming back from a film's page shows Home as you left it
-            if (state.value.loadingState == LoadingState.Success && !com.github.damontecres.wholphin.nobars.data.HomeRefresh.needed()) {
+            if (state.value.loadingState == LoadingState.Success && !HomeRefresh.needed()) {
                 Timber.i("NoBars timing: back to Home, rows kept (nothing changed)")
                 return
             }
@@ -274,7 +275,7 @@ class HomeViewModel
                     }
                 }
                 Timber.d("Home page load complete")
-                com.github.damontecres.wholphin.nobars.data.HomeRefresh.loaded()
+                HomeRefresh.loaded()
             } catch (ex: CancellationException) {
                 throw ex
             } catch (ex: Exception) {

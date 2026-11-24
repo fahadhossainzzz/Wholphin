@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.playback
 
+import com.github.damontecres.wholphin.nobars.playback.PlaybackFacts
+import com.github.damontecres.wholphin.services.ServerReportService
 import com.github.damontecres.wholphin.nobars.playback.TrickplayCache
 import android.content.Context
 import android.media.MediaCodecList
@@ -162,7 +164,7 @@ class PlaybackViewModel
         private val imageUrlService: ImageUrlService,
         private val screensaverService: ScreensaverService,
         private val musicService: MusicService,
-        private val serverReportService: com.github.damontecres.wholphin.services.ServerReportService,
+        private val serverReportService: ServerReportService,
         @Assisted private val destination: Destination,
     ) : ViewModel(),
         Player.Listener,
@@ -1123,7 +1125,7 @@ class PlaybackViewModel
                 audio?.displayTitle ?: "default",
                 subtitle?.displayTitle ?: "off",
                 playback?.playMethod?.serialName ?: "?",
-            ) + "\n" + com.github.damontecres.wholphin.nobars.playback.PlaybackFacts.reportLines(playback).joinToString("\n") { "  $it" }
+            ) + "\n" + PlaybackFacts.reportLines(playback).joinToString("\n") { "  $it" }
         }
 
         private suspend fun prefetchTrickplay(

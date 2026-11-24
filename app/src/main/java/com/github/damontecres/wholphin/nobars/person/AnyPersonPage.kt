@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.person
 
+import com.github.damontecres.wholphin.nobars.ui.QuickView
 import com.github.damontecres.wholphin.nobars.catalog.StreamingViewModel
 import com.github.damontecres.wholphin.ui.detail.PersonPageContent
 import androidx.compose.foundation.background
@@ -249,7 +250,7 @@ fun AnyPersonPage(
                         viewModel.navigationManager.navigateTo(Destination.MediaItem(lib, if (c.tv) BaseItemKind.SERIES else BaseItemKind.MOVIE))
                     } else {
                         // the quick view (its buttons; "View details" for the whole title page)
-                        com.github.damontecres.wholphin.nobars.ui.QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
+                        QuickView.open(c.tmdb, c.tv, c.title, c.posterLarge)
                     }
                 },
                 extraLines = personExtraLines(p, work),

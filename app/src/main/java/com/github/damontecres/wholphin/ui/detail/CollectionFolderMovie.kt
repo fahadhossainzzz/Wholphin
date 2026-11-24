@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.detail
 
+import com.github.damontecres.wholphin.ui.data.MovieLibrarySortOptions
+import com.github.damontecres.wholphin.data.filter.NbMovieFilterOptions
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -87,8 +89,8 @@ fun CollectionFolderMovie(
                         ),
                     showTitle = false,
                     recursive = true,
-                    sortOptions = com.github.damontecres.wholphin.ui.data.MovieLibrarySortOptions,
-                    filterOptions = com.github.damontecres.wholphin.data.filter.NbMovieFilterOptions,
+                    sortOptions = MovieLibrarySortOptions,
+                    filterOptions = NbMovieFilterOptions,
                     defaultViewOptions = ViewOptionsPoster,
                     modifier =
                         Modifier

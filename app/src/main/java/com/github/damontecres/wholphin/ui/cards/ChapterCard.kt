@@ -35,7 +35,7 @@ import com.github.damontecres.wholphin.ui.roundSeconds
 import org.jellyfin.sdk.model.api.ImageType
 
 /**
- * Card for a [com.github.damontecres.wholphin.data.model.Chapter]
+ * Card for a [Chapter]
  */
 @Composable
 fun ChapterCard(

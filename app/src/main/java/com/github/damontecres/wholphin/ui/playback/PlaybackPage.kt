@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.ui.playback
 
+import com.github.damontecres.wholphin.ui.playback.overlay.SeekBarReset
+import com.github.damontecres.wholphin.nobars.playback.SubtitleOffset
 import com.github.damontecres.wholphin.nobars.playback.ZoomedContentScale
 import com.github.damontecres.wholphin.nobars.playback.TrickplayCache
 import com.github.damontecres.wholphin.R
@@ -271,11 +273,11 @@ fun PlaybackPageContent(
     // NoBars: subtitle delay for ExoPlayer is applied inside the player (DelayedTextRenderer): any subtitle the
     // player shows (inside the file, separate .srt, picture subtitles) moves by the delay, live, nothing fetched
     LaunchedEffect(state.currentPlayback?.subtitleDelay, player) {
-        com.github.damontecres.wholphin.nobars.playback.SubtitleOffset.delayUs =
+        SubtitleOffset.delayUs =
             if (player is MpvPlayer) 0L else (state.currentPlayback?.subtitleDelay ?: Duration.ZERO).inWholeMicroseconds
     }
     androidx.compose.runtime.DisposableEffect(Unit) {
-        onDispose { com.github.damontecres.wholphin.nobars.playback.SubtitleOffset.delayUs = 0L }
+        onDispose { SubtitleOffset.delayUs = 0L }
     }
 
     val presentationState = rememberPresentationState(player, false)
@@ -374,7 +376,7 @@ fun PlaybackPageContent(
             barPending = null
             player.seekTo(it)
             player.play()
-            com.github.damontecres.wholphin.ui.playback.overlay.SeekBarReset.count++
+            SeekBarReset.count++
             controllerViewState.pulseControls()
         }
         Unit
@@ -382,7 +384,7 @@ fun PlaybackPageContent(
     val cancelBarSeek = {
         if (barPending != null) {
             barPending = null
-            com.github.damontecres.wholphin.ui.playback.overlay.SeekBarReset.count++
+            SeekBarReset.count++
             if (barResume) player.play()
             controllerViewState.pulseControls()
         }

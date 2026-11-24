@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.components
 
+import com.github.damontecres.wholphin.data.ExtrasItem
 import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -181,7 +182,7 @@ data class ItemGridState(
 )
 
 /**
- * Display a grid of a list of arbitrary items [com.github.damontecres.wholphin.data.ExtrasItem]
+ * Display a grid of a list of arbitrary items [ExtrasItem]
  */
 @Composable
 fun ItemGrid(

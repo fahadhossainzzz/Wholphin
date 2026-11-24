@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.ui.components
 
+import com.github.damontecres.wholphin.ui.cards.ItemRow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -20,7 +21,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
 /**
- * Placeholder for [com.github.damontecres.wholphin.ui.cards.ItemRow]. It is [focusable] so it can be scrolled.
+ * Placeholder for [ItemRow]. It is [focusable] so it can be scrolled.
  */
 @Composable
 @NonRestartableComposable

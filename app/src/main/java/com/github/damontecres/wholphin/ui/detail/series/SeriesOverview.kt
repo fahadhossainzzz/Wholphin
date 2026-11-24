@@ -2,6 +2,7 @@
 
 package com.github.damontecres.wholphin.ui.detail.series
 
+import com.github.damontecres.wholphin.nobars.ui.TraktMark
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -265,7 +266,7 @@ fun SeriesOverview(
                     episodeList?.getOrNull(position.episodeRowIndex)?.let {
                         val played = it.data.userData?.played ?: false
                         // NoBars: your Trakt history
-                        if (!com.github.damontecres.wholphin.nobars.ui.TraktMark.ask(it)) viewModel.setWatched(it.id, !played, position.episodeRowIndex)
+                        if (!TraktMark.ask(it)) viewModel.setWatched(it.id, !played, position.episodeRowIndex)
                     }
                 },
                 favoriteOnClick = {

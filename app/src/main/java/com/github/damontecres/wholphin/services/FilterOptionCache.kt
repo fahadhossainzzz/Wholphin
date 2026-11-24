@@ -1,5 +1,27 @@
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.data.filter.AddedWithinFilter
+import com.github.damontecres.wholphin.data.filter.CollectionMembershipFilter
+import com.github.damontecres.wholphin.data.filter.ExcludeGenreFilter
+import com.github.damontecres.wholphin.data.filter.ExcludeTagFilter
+import com.github.damontecres.wholphin.data.filter.InProgressFilter
+import com.github.damontecres.wholphin.data.filter.MinBoxOfficeFilter
+import com.github.damontecres.wholphin.data.filter.MinTomatoesFilter
+import com.github.damontecres.wholphin.data.filter.MinVotesFilter
+import com.github.damontecres.wholphin.data.filter.NbFilterBy
+import com.github.damontecres.wholphin.data.filter.NbFilterChoices
+import com.github.damontecres.wholphin.data.filter.OnServiceFilter
+import com.github.damontecres.wholphin.data.filter.ReleasedWithinFilter
+import com.github.damontecres.wholphin.data.filter.RuntimeFilter
+import com.github.damontecres.wholphin.data.filter.StreamingReleaseFilter
+import com.github.damontecres.wholphin.data.filter.SubtitlesFilter
+import com.github.damontecres.wholphin.data.filter.TagFilter
+import com.github.damontecres.wholphin.data.filter.VerdictFilter
+import com.github.damontecres.wholphin.data.filter.WantedFilter
+import com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter
+import com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter
+import com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter
+import com.github.damontecres.wholphin.data.filter.YearRankFilter
 import android.content.Context
 import com.github.damontecres.wholphin.api.seerr.model.TvShowStatus
 import com.github.damontecres.wholphin.data.ServerRepository
@@ -190,7 +212,7 @@ class FilterOptionCache
                 getDiscoverFilterOptionValues(filterOption)
             }
 
-            is com.github.damontecres.wholphin.data.filter.NbFilterBy<*> -> {
+            is NbFilterBy<*> -> {
                 nbFilterOptionValues(userId, parentId, filterOption)
             }
         }
@@ -199,13 +221,13 @@ class FilterOptionCache
         private suspend fun nbFilterOptionValues(
             userId: UUID?,
             parentId: UUID?,
-            filterOption: com.github.damontecres.wholphin.data.filter.NbFilterBy<*>,
+            filterOption: NbFilterBy<*>,
         ): List<FilterValueOption> {
-            val c = com.github.damontecres.wholphin.data.filter.NbFilterChoices
+            val c = NbFilterChoices
             fun <T> List<Pair<T, String>>.options() = map { FilterValueOption(it.second, it.first) }
             return when (filterOption) {
-                com.github.damontecres.wholphin.data.filter.TagFilter,
-                com.github.damontecres.wholphin.data.filter.ExcludeTagFilter,
+                TagFilter,
+                ExcludeTagFilter,
                 ->
                     api.filterApi
                         .getQueryFiltersLegacy(parentId = parentId, userId = userId)
@@ -214,13 +236,13 @@ class FilterOptionCache
                         .sorted()
                         .map { FilterValueOption(it, it) }
 
-                com.github.damontecres.wholphin.data.filter.ExcludeGenreFilter ->
+                ExcludeGenreFilter ->
                     api.genresApi
                         .getGenres(parentId = parentId, userId = userId)
                         .content.items
                         .map { FilterValueOption(it.name ?: "", it.id) }
 
-                com.github.damontecres.wholphin.data.filter.CollectionMembershipFilter ->
+                CollectionMembershipFilter ->
                     api.itemsApi
                         .getItems(
                             userId = userId,
@@ -231,26 +253,26 @@ class FilterOptionCache
                         ).content.items
                         .map { FilterValueOption(it.name ?: "", it.id) }
 
-                com.github.damontecres.wholphin.data.filter.MinVotesFilter -> c.minVotes.options()
-                com.github.damontecres.wholphin.data.filter.MinTomatoesFilter -> c.minTomatoes.options()
-                com.github.damontecres.wholphin.data.filter.MinBoxOfficeFilter -> c.boxOffice.options()
-                com.github.damontecres.wholphin.data.filter.VerdictFilter -> c.verdict.options()
-                com.github.damontecres.wholphin.data.filter.YearRankFilter -> c.yearRank.options()
-                com.github.damontecres.wholphin.data.filter.StreamingReleaseFilter -> c.streamingRelease.options()
-                com.github.damontecres.wholphin.data.filter.OnServiceFilter -> c.onService.options()
-                com.github.damontecres.wholphin.data.filter.RuntimeFilter -> c.runtime.options()
-                com.github.damontecres.wholphin.data.filter.AddedWithinFilter -> c.addedWithin.options()
-                com.github.damontecres.wholphin.data.filter.ReleasedWithinFilter -> c.releasedWithin.options()
-                com.github.damontecres.wholphin.data.filter.SubtitlesFilter ->
+                MinVotesFilter -> c.minVotes.options()
+                MinTomatoesFilter -> c.minTomatoes.options()
+                MinBoxOfficeFilter -> c.boxOffice.options()
+                VerdictFilter -> c.verdict.options()
+                YearRankFilter -> c.yearRank.options()
+                StreamingReleaseFilter -> c.streamingRelease.options()
+                OnServiceFilter -> c.onService.options()
+                RuntimeFilter -> c.runtime.options()
+                AddedWithinFilter -> c.addedWithin.options()
+                ReleasedWithinFilter -> c.releasedWithin.options()
+                SubtitlesFilter ->
                     listOf(FilterValueOption("With subtitles", true), FilterValueOption("Without subtitles", false))
-                com.github.damontecres.wholphin.data.filter.InProgressFilter,
-                com.github.damontecres.wholphin.data.filter.WantedFilter,
+                InProgressFilter,
+                WantedFilter,
                 -> listOf(FilterValueOption("Yes", true))
 
                 // the Watchlist page supplies these itself
-                com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter,
-                com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter,
-                com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter,
+                WatchlistTypeFilter,
+                WatchlistWhereFilter,
+                WatchlistGenreFilter,
                 -> emptyList()
             }
         }

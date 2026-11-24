@@ -1,5 +1,19 @@
 package com.github.damontecres.wholphin.nobars.watchlist
 
+import com.github.damontecres.wholphin.data.model.BaseItem
+import com.github.damontecres.wholphin.nobars.ui.CatalogGrid
+import com.github.damontecres.wholphin.data.filter.CommunityRatingFilter
+import com.github.damontecres.wholphin.data.filter.DecadeFilter
+import com.github.damontecres.wholphin.data.filter.FilterValueOption
+import com.github.damontecres.wholphin.data.model.GetItemsFilter
+import com.github.damontecres.wholphin.nobars.data.HistoryStore
+import com.github.damontecres.wholphin.data.filter.ItemFilterBy
+import com.github.damontecres.wholphin.nobars.data.PosterFacts
+import com.github.damontecres.wholphin.ui.data.SortAndDirection
+import com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter
+import com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter
+import com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter
+import com.github.damontecres.wholphin.data.filter.YearFilter
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.background
@@ -170,10 +184,10 @@ internal fun WatchlistPage(
             }
         } else {
             // one page of rows (24 posters each, then "See all"); See all opens that row as a grid, Back returns
-            val history by com.github.damontecres.wholphin.nobars.data.HistoryStore.state.collectAsState()
-            LaunchedEffect(Unit) { com.github.damontecres.wholphin.nobars.data.HistoryStore.loadIfOld() }
-            val factsVersion by com.github.damontecres.wholphin.nobars.data.PosterFacts.version.collectAsState()
-            LaunchedEffect(list) { com.github.damontecres.wholphin.nobars.data.PosterFacts.load(list.map { (if (it.series) "tv:" else "movie:") + it.tmdb }) }
+            val history by HistoryStore.state.collectAsState()
+            LaunchedEffect(Unit) { HistoryStore.loadIfOld() }
+            val factsVersion by PosterFacts.version.collectAsState()
+            LaunchedEffect(list) { PosterFacts.load(list.map { (if (it.series) "tv:" else "movie:") + it.tmdb }) }
             val rows = remember(list, history, factsVersion) { overviewRows(list, history.items.keys) }
             var seeAll by remember { mutableStateOf<String?>(WatchlistMemo.seeAll) }
             LaunchedEffect(seeAll) { WatchlistMemo.seeAll = seeAll }
@@ -211,13 +225,13 @@ internal fun WatchlistPage(
 private object WatchlistMemo {
     var list: List<StreamingStore.Entry>? = null
     var seeAll: String? = null
-    val sorts = mutableMapOf<String, com.github.damontecres.wholphin.ui.data.SortAndDirection>()
-    val filters = mutableMapOf<String, com.github.damontecres.wholphin.data.model.GetItemsFilter>()
+    val sorts = mutableMapOf<String, SortAndDirection>()
+    val filters = mutableMapOf<String, GetItemsFilter>()
 }
 
 /** Each row's own order in its See all grid (until you change it). */
 private fun defaultSort(row: String) =
-    com.github.damontecres.wholphin.ui.data.SortAndDirection(
+    SortAndDirection(
         when (row) {
             "Coming soon" -> org.jellyfin.sdk.model.api.ItemSortBy.PREMIERE_DATE
             "Best rated" -> org.jellyfin.sdk.model.api.ItemSortBy.COMMUNITY_RATING
@@ -232,7 +246,7 @@ private val byRating: Comparator<StreamingStore.Entry> =
 
 /** The exact release day when known (TMDB), else the cinema date, else 1 Jan of its year. */
 private fun releaseDay(e: StreamingStore.Entry): String =
-    com.github.damontecres.wholphin.nobars.data.PosterFacts.get((if (e.series) "tv:" else "movie:") + e.tmdb)?.releaseDate ?: releaseDate(e)
+    PosterFacts.get((if (e.series) "tv:" else "movie:") + e.tmdb)?.releaseDate ?: releaseDate(e)
 
 private fun overviewRows(
     list: List<StreamingStore.Entry>,
@@ -256,7 +270,7 @@ private fun overviewRows(
 private fun WatchlistRows(
     rows: List<Pair<String, List<StreamingStore.Entry>>>,
     viewModel: StreamingViewModel,
-    onOpen: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit,
+    onOpen: (BaseItem) -> Unit,
     onToggle: (StreamingStore.Entry) -> Unit,
     onSeeAll: (String) -> Unit,
     takeFocus: Boolean,
@@ -311,7 +325,7 @@ private fun WatchlistAll(
     list: List<StreamingStore.Entry>,
     title: String,
     viewModel: StreamingViewModel,
-    onOpen: (com.github.damontecres.wholphin.data.model.BaseItem) -> Unit,
+    onOpen: (BaseItem) -> Unit,
     onToggle: (StreamingStore.Entry) -> Unit,
     onShowTabs: (Boolean) -> Unit,
     takeFocus: Boolean,
@@ -331,17 +345,17 @@ private fun WatchlistAll(
     val filterOptions =
         remember {
             listOf(
-                com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter,
-                com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter,
-                com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter,
-                com.github.damontecres.wholphin.data.filter.YearFilter,
-                com.github.damontecres.wholphin.data.filter.DecadeFilter,
-                com.github.damontecres.wholphin.data.filter.CommunityRatingFilter,
+                WatchlistTypeFilter,
+                WatchlistWhereFilter,
+                WatchlistGenreFilter,
+                YearFilter,
+                DecadeFilter,
+                CommunityRatingFilter,
             )
         }
     // kept while the app runs, so Sort and Filter are still set when you come back from a title
     var sort by remember(title) { mutableStateOf(WatchlistMemo.sorts[title] ?: defaultSort(title)) }
-    var filter by remember(title) { mutableStateOf(WatchlistMemo.filters[title] ?: com.github.damontecres.wholphin.data.model.GetItemsFilter()) }
+    var filter by remember(title) { mutableStateOf(WatchlistMemo.filters[title] ?: GetItemsFilter()) }
     LaunchedEffect(sort, filter) {
         WatchlistMemo.sorts[title] = sort
         WatchlistMemo.filters[title] = filter
@@ -370,28 +384,28 @@ private fun WatchlistAll(
             val directed = if (sort.direction == org.jellyfin.sdk.model.api.SortOrder.DESCENDING) ordered.reversed() else ordered
             directed.map { StreamingStore.toBaseItem(it, MY_LIST_ROW) }
         }
-    val possible = { option: com.github.damontecres.wholphin.data.filter.ItemFilterBy<*> ->
+    val possible = { option: ItemFilterBy<*> ->
         when (option) {
-            com.github.damontecres.wholphin.data.filter.WatchlistTypeFilter ->
+            WatchlistTypeFilter ->
                 listOf(
-                    com.github.damontecres.wholphin.data.filter.FilterValueOption("Films", "films"),
-                    com.github.damontecres.wholphin.data.filter.FilterValueOption("Shows", "shows"),
+                    FilterValueOption("Films", "films"),
+                    FilterValueOption("Shows", "shows"),
                 )
-            com.github.damontecres.wholphin.data.filter.WatchlistWhereFilter ->
-                WHERE_NAMES.map { com.github.damontecres.wholphin.data.filter.FilterValueOption(it.second, it.first) }
-            com.github.damontecres.wholphin.data.filter.WatchlistGenreFilter ->
-                list.flatMap { it.genres }.distinct().sorted().map { com.github.damontecres.wholphin.data.filter.FilterValueOption(it, it) }
-            com.github.damontecres.wholphin.data.filter.YearFilter ->
-                list.mapNotNull { it.year }.distinct().sorted().map { com.github.damontecres.wholphin.data.filter.FilterValueOption("$it", it) }
-            com.github.damontecres.wholphin.data.filter.DecadeFilter ->
-                list.mapNotNull { it.year?.div(10)?.times(10) }.distinct().sorted().map { com.github.damontecres.wholphin.data.filter.FilterValueOption("${it}s", it) }
-            com.github.damontecres.wholphin.data.filter.CommunityRatingFilter ->
-                (1..9).map { com.github.damontecres.wholphin.data.filter.FilterValueOption("$it", it) }
+            WatchlistWhereFilter ->
+                WHERE_NAMES.map { FilterValueOption(it.second, it.first) }
+            WatchlistGenreFilter ->
+                list.flatMap { it.genres }.distinct().sorted().map { FilterValueOption(it, it) }
+            YearFilter ->
+                list.mapNotNull { it.year }.distinct().sorted().map { FilterValueOption("$it", it) }
+            DecadeFilter ->
+                list.mapNotNull { it.year?.div(10)?.times(10) }.distinct().sorted().map { FilterValueOption("${it}s", it) }
+            CommunityRatingFilter ->
+                (1..9).map { FilterValueOption("$it", it) }
             else -> emptyList()
         }
     }
     // the same grid as the Movies library (header, posters, View options)
-    com.github.damontecres.wholphin.nobars.ui.CatalogGrid(
+    CatalogGrid(
         title = "$title · ${shown.size}",
         items = shown,
         sort = sort,

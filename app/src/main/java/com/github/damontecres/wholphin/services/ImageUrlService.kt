@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.ui.LocalImageUrlService
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.github.damontecres.wholphin.data.model.BaseItem
@@ -15,7 +16,7 @@ import javax.inject.Singleton
 /**
  * Provides image URLs for items with several convenience methods
  *
- * This is available in compose UI code via [com.github.damontecres.wholphin.ui.LocalImageUrlService]
+ * This is available in compose UI code via [LocalImageUrlService]
  */
 @Singleton
 class ImageUrlService

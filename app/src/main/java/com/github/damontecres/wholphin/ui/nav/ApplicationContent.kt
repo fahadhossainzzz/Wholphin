@@ -1,5 +1,9 @@
 package com.github.damontecres.wholphin.ui.nav
 
+import com.github.damontecres.wholphin.nobars.ui.QuickViewHost
+import com.github.damontecres.wholphin.nobars.data.ServerAccess
+import com.github.damontecres.wholphin.nobars.data.StreamingStore
+import com.github.damontecres.wholphin.nobars.ui.TraktMarkHost
 import org.jellyfin.sdk.api.client.ApiClient
 import com.github.damontecres.wholphin.nobars.data.LocalImdbVotes
 import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
@@ -44,10 +48,10 @@ class ApplicationContentViewModel
     ) : ViewModel() {
         // NoBars: IMDb vote counts for the whole library, fetched once per session (about 30 KB)
         fun loadImdbVotes() {
-            com.github.damontecres.wholphin.nobars.data.ServerAccess.baseUrl = api.baseUrl
-            com.github.damontecres.wholphin.nobars.data.ServerAccess.token = api.accessToken
+            ServerAccess.baseUrl = api.baseUrl
+            ServerAccess.token = api.accessToken
             viewModelScope.launchIO { ImdbVotesStore.load(api.baseUrl, api.accessToken) }
-            viewModelScope.launchIO { com.github.damontecres.wholphin.nobars.data.StreamingStore.loadLibrary() }
+            viewModelScope.launchIO { StreamingStore.loadLibrary() }
         }
 
         fun clearBackdrop() {
@@ -73,9 +77,9 @@ fun ApplicationContent(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     // NoBars: where title cards are kept on the TV (so titles open at once, even after a restart)
     val appContext = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(Unit) { com.github.damontecres.wholphin.nobars.data.StreamingStore.cacheDir = appContext.cacheDir }
+    LaunchedEffect(Unit) { StreamingStore.cacheDir = appContext.cacheDir }
     LaunchedEffect(server.id, user.id) {
-        com.github.damontecres.wholphin.nobars.data.ServerAccess.userId = user.id
+        ServerAccess.userId = user.id
         viewModel.loadImdbVotes()
     }
     val imdbVotes by ImdbVotesStore.votes.collectAsState()
@@ -128,9 +132,9 @@ fun ApplicationContent(
             },
         )
         // NoBars: "Mark watched…" (your Trakt history), over any page
-        com.github.damontecres.wholphin.nobars.ui.TraktMarkHost()
+        TraktMarkHost()
         // NoBars: the quick view for posters outside your library
-        com.github.damontecres.wholphin.nobars.ui.QuickViewHost(navigationManager)
+        QuickViewHost(navigationManager)
     }
     }
 }

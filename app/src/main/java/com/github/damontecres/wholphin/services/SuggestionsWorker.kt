@@ -340,7 +340,7 @@ class SuggestionsWorker
         }
 
         companion object {
-            const val WORK_NAME = "com.github.damontecres.wholphin.services.SuggestionsWorker"
+            const val WORK_NAME = "SuggestionsWorker"
             const val PARAM_USER_ID = "userId"
             const val PARAM_SERVER_ID = "serverId"
             const val PARAM_PARENT_ID = "parentId"

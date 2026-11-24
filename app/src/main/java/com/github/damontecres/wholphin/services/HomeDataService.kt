@@ -1,5 +1,7 @@
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
+import com.github.damontecres.wholphin.util.RequestHandler
 import com.github.damontecres.wholphin.nobars.data.NbQuery
 import androidx.core.net.toUri
 import com.github.damontecres.wholphin.R
@@ -401,8 +403,8 @@ class HomeDataService
                                 )
                             request0.copy(ids = ids, sortBy = null, sortOrder = null)
                         }
-                    val handler: com.github.damontecres.wholphin.util.RequestHandler<GetItemsRequest> =
-                        if (tvSort == null) GetItemsRequestHandler else com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
+                    val handler: RequestHandler<GetItemsRequest> =
+                        if (tvSort == null) GetItemsRequestHandler else OrderedIdsRequestHandler
 
                     // Not using getItemName because we want to throw the 404
                     val title =
@@ -473,12 +475,12 @@ class HomeDataService
                             ApiRequestPager(
                                 api,
                                 request.copy(ids = ids, sortBy = null, sortOrder = null),
-                                com.github.damontecres.wholphin.util.OrderedIdsRequestHandler,
+                                OrderedIdsRequestHandler,
                                 scope,
                                 useSeriesForPrimary = row.viewOptions.useSeries,
                             ).init()
                         } else {
-                            com.github.damontecres.wholphin.util.OrderedIdsRequestHandler
+                            OrderedIdsRequestHandler
                                 .execute(api, request.copy(ids = ids, startIndex = 0, limit = rowLimit))
                                 .content.items
                                 .map { BaseItem(it, row.viewOptions.useSeries) }

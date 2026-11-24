@@ -2,6 +2,8 @@
 
 package com.github.damontecres.wholphin.services
 
+import com.github.damontecres.wholphin.nobars.playback.DelayedTextRenderer
+import com.github.damontecres.wholphin.ui.playback.ZoomPolicy
 import android.content.Context
 import android.os.Build
 import android.os.Handler
@@ -334,7 +336,7 @@ class WholphinRenderersFactory(
     ) {
         val built = ArrayList<Renderer>()
         super.buildTextRenderers(context, output, outputLooper, extensionRendererMode, built)
-        built.forEach { out.add(com.github.damontecres.wholphin.nobars.playback.DelayedTextRenderer(it)) }
+        built.forEach { out.add(DelayedTextRenderer(it)) }
     }
 
     // NoBars: DTS/TrueHD are decoded here instead of being handed to a TV that refuses them
@@ -373,7 +375,7 @@ class WholphinRenderersFactory(
                 .Builder(context)
                 .setCodecAdapterFactory(videoCodecAdapterFactory)
                 .setMediaCodecSelector(
-                    com.github.damontecres.wholphin.ui.playback.ZoomPolicy
+                    ZoomPolicy
                         .wrap(mediaCodecSelector),
                 ).setAllowedJoiningTimeMs(allowedVideoJoiningTimeMs)
                 .setEnableDecoderFallback(enableDecoderFallback)

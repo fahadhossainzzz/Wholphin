@@ -1,5 +1,9 @@
 package com.github.damontecres.wholphin.nobars.ui
 
+import com.github.damontecres.wholphin.nobars.data.BoxOffice
+import com.github.damontecres.wholphin.nobars.data.CriticFallback
+import com.github.damontecres.wholphin.nobars.data.PosterFacts
+import com.github.damontecres.wholphin.nobars.data.StreamingStore
 import com.github.damontecres.wholphin.nobars.data.forItem
 import com.github.damontecres.wholphin.nobars.data.LocalImdbVotes
 import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
@@ -51,30 +55,30 @@ fun PosterRatingBand(
     val dto = item?.data ?: return
     if (dto.type !in RATED_TYPES) return
     // NoBars: a catalogue poster (Watchlist, History…) fills in when its facts arrive from the server
-    val catalogue = com.github.damontecres.wholphin.nobars.data.StreamingStore.entries[dto.id]
-    val factsVersion by com.github.damontecres.wholphin.nobars.data.PosterFacts.version.collectAsState()
+    val catalogue = StreamingStore.entries[dto.id]
+    val factsVersion by PosterFacts.version.collectAsState()
     val facts =
         remember(dto.id, factsVersion) {
-            catalogue?.let { com.github.damontecres.wholphin.nobars.data.PosterFacts.get((if (it.series) "tv:" else "movie:") + it.tmdb) }
+            catalogue?.let { PosterFacts.get((if (it.series) "tv:" else "movie:") + it.tmdb) }
         }
     val stars = dto.communityRating?.takeIf { it > 0f } ?: facts?.rating
     // NoBars: Jellyfin's own score, else the daily run's (OMDb / MDBList), else the audience 🍿 score
     val tomatoes =
         dto.criticRating?.takeIf { it >= 0f }
-            ?: com.github.damontecres.wholphin.nobars.data.CriticFallback.tomatoes(dto.id)?.toFloat()
+            ?: CriticFallback.tomatoes(dto.id)?.toFloat()
             ?: facts?.rt?.toFloat()
-    val popcorn = if (tomatoes == null) com.github.damontecres.wholphin.nobars.data.CriticFallback.popcorn(dto.id) else null
+    val popcorn = if (tomatoes == null) CriticFallback.popcorn(dto.id) else null
     // NoBars: worldwide box office in the middle slot, films only
     val money =
         if (dto.type == BaseItemKind.MOVIE) {
-            com.github.damontecres.wholphin.nobars.data.BoxOffice.forItem(dto.id)?.let {
-                com.github.damontecres.wholphin.nobars.data.BoxOffice.posterLabel(it)
+            BoxOffice.forItem(dto.id)?.let {
+                BoxOffice.posterLabel(it)
             }
         } else {
             null
         }
     if (stars == null && tomatoes == null && popcorn == null && money == null) return
-    val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: com.github.damontecres.wholphin.nobars.data.StreamingStore.votes(dto.id) ?: facts?.votes
+    val votes = LocalImdbVotes.current.forItem(dto.id)?.votes ?: StreamingStore.votes(dto.id) ?: facts?.votes
     RatingBand(stars, votes, money, tomatoes, popcorn, modifier)
 }
 

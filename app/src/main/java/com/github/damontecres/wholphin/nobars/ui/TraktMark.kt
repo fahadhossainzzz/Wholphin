@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.ui
 
+import com.github.damontecres.wholphin.nobars.data.PosterFacts
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -119,9 +120,9 @@ fun traktWatched(item: BaseItem?): Boolean? {
 @Composable
 fun releaseLabel(target: TraktMark.Target): String? {
     if (target.season != null) return if (target.episode != null) "Watched on its air date" else "Watched on air dates"
-    val factsVersion by com.github.damontecres.wholphin.nobars.data.PosterFacts.version.collectAsState()
-    LaunchedEffect(target.key) { com.github.damontecres.wholphin.nobars.data.PosterFacts.load(listOf(target.key)) }
-    val day = remember(target.key, factsVersion) { com.github.damontecres.wholphin.nobars.data.PosterFacts.get(target.key)?.releaseDate }
+    val factsVersion by PosterFacts.version.collectAsState()
+    LaunchedEffect(target.key) { PosterFacts.load(listOf(target.key)) }
+    val day = remember(target.key, factsVersion) { PosterFacts.get(target.key)?.releaseDate }
     return when {
         day == null -> null
         day > LocalDate.now().toString() -> null

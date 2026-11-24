@@ -1,5 +1,8 @@
 package com.github.damontecres.wholphin.ui.data
 
+import com.github.damontecres.wholphin.nobars.data.MoneySort
+import com.github.damontecres.wholphin.util.MoneySortRequestHandler
+import com.github.damontecres.wholphin.nobars.data.SizeStore
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -44,19 +47,19 @@ val MovieSortOptions =
 
 /**
  * NoBars: the money orders ride on sort values Jellyfin never uses for films. The app never sends them to the
- * server: [com.github.damontecres.wholphin.util.MoneySortRequestHandler] sorts these on the TV.
+ * server: [MoneySortRequestHandler] sorts these on the TV.
  */
 object MoneySortCarrier {
     private val map =
         mapOf(
-            ItemSortBy.START_DATE to com.github.damontecres.wholphin.nobars.data.MoneySort.BOX_OFFICE,
-            ItemSortBy.AIR_TIME to com.github.damontecres.wholphin.nobars.data.MoneySort.TODAYS_MONEY,
-            ItemSortBy.VIDEO_BIT_RATE to com.github.damontecres.wholphin.nobars.data.MoneySort.BUDGET,
-            ItemSortBy.STUDIO to com.github.damontecres.wholphin.nobars.data.MoneySort.RETURN,
-            ItemSortBy.IS_FOLDER to com.github.damontecres.wholphin.nobars.data.MoneySort.YEAR_RANK,
+            ItemSortBy.START_DATE to MoneySort.BOX_OFFICE,
+            ItemSortBy.AIR_TIME to MoneySort.TODAYS_MONEY,
+            ItemSortBy.VIDEO_BIT_RATE to MoneySort.BUDGET,
+            ItemSortBy.STUDIO to MoneySort.RETURN,
+            ItemSortBy.IS_FOLDER to MoneySort.YEAR_RANK,
         )
 
-    fun of(sort: ItemSortBy?): com.github.damontecres.wholphin.nobars.data.MoneySort? = sort?.let { map[it] }
+    fun of(sort: ItemSortBy?): MoneySort? = sort?.let { map[it] }
 
     val options: List<ItemSortBy> = map.keys.toList()
 }
@@ -64,7 +67,7 @@ object MoneySortCarrier {
 /** NoBars: IMDb rating weighted by its number of votes (IMDb's Top 250 method), worked out on the TV */
 val WeightedImdbSort: ItemSortBy = ItemSortBy.NAME
 
-/** NoBars: size on disk (films: the file(s); shows: all episodes), worked out on the TV ([com.github.damontecres.wholphin.nobars.data.SizeStore]) */
+/** NoBars: size on disk (films: the file(s); shows: all episodes), worked out on the TV ([SizeStore]) */
 val SizeSort: ItemSortBy = ItemSortBy.SIMILARITY_SCORE
 
 /** NoBars: the Movies library's sort menu, with the weighted IMDb order and the money orders after the ratings. */

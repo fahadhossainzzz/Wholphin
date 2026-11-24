@@ -192,6 +192,8 @@ class NavDrawerService
             userDto: ServerUserConfig,
             discoverActive: Boolean,
         ) {
+            // the Calendar's count of today's things of yours, for the menu
+            com.github.damontecres.wholphin.nobars.calendar.CalendarStore.warmUp()
             val builtins =
                 buildList {
                     add(NavDrawerItem.Favorites)
@@ -202,6 +204,7 @@ class NavDrawerService
                     add(NavDrawerItem.Cinema)
                     add(NavDrawerItem.Watchlist)
                     add(NavDrawerItem.History)
+                    add(NavDrawerItem.Calendar)
                     if (discoverActive) add(NavDrawerItem.Discover)
                 }
             val allLibraries = getAllUserLibraries(user.id, userDto.tvAccess)

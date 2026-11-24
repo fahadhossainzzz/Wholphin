@@ -125,6 +125,10 @@ fun StreamingPage(
         HistoryPage(modifier, viewModel)
         return
     }
+    if (service == StreamingStore.CALENDAR) {
+        com.github.damontecres.wholphin.nobars.calendar.CalendarPage(viewModel.navigationManager, modifier)
+        return
+    }
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var loadedRows by remember(service) { mutableStateOf<List<HomeRowLoadingState>?>(null) }

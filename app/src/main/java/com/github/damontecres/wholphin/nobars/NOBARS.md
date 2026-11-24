@@ -30,11 +30,12 @@ Everything of ours is under `nobars/`. The original app's files are changed only
 | `nobars/watchlist/` | The Watchlist page: rows Total · On Netflix · On Prime Video · In your library · Others · Best rated, and their See all grids |
 | `nobars/history/` | The History page (`HistoryPage`: Total · Films · TV shows · a row per year) and its data (`HistoryShelf`) |
 | `nobars/person/` | Anyone's page (`AnyPersonPage`), the career model (`Credit`), the cast overlay in the player (`PeopleOverlay`). The library's person page itself is the original `ui/detail/PersonPage.kt` with our rows (In your library · Best rated on IMDb · All films · All TV · On your watchlist · Your history) |
+| `nobars/calendar/` | The Calendar: `CalendarModels` (a day's items: yours · watched · world), `CalendarStore` (one month per request, kept while the app runs; today's count for the menu), `CalendarPage` (the month grid), `CalendarDayPanel` (OK on a day) |
 | `nobars/library/` | Deleting one version of a film (`DeleteVersion`) |
 | `nobars/home/` | The custom home-row editor (`CustomRowEditor`) |
 | `nobars/playback/` | Player add-ons: `StallGuard`, `ElasticLoadControl`, `UsbReadAhead`, `PatientLoadErrorPolicy`, `EndTolerantExtractor`, `LeanExtractorsFactory`, `NoDtsPassthrough`, `DelayedTextRenderer`, `LanguageKeep`, `StreamHealth`, `DiagCollector`, `NoBarsLog`, `TrickplayCache`, `ZoomedContentScale`, `PlaybackFacts` |
 
-New features get their own folder here (for example `nobars/calendar/`), with one file per job.
+New features get their own folder here, with one file per job.
 
 ## The plugin's NoBars API (one file per feature)
 
@@ -45,6 +46,7 @@ New features get their own folder here (for example `nobars/calendar/`), with on
 | `ImdbRatingsController.Catalog.cs` | `Streaming/{name}`, `Streaming/title/{key}`, `ServerStatus/{name}`, `Title/{key}`, `Facts?keys=`, `Trailer/{key}` |
 | `ImdbRatingsController.Person.cs` | `Person/{tmdbId}`: profile, career with IMDb ids (Trakt), today's IMDb rating and votes, 🍅 / 🍿 (MDBList) |
 | `ImdbRatingsController.History.cs` | `History`, `History/Shelf`, `History/Mark`, `History/Unmark` |
+| `ImdbRatingsController.Calendar.cs` | `Calendar/{yyyy-MM}`: one month, rebuilt after 3 h (a day for past months) or when your history changed |
 | `ImdbRatingsController.Library.cs` | `Origin/{itemId}`, `CheckSubtitle/{itemId}`, `DeleteVersion/{itemId}/{sourceId}` |
 
 ## The Mac scripts
@@ -57,12 +59,13 @@ New features get their own folder here (for example `nobars/calendar/`), with on
 | `daily/poster_facts.py` | IMDb / box office / 🍅 for any list of titles (older titles kept 90 days) |
 | `daily/history_shelf.py` | The History page's data from your Trakt history (posters, plots, ratings) |
 | `daily/ratings.py`, `money.py`, `journey.py`, `library_facts.py`, `library_patch.py` | 🍅 / 🍿, box office, a title's journey, library facts and quick patches after an import |
-| `maintenance/trakt_sync.py` | Watchlist both ways, the Trakt history copy, marking watched |
+| `daily/calendar_page.py` | A month of the Calendar: your Trakt calendar and history, cinema (IN/US/BD) and digital (IN) from TMDB, streaming premieres from TVmaze; Bangladesh time |
+| `maintenance/trakt_sync.py` | Watchlist both ways, the Trakt history copy, marking watched, `--calendar YYYY-MM` |
 | `tools/fetch_app.py` | Puts each new APK on HDD2 |
 
 ## Small hooks in the original app
 
-These original files carry short NoBars changes (search for "NoBars" in them): the side menu (`ui/nav/NavDrawer.kt`,
+These original files carry short NoBars changes (search for "NoBars" in them): the side menu (Netflix · Prime Video · Theatre · Watchlist · History · Calendar; `ui/nav/NavDrawer.kt`,
 `services/NavDrawerService.kt`), navigation (`ui/nav/Destination.kt`, `DestinationContent.kt`, `ApplicationContent.kt`),
 poster cards (`ui/cards/BannerCard.kt`, `GridCard.kt`, `ItemCardImage.kt`), library grids and filters
 (`ui/components/CollectionFolder*.kt`, `FilterByButton.kt`, `data/filter/ItemFilterBy.kt`, `ui/data/SortAndDirection.kt`),

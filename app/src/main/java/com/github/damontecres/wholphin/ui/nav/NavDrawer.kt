@@ -169,6 +169,11 @@ class NavDrawerViewModel
                     navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.HISTORY))
                 }
 
+                NavDrawerItem.Calendar -> {
+                    setIndex(index)
+                    navigationManager.navigateToFromDrawer(Destination.Streaming(StreamingStore.CALENDAR))
+                }
+
                 NavDrawerItem.Discover -> {
                     setIndex(index)
                     navigationManager.navigateToFromDrawer(
@@ -214,6 +219,7 @@ class NavDrawerViewModel
                             is NavDrawerItem.Cinema -> Destination.Streaming(StreamingStore.CINEMA)
                             is NavDrawerItem.Watchlist -> Destination.Streaming(StreamingStore.WATCHLIST)
                             is NavDrawerItem.History -> Destination.Streaming(StreamingStore.HISTORY)
+                            is NavDrawerItem.Calendar -> Destination.Streaming(StreamingStore.CALENDAR)
                             else -> null
                         }
                     }
@@ -343,6 +349,16 @@ sealed interface NavDrawerItem {
             get() = "a_history"
 
         override fun name(context: Context): String = "History"
+    }
+
+    /** NoBars: one month at a time: yours, what you watched, and the world (with today's count of yours) */
+    object Calendar : NavDrawerItem {
+        override val id: String
+            get() = "a_calendar"
+
+        override fun name(context: Context): String =
+            com.github.damontecres.wholphin.nobars.calendar.CalendarStore.today.value
+                .let { if (it > 0) "Calendar · $it" else "Calendar" }
     }
 }
 
@@ -804,6 +820,10 @@ fun NavigationDrawerScope.NavItem(
 
                 NavDrawerItem.History -> {
                     R.string.fa_clock
+                }
+
+                NavDrawerItem.Calendar -> {
+                    R.string.fa_calendar
                 }
 
                 is ServerNavDrawerItem -> {

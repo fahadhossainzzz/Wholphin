@@ -36,6 +36,9 @@ object StreamingStore {
     /** The History page in the menu (your Trakt history) */
     const val HISTORY = "history"
 
+    /** The Calendar page in the menu */
+    const val CALENDAR = "calendar"
+
     /** Poster ids of the Watchlist row's own cards (they don't need the 🔖 mark) */
     private val watchlistCards = java.util.Collections.newSetFromMap(ConcurrentHashMap<UUID, Boolean>())
 
@@ -141,6 +144,7 @@ object StreamingStore {
             CINEMA -> "Theatre"
             WATCHLIST -> "Watchlist"
             HISTORY -> "History"
+            CALENDAR -> "Calendar"
             "Trakt" -> "your phone (Trakt)"
             else -> "Prime Video"
         }

@@ -666,8 +666,8 @@ public final class LeanMp4Extractor implements Extractor {
     boolean ignoreEditLists = (flags & FLAG_WORKAROUND_IGNORE_EDIT_LISTS) != 0;
     // NoBars: decide per track (in file order) whether its sample table is built at all. Tracks in
     // languages nobody here uses are skipped, so their per-sample index never takes memory.
-    com.github.damontecres.wholphin.services.stream.LanguageKeep.Session keepSession =
-        com.github.damontecres.wholphin.services.stream.LanguageKeep.INSTANCE.newSession();
+    com.github.damontecres.wholphin.nobars.playback.LanguageKeep.Session keepSession =
+        com.github.damontecres.wholphin.nobars.playback.LanguageKeep.INSTANCE.newSession();
     List<TrackSampleTable> trackSampleTables =
         parseTraks(
             moov,

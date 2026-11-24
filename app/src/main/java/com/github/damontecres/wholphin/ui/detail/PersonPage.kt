@@ -451,13 +451,13 @@ fun PersonPageContent(
         com.github.damontecres.wholphin.services.HistoryStore.load()
     }
     val pageRows =
-        remember(work, wanted, history) {
+        remember(work, wanted, history, name) {
             val library = libraryRow(work)
             val career = careerRows(work)
             val mine = personalRows(work, wanted, history)
             buildList {
                 if (library.isNotEmpty()) add(PageRow("In your library (${library.size})", library, mixed = true))
-                val best = bestRatedRow(work)
+                val best = bestRatedRow(work, name)
                 if (best.isNotEmpty()) add(PageRow("Best rated on IMDb (${best.size})", best, mixed = true))
                 career.forEach { add(PageRow(it.title, it.items, it.mixed)) }
                 mine.forEach { add(PageRow(it.title, it.items, mixed = true, note = it.note)) }
@@ -627,10 +627,29 @@ private fun cameoKeys(work: List<WorkCredit>): Set<String> =
  * (more votes first on a tie). Ratings come with the career itself (the server's daily IMDb copy), so the row is
  * there as the page opens. Talk-show spots, cameos and uncredited parts are left out.
  */
-internal fun bestRatedRow(work: List<WorkCredit>): List<WorkCredit> {
+internal fun bestRatedRow(
+    work: List<WorkCredit>,
+    name: String = "",
+): List<WorkCredit> {
     val skip = selfOnlyKeys(work) + cameoKeys(work)
+    // a part named after themselves ("Shah Rukh Khan" on a talk show) is them as themselves
+    val own = name.trim().lowercase().takeIf { it.length > 2 }
+    val asOwnName =
+        work
+            .groupBy { it.ownedKey }
+            .filter { (_, cs) -> own != null && cs.none { it.crew } && cs.all { it.role.lowercase().contains(own) } }
+            .keys
+    // TV with only one or two of their episodes (hosting, talk shows, guest spots), unless they worked behind the camera
+    val guestTv =
+        work
+            .groupBy { it.ownedKey }
+            .filter { (_, cs) -> cs.first().tv && cs.none { it.crew } && (cs.mapNotNull { it.episodes }.sum().takeIf { s -> s > 0 } ?: 99) < 3 }
+            .keys
     return mergedCareer(work)
-        .filter { it.ownedKey !in skip && (it.imdbRating ?: 0f) >= 6f && (it.imdbVotes ?: 0) >= 1000 }
+        .filter {
+            it.ownedKey !in skip && it.ownedKey !in asOwnName && it.ownedKey !in guestTv &&
+                (it.imdbRating ?: 0f) >= 6f && (it.imdbVotes ?: 0) >= 1000
+        }
         .sortedWith(compareByDescending<WorkCredit> { it.imdbRating }.thenByDescending { it.imdbVotes })
 }
 

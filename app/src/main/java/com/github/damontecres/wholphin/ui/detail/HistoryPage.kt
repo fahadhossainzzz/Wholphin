@@ -84,11 +84,11 @@ object HistoryShelf {
             title = o.optString("t"),
             year = o.optInt("y").takeIf { it > 0 },
             poster = o.optString("p").takeIf { it.isNotBlank() }?.let { POSTER + it },
-            // the header under the rows: when you watched it
-            overview = watchedLine(day to plays) ?: "Watched",
+            // the header: when you watched it, then the start of the plot
+            overview = "👁 " + (watchedLine(day to plays) ?: "Watched") + (o.optString("o").takeIf { it.isNotBlank() }?.let { "  ·  $it" } ?: ""),
             genres = o.optJSONArray("g")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
-            runtime = null,
-            seasons = null,
+            runtime = o.optInt("rn").takeIf { it > 0 && !series },
+            seasons = o.optInt("s").takeIf { it > 0 && series },
             imdbRating = o.optDouble("r").takeIf { !it.isNaN() && it > 0 }?.toFloat(),
             imdbVotes = o.optInt("v").takeIf { it > 0 },
             libraryId = null,
@@ -105,7 +105,9 @@ object HistoryShelf {
                 val a = o.optJSONArray("rows") ?: JSONArray()
                 (0 until a.length()).mapNotNull { i ->
                     val r = a.optJSONObject(i) ?: return@mapNotNull null
-                    Row(r.optString("id"), r.optString("name"), r.optInt("total"), entries(r.optJSONArray("items")))
+                    // the first row is everything you've watched: "Total"
+                    val id = r.optString("id")
+                    Row(id, if (id == "recent") "Total" else r.optString("name"), r.optInt("total"), entries(r.optJSONArray("items")))
                 }.also { rows = it }
             } catch (_: Exception) {
                 rows
@@ -190,7 +192,7 @@ fun HistoryPage(
                 remember(r) {
                     r.map { row ->
                         HomeRowLoadingState.Success(
-                            title = StringStringProvider(if (row.total > 24) "${row.name} · ${row.total}" else row.name),
+                            title = StringStringProvider("${row.name} · ${row.total}"),
                             items = row.items.map { StreamingStore.toBaseItem(it, "$HISTORY_ROW-${row.id}") },
                             showViewMore = row.total > 24,
                         )

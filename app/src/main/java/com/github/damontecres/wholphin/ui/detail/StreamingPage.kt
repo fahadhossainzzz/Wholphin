@@ -760,16 +760,13 @@ private fun overviewRows(
 ): List<Pair<String, List<StreamingStore.Entry>>> {
     // a film in your Trakt history has left the Watchlist (Trakt takes it off too); series stay until you remove them
     val left = list.filterNot { !it.series && "movie:${it.tmdb}" in watched }
-    val today = java.time.LocalDate.now().toString()
-    fun coming(e: StreamingStore.Entry) = "cinemas" in whereOf(e) || releaseDay(e) > today
-    fun placed(e: StreamingStore.Entry) = whereOf(e).let { "netflix" in it || "prime" in it || "library" in it } || coming(e)
+    fun placed(e: StreamingStore.Entry) = whereOf(e).let { "netflix" in it || "prime" in it || "library" in it }
     return listOf(
-        "Just added" to left,
+        "Total" to left,
         "On Netflix" to left.filter { "netflix" in whereOf(it) },
         "On Prime Video" to left.filter { "prime" in whereOf(it) },
         "In your library" to left.filter { "library" in whereOf(it) },
-        "Coming soon" to left.filter(::coming).sortedBy(::releaseDay),
-        "Everything else" to left.filterNot(::placed),
+        "Others" to left.filterNot(::placed),
         "Best rated" to left.sortedWith(byRating.reversed()),
     ).filter { it.second.isNotEmpty() }
 }
@@ -798,18 +795,8 @@ private fun WatchlistRows(
             rows.map { (title, items) ->
                 // 24 posters, then "See all" (the whole row as a grid)
                 HomeRowLoadingState.Success(
-                    title = StringStringProvider(if (items.size > 24) "$title · ${items.size}" else title),
-                    items =
-                        items.take(24).map { e ->
-                            StreamingStore.toBaseItem(e, "$MY_LIST_ROW-$title").also { card ->
-                                // the release day on Coming soon posters
-                                val day = releaseDay(e)
-                                if (title == "Coming soon" && day.length == 10 && day > java.time.LocalDate.now().toString()) {
-                                    StreamingStore.dateBadges[card.id] =
-                                        java.time.LocalDate.parse(day).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK))
-                                }
-                            }
-                        },
+                    title = StringStringProvider("$title · ${items.size}"),
+                    items = items.take(24).map { StreamingStore.toBaseItem(it, "$MY_LIST_ROW-$title") },
                     showViewMore = items.size > 24,
                 )
             }
@@ -925,7 +912,7 @@ private fun WatchlistAll(
     }
     // the same grid as the Movies library (header, posters, View options)
     com.github.damontecres.wholphin.ui.components.CatalogGrid(
-        title = title,
+        title = "$title · ${shown.size}",
         items = shown,
         sort = sort,
         onSortChange = { sort = it },

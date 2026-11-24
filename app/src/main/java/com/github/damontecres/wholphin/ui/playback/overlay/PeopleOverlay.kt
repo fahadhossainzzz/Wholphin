@@ -172,7 +172,7 @@ internal fun parseCredits(json: String): List<Credit> {
                 imdbRating = c.optDouble("ir").takeIf { !it.isNaN() && it > 0 }?.toFloat(),
                 imdbVotes = c.optInt("iv").takeIf { it > 0 },
                 rt = if (c.has("rt")) c.optInt("rt") else null,
-                pop = if (c.has("pop")) c.optInt("pop") else null,
+                pop = if (c.has("pc")) c.optInt("pc") else null,
             )
         }
     val acting =

@@ -260,6 +260,9 @@ private fun overviewRows(
     fun placed(e: StreamingStore.Entry) = whereOf(e).let { "netflix" in it || "prime" in it || "library" in it }
     return listOf(
         "Total" to left,
+        // v117: like History, the two kinds right after Total (they add up to it)
+        "Films" to left.filterNot { it.series },
+        "TV shows" to left.filter { it.series },
         "On Netflix" to left.filter { "netflix" in whereOf(it) },
         "On Prime Video" to left.filter { "prime" in whereOf(it) },
         "In your library" to left.filter { "library" in whereOf(it) },
@@ -345,10 +348,12 @@ private fun WatchlistAll(
                 org.jellyfin.sdk.model.api.ItemSortBy.RUNTIME,
             )
         }
+    // Films and TV shows already have the kind fixed, so no Films / Shows filter there
+    val fixedKind = title == "Films" || title == "TV shows"
     val filterOptions =
-        remember {
-            listOf(
-                WatchlistTypeFilter,
+        remember(fixedKind) {
+            listOfNotNull(
+                WatchlistTypeFilter.takeUnless { fixedKind },
                 WatchlistWhereFilter,
                 WatchlistGenreFilter,
                 YearFilter,

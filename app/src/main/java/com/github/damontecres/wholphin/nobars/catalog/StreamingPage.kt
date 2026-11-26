@@ -134,9 +134,16 @@ fun StreamingPage(
     var loadedRows by remember(service) { mutableStateOf<List<HomeRowLoadingState>?>(null) }
     var rawRows by remember(service) { mutableStateOf<List<StreamingStore.Row>?>(null) }
     LaunchedEffect(service) {
-        WantedStore.load()
+        // NoBars v113: only this page's rows (the 🔖 on posters shows what's on your Watchlist; the Watchlist page has
+        // the list itself, so this page no longer fetches a card for every Watchlist title)
+        // Room first: the previous page's posters and backdrops are let go before this page's arrive
+        try {
+            coil3.SingletonImageLoader.get(context).memoryCache?.let { it.trimToSize(it.maxSize / 2) }
+        } catch (e: Exception) {
+            timber.log.Timber.w(e, "NoBars: image cache trim")
+        }
+        scope.launch { WantedStore.loadIfStale() } // 🔖 marks, in the background
         val loaded = StreamingStore.rows(service)
-        StreamingStore.rows(StreamingStore.LIST)
         rawRows = loaded
         loadedRows =
             loaded.orEmpty().map { row ->
@@ -149,32 +156,7 @@ fun StreamingPage(
     }
     val wanted by WantedStore.items.collectAsState()
     val watched by WantedStore.watched.collectAsState()
-    // today's card for each title on the list (the saved copy when it's gone from everywhere)
-    var myList by remember(service) { mutableStateOf<List<StreamingStore.Entry>>(emptyList()) }
-    LaunchedEffect(wanted, rawRows) {
-        myList = StreamingStore.freshForAll(wanted, rawRows)
-    }
-    val rows =
-        remember(loadedRows, myList, watched, service) {
-            val base = loadedRows
-            if (base == null || myList.isEmpty()) {
-                base
-            } else {
-                val inLibrary = myList.count { StreamingStore.libraryId(it) != null }
-                val seen = myList.count { e -> StreamingStore.libraryId(e)?.let { it in watched } == true }
-                base +
-                    HomeRowLoadingState.Success(
-                        title =
-                            StringStringProvider(
-                                "Watchlist · ${myList.size}" +
-                                    (if (inLibrary > 0) " · $inLibrary in your library" else "") +
-                                    (if (seen > 0) " · $seen watched" else ""),
-                            ),
-                        items = myList.map { StreamingStore.toBaseItem(it, MY_LIST_ROW) },
-                        showViewMore = true,
-                    )
-            }
-        }
+    val rows = loadedRows
     var panel by remember { mutableStateOf<Pair<StreamingStore.Entry, Boolean>?>(null) }
     val pageFocus = remember { FocusRequester() }
     var position by rememberPosition()

@@ -7,6 +7,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -236,8 +237,139 @@ object StreamingStore {
             }
         }
 
+    // NoBars v113: each page's rows on their own (the server sends only that service, without journeys), read
+    // piece by piece from the connection: the whole catalogue never sits in memory at once
+    private val serviceRows = ConcurrentHashMap<String, Pair<Long, List<Row>>>()
+    private val serviceLocks = ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
+
     /** Rows for one service, fetched once per hour at most. Null when the lists aren't available. */
     suspend fun rows(service: String): List<Row>? =
+        withContext(WholphinDispatchers.IO) {
+            serviceRows[service]?.let { (at, r) -> if (System.currentTimeMillis() - at < 3_600_000) return@withContext r }
+            serviceLocks.getOrPut(service) { kotlinx.coroutines.sync.Mutex() }.withLock {
+                serviceRows[service]?.let { (at, r) -> if (System.currentTimeMillis() - at < 3_600_000) return@withLock r }
+                val fresh =
+                    try {
+                        ServerAccess.read("/Plugins/ImdbRatings/Streaming/catalog?service=$service") { readServiceRows(it, service) }
+                    } catch (e: Exception) {
+                        Timber.w(e, "NoBars: %s rows unavailable", service)
+                        null
+                    }
+                if (fresh != null) {
+                    serviceRows[service] = System.currentTimeMillis() to fresh
+                    fresh
+                } else {
+                    wholeCatalogRows(service) ?: serviceRows[service]?.second
+                }
+            }
+        }
+
+    /** {"logos": {…}, "services": {service: {"rows": [{title, ranked, items: [...]}]}}}, one poster at a time. */
+    private fun readServiceRows(
+        input: java.io.InputStream,
+        service: String,
+    ): List<Row>? {
+        val r = android.util.JsonReader(java.io.InputStreamReader(input, Charsets.UTF_8))
+        var rows: List<Row>? = null
+        r.beginObject()
+        while (r.hasNext()) {
+            when (r.nextName()) {
+                "logos" -> {
+                    val m = mutableMapOf<String, String>()
+                    r.beginObject()
+                    while (r.hasNext()) {
+                        val k = r.nextName()
+                        if (r.peek() == android.util.JsonToken.STRING) m[k] = r.nextString() else r.skipValue()
+                    }
+                    r.endObject()
+                    if (m.isNotEmpty()) logos = m
+                }
+                "services" -> {
+                    r.beginObject()
+                    while (r.hasNext()) {
+                        if (r.nextName() == service) rows = readRows(r) else r.skipValue()
+                    }
+                    r.endObject()
+                }
+                else -> r.skipValue()
+            }
+        }
+        r.endObject()
+        return rows
+    }
+
+    private fun readRows(r: android.util.JsonReader): List<Row> {
+        val out = mutableListOf<Row>()
+        r.beginObject()
+        while (r.hasNext()) {
+            if (r.nextName() != "rows") {
+                r.skipValue()
+                continue
+            }
+            r.beginArray()
+            while (r.hasNext()) {
+                var title = ""
+                var ranked = false
+                val items = mutableListOf<Entry>()
+                r.beginObject()
+                while (r.hasNext()) {
+                    when (r.nextName()) {
+                        "title" -> title = r.nextString()
+                        "ranked" -> ranked = r.nextBoolean()
+                        "items" -> {
+                            r.beginArray()
+                            while (r.hasNext()) {
+                                items += parse(readJson(r) as JSONObject)
+                            }
+                            r.endArray()
+                        }
+                        else -> r.skipValue()
+                    }
+                }
+                r.endObject()
+                out += Row(title = title, ranked = ranked, items = items)
+            }
+            r.endArray()
+        }
+        r.endObject()
+        return out
+    }
+
+    /** One JSON value from the reader, as org.json objects (used per poster, so only one is built at a time). */
+    private fun readJson(r: android.util.JsonReader): Any? =
+        when (r.peek()) {
+            android.util.JsonToken.BEGIN_OBJECT -> {
+                val o = JSONObject()
+                r.beginObject()
+                while (r.hasNext()) o.put(r.nextName(), readJson(r) ?: JSONObject.NULL)
+                r.endObject()
+                o
+            }
+            android.util.JsonToken.BEGIN_ARRAY -> {
+                val a = JSONArray()
+                r.beginArray()
+                while (r.hasNext()) a.put(readJson(r) ?: JSONObject.NULL)
+                r.endArray()
+                a
+            }
+            android.util.JsonToken.STRING -> r.nextString()
+            android.util.JsonToken.NUMBER -> {
+                val n = r.nextString()
+                n.toLongOrNull() ?: n.toDoubleOrNull() ?: n
+            }
+            android.util.JsonToken.BOOLEAN -> r.nextBoolean()
+            android.util.JsonToken.NULL -> {
+                r.nextNull()
+                null
+            }
+            else -> {
+                r.skipValue()
+                null
+            }
+        }
+
+    /** Before v113's plugin: the whole catalogue in one file (kept as a fallback). */
+    private suspend fun wholeCatalogRows(service: String): List<Row>? =
         withContext(WholphinDispatchers.IO) {
             if (catalog == null || System.currentTimeMillis() - catalogAt > 3_600_000) {
                 try {
@@ -495,7 +627,7 @@ object StreamingStore {
         for (service in listOf(NETFLIX, PRIME, CINEMA, LIST)) {
             rows(service)?.asSequence()?.flatMap { it.items }?.firstOrNull(::match)?.let { return it }
         }
-        WantedStore.load()
+        WantedStore.loadIfStale()
         return WantedStore.items.value.firstOrNull(::match)
             ?: entries.values.firstOrNull(::match)
             // NoBars: any other title (a person's "All work", "More like this"): the server's title service
@@ -559,10 +691,17 @@ object StreamingStore {
     // (12 hours), so a title you've seen opens at once, even after the app restarts. An older copy is shown at once
     // and refreshed quietly behind it.
     private val titleCards = ConcurrentHashMap<String, Pair<Long, Entry>>()
-    private val titleSlots = kotlinx.coroutines.sync.Semaphore(8)
+    private val titleSlots = kotlinx.coroutines.sync.Semaphore(3)
     private val refreshing = ConcurrentHashMap.newKeySet<String>()
-    private const val TITLE_FRESH_MS = 30 * 60_000L
+    private const val TITLE_FRESH_MS = 12 * 3_600_000L // the Mac refreshes every card each morning
     private const val TITLE_KEEP_MS = 12 * 3_600_000L
+
+    /** At most 150 cards in memory (the TV's storage keeps the rest); the oldest go first. */
+    private fun trimTitleCards() {
+        val extra = titleCards.size - 150
+        if (extra <= 0) return
+        titleCards.entries.sortedBy { it.value.first }.take(extra).forEach { titleCards.remove(it.key) }
+    }
 
     /** The app's cache folder (set at start), for the cards kept on the TV. */
     @Volatile var cacheDir: java.io.File? = null
@@ -598,6 +737,7 @@ object StreamingStore {
             val e = parse(JSONObject(json))
             if (e.tmdb != tmdb) return null
             titleCards[key] = System.currentTimeMillis() to e
+            trimTitleCards()
             try {
                 titleFile(key)?.let {
                     it.parentFile?.mkdirs()

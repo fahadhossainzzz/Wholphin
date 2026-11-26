@@ -25,6 +25,25 @@ object ServerAccess {
         return httpGet(base.trimEnd('/') + path, mapOf("Authorization" to "MediaBrowser Token=\"$t\""))
     }
 
+    /** GET, handing the open response to [block] (read it as it arrives); null when it failed or isn't there. */
+    fun <T> read(
+        path: String,
+        block: (java.io.InputStream) -> T,
+    ): T? {
+        val base = baseUrl ?: return null
+        val t = token ?: return null
+        val conn = URL(base.trimEnd('/') + path).openConnection() as HttpURLConnection
+        conn.connectTimeout = 8_000
+        conn.readTimeout = 20_000
+        conn.setRequestProperty("Authorization", "MediaBrowser Token=\"$t\"")
+        conn.setRequestProperty("Accept", "application/json")
+        return try {
+            if (conn.responseCode == 200) conn.inputStream.use(block) else null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     /** POST with an empty body; the reply's text, or null when it failed. */
     fun post(path: String): String? {
         val base = baseUrl ?: return null

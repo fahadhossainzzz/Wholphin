@@ -148,6 +148,9 @@ class BackdropService
                             .data(imageUrl)
                             .allowHardware(false)
                             .bitmapConfig(Bitmap.Config.ARGB_8888)
+                            // NoBars v113: a small copy is enough for the colours (a full 4K backdrop was ~33 MB)
+                            .size(320, 180)
+                            .memoryCachePolicy(coil3.request.CachePolicy.DISABLED)
                             .build()
 
                     val result = loader.execute(request)

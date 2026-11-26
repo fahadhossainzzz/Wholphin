@@ -24,6 +24,18 @@ object WantedStore {
 
     @Volatile private var loaded = false
 
+    @Volatile private var loadedAt = 0L
+
+    /** The last change made here, written into the removal log on the next save ("movie:603" -> removed or re-added). */
+    @Volatile private var lastChange: Pair<String, Boolean>? = null
+
+    private fun key(e: StreamingStore.Entry) = (if (e.series) "show:" else "movie:") + e.tmdb
+
+    /** The list as already held, fetched again only when more than a minute old (badges and lookups). */
+    suspend fun loadIfStale() {
+        if (!loaded || System.currentTimeMillis() - loadedAt > 60_000) load()
+    }
+
     private val _watched = MutableStateFlow<Set<java.util.UUID>>(emptySet())
 
     /** Library copies of My list titles that you've watched to the end (they stay on the list until you remove them) */
@@ -46,6 +58,7 @@ object WantedStore {
                         JSONArray(list).let { a -> (0 until a.length()).map { StreamingStore.fromJson(a.getJSONObject(it)) } }
                     }
                 loaded = true
+                loadedAt = System.currentTimeMillis()
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: wanted list unavailable")
             }
@@ -110,7 +123,16 @@ object WantedStore {
             } else {
                 now.filterNot { it.tmdb == e.tmdb && it.series == e.series }
             }
+        lastChange = key(e) to !adding
         save()
+        // NoBars v113: tell the Mac at once, so Trakt (and the phone) get the change within seconds
+        withContext(WholphinDispatchers.IO) {
+            try {
+                ServerAccess.post("/Plugins/ImdbRatings/Watchlist/Changed")
+            } catch (ex: Exception) {
+                Timber.w(ex, "NoBars: watchlist sync kick failed")
+            }
+        }
         return adding
     }
 
@@ -121,6 +143,17 @@ object WantedStore {
                 val current = JSONObject(ServerAccess.get(p) ?: "{}")
                 val prefs = current.optJSONObject("CustomPrefs") ?: JSONObject()
                 prefs.put("wanted", JSONArray(_items.value.map { StreamingStore.toJson(it) }).toString())
+                // NoBars v113: titles removed on the TV (kept a week), so the Mac's sync removes exactly these from
+                // Trakt and puts back anything else that went missing from a stale save
+                val removed =
+                    try {
+                        JSONObject(prefs.optString("removed").ifBlank { "{}" })
+                    } catch (ex: Exception) {
+                        JSONObject()
+                    }
+                lastChange?.let { (k, gone) -> if (gone) removed.put(k, java.time.LocalDate.now().toString()) else removed.remove(k) }
+                lastChange = null
+                prefs.put("removed", removed.toString())
                 current.put("CustomPrefs", prefs)
                 if (!current.has("Id")) current.put("Id", PREFS_ID)
                 if (!current.has("Client")) current.put("Client", CLIENT)

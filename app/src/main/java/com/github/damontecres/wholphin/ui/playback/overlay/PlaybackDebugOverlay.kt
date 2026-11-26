@@ -127,7 +127,9 @@ fun PlaybackDebugOverlay(
                             listOfNotNull(
                                 conn.takeIf { it > 0f }?.let { StreamHealth.mbs(it) },
                                 StreamHealth.lastChunkMbps.takeIf { it > 0f }?.let { "last " + StreamHealth.mbs(it).removeSuffix(" MB/s") },
-                            ).joinToString(" · ").ifEmpty { if (full) "idle – nothing to load" else "measuring…" },
+                            ).joinToString(" · ")
+                                .let { if (conn <= 0f && it.isNotEmpty()) "idle · $it MB/s" else it }
+                                .ifEmpty { if (full) "idle – nothing to load" else "measuring…" },
                         ),
                         DebugRow(
                             "Headroom",
@@ -378,14 +380,15 @@ fun PlaybackDebugOverlayPreview() {
 /** "OMX.dolby.vision.dvhe.st.decoder" → "HW · dolby.vision.dvhe" */
 private fun shortDecoder(name: String?): String {
     if (name.isNullOrBlank()) return "?"
-    val hw = !(name.startsWith("c2.android") || name.startsWith("OMX.google") || name.contains("ffmpeg", true))
+    val raw = name.removeSuffix(" (HW)").trim()
+    val hw = name.endsWith("(HW)") || !(raw.startsWith("c2.android") || raw.startsWith("OMX.google") || raw.contains("ffmpeg", true))
     val core =
-        name
+        raw
             .removePrefix("OMX.")
             .removePrefix("c2.")
-            .removeSuffix(".decoder")
             .removeSuffix(".secure")
-            .replace(Regex("\\.st$|\\.st\\.decoder$"), "")
+            .removeSuffix(".decoder")
+            .removeSuffix(".st")
     return (if (hw) "HW · " else "software · ") + core
 }
 

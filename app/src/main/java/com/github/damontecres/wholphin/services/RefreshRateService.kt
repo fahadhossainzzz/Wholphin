@@ -40,7 +40,8 @@ class RefreshRateService
             switchResolution: Boolean,
         ) = withContext(WholphinDispatchers.IO) {
             if (!switchRefreshRate && !switchResolution) {
-                Timber.v("Not switching either refresh rate nor resolution")
+                com.github.damontecres.wholphin.nobars.playback.StreamHealth.rateSwitch = "switching off in Settings"
+                Timber.e("NoBars display: refresh-rate switching is off in Settings")
                 return@withContext
             }
             val displayManager =
@@ -76,6 +77,19 @@ class RefreshRateService
                     resolutionSwitch = switchResolution,
                 )
             Timber.i("Found display mode: %s, current=%s", targetMode, currentDisplayMode)
+            Timber.e(
+                "NoBars display: film %s fps, screen %s Hz, TV offers %s; chose %s",
+                frameRate,
+                currentDisplayMode.refreshRate,
+                displayModes.joinToString { "${it.physicalWidth}x${it.physicalHeight}@${it.refreshRate}" },
+                targetMode?.let { "${it.physicalWidth}x${it.physicalHeight}@${it.refreshRate}" } ?: "none",
+            )
+            com.github.damontecres.wholphin.nobars.playback.StreamHealth.rateSwitch =
+                when {
+                    targetMode == null -> "the TV offers no matching rate"
+                    targetMode.modeId == currentDisplayMode.modeId -> "already matching"
+                    else -> "switched to ${targetMode.refreshRate.roundToInt()} Hz"
+                }
             if (targetMode != null && targetMode.modeId != currentDisplayMode.modeId) {
                 val listener = Listener(display.displayId)
                 displayManager.registerDisplayListener(

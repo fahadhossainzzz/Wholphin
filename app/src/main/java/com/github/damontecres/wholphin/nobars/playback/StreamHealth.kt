@@ -124,6 +124,9 @@ object StreamHealth {
 
     @Volatile var offeredHz: List<Float> = emptyList()
 
+    /** What refresh-rate switching did for this film: "switching off in Settings", "switched to 24 Hz", … */
+    @Volatile var rateSwitch: String = ""
+
     /** The film's frame rate (fps), 0 when unknown */
     @Volatile var filmFps: Float = 0f
 
@@ -154,7 +157,8 @@ object StreamHealth {
         val screen = hzText(hz) + " Hz"
         if (fps <= 0f) return screen to true
         val even = matches(hz, fps)
-        return "$screen · film ${fpsText(fps)} fps ${if (even) "✓" else "⚠"}" to even
+        val why = if (!even && rateSwitch.isNotEmpty()) " ($rateSwitch)" else ""
+        return "$screen · film ${fpsText(fps)} fps ${if (even) "✓" else "⚠"}$why" to even
     }
 
     /** A screen rate shows every frame for the same time when it is a whole multiple of the film's rate. */

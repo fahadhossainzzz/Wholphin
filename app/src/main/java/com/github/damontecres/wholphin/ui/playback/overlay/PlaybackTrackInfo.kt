@@ -194,7 +194,11 @@ fun TrackSupportRow(
                 listOf(
                     track.id ?: "",
                     track.type.name,
-                    track.codecs ?: "",
+                    // NoBars: "application/x-quicktime-tx3g" → "tx3g", "audio/eac3-joc" → "eac3-joc" (fits one line)
+                    (track.codecs?.takeIf { it.isNotBlank() } ?: track.format.sampleMimeType ?: "")
+                        .substringAfter("/")
+                        .removePrefix("x-")
+                        .removePrefix("quicktime-"),
                     track.supported.name,
                     track.labels.joinToString(", "),
                 )

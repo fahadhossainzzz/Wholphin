@@ -615,10 +615,11 @@ class StallGuard(
     private fun updateRecent(now: Long) {
         val tenMin = 10 * 60_000L
         val wall = System.currentTimeMillis()
-        val recent = session.waits.filter { wall - it.at <= tenMin }
+        // the film's start is shown on its own ("start 3.1 s"), so only the waits after it count here
+        val recent = session.waits.filter { wall - it.at <= tenMin && it.cause != "start" }
         StreamHealth.recentWaits =
             if (recent.isEmpty()) {
-                "none in 10 min"
+                if (session.waits.any { wall - it.at <= tenMin }) "none since" else "none in 10 min"
             } else {
                 val last = recent.last()
                 String.format(
@@ -906,6 +907,7 @@ class StallGuard(
                     when {
                         fps <= 0f -> "film rate unknown"
                         even -> "even ✓"
+                        StreamHealth.rateSwitch.isNotEmpty() -> "uneven – ${StreamHealth.rateSwitch}"
                         canMatch -> "uneven – the TV offers a matching rate, so switching is off or didn't apply"
                         else -> "uneven – the TV offers no matching rate"
                     }

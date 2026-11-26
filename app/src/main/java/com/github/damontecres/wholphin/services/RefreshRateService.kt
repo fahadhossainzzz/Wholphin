@@ -61,9 +61,11 @@ class RefreshRateService
             val width = stream.width
             val height = stream.height
             val frameRate =
-                if (switchRefreshRate) stream.realFrameRate else currentDisplayMode.refreshRate
+                // NoBars: the average rate when the file doesn't state the exact one (it used to skip switching)
+                if (switchRefreshRate) stream.realFrameRate ?: stream.averageFrameRate else currentDisplayMode.refreshRate
             if (width == null || height == null || frameRate == null) {
-                Timber.w("Video stream missing required info: width=%s, height=%s, frameRate=%s", width, height, frameRate)
+                com.github.damontecres.wholphin.nobars.playback.StreamHealth.rateSwitch = "the file doesn't say its frame rate"
+                Timber.e("NoBars display: video stream missing required info: width=%s, height=%s, frameRate=%s", width, height, frameRate)
                 return@withContext
             }
             Timber.d("Getting refresh rate for: width=%s, height=%s, frameRate=%s", width, height, frameRate)
@@ -88,7 +90,7 @@ class RefreshRateService
                 when {
                     targetMode == null -> "the TV offers no matching rate"
                     targetMode.modeId == currentDisplayMode.modeId -> "already matching"
-                    else -> "switched to ${targetMode.refreshRate.roundToInt()} Hz"
+                    else -> "switched to ${com.github.damontecres.wholphin.nobars.playback.StreamHealth.hzText(targetMode.refreshRate)} Hz"
                 }
             if (targetMode != null && targetMode.modeId != currentDisplayMode.modeId) {
                 val listener = Listener(display.displayId)
@@ -111,6 +113,13 @@ class RefreshRateService
                 } finally {
                     displayManager.unregisterDisplayListener(listener)
                 }
+                // NoBars: did the TV really change?
+                val now = display.mode
+                if (now.modeId != targetMode.modeId) {
+                    com.github.damontecres.wholphin.nobars.playback.StreamHealth.rateSwitch =
+                        "asked for ${com.github.damontecres.wholphin.nobars.playback.StreamHealth.hzText(targetMode.refreshRate)} Hz, the TV stayed at ${com.github.damontecres.wholphin.nobars.playback.StreamHealth.hzText(now.refreshRate)} Hz"
+                }
+                Timber.e("NoBars display: asked for mode %s, the screen is now %s@%s", targetMode.modeId, now.modeId, now.refreshRate)
                 val targetRate = (targetMode.refreshRate * 1000).roundToInt()
                 val isSeamless =
                     targetRate == (currentDisplayMode.refreshRate * 1000).roundToInt() ||
@@ -185,10 +194,12 @@ class RefreshRateService
                     }
 //                Timber.v("display modes candidates: %s", candidates.joinToString("\n"))
                 return if (!resolutionSwitch) {
-                    candidates
-                        .filter { it.refreshRateRounded == streamRate }
-                        .maxByOrNull { it.physicalWidth * it.physicalHeight }
-                        ?: candidates.maxByOrNull { it.physicalWidth * it.physicalHeight }
+                    // NoBars: keep the highest resolution, and at it the best rate: exactly the film's, then a near
+                    // one (24 Hz for 23.976 fps), then a whole multiple (48, 120 Hz)
+                    candidates.minWithOrNull(
+                        compareByDescending<DisplayMode> { it.physicalWidth * it.physicalHeight }
+                            .thenBy { if (refreshRateSwitch) matchRank(it.refreshRateRounded, streamRate) ?: 99 else 0 },
+                    )
                 } else {
                     // Exact resolution & frame rate
                     candidates.firstOrNull {
@@ -227,8 +238,29 @@ class RefreshRateService
                 refreshRateRounded: Int,
                 streamRate: Int,
             ): Boolean {
-                return refreshRateRounded % streamRate == 0 || // Exact multiple
-                    refreshRateRounded == (streamRate * 2.5).roundToInt() // eg 24 & 60fps
+                // NoBars: only rates that show every frame for the same time. 60 Hz for a 24 fps film (2.5×) is the
+                // uneven 3-2 pattern this is meant to avoid, so it no longer counts
+                return matchRank(refreshRateRounded, streamRate) != null
+            }
+
+            /**
+             * NoBars: how well a screen rate suits a film (both in thousandths of Hz/fps), lower is better; null when it
+             * doesn't suit. 0 exact (23.976 for 23.976), 2-5 an exact whole multiple (47.952, 119.88), 11 near (24 for
+             * 23.976: one repeated frame about every 40 s), 12-15 a near multiple (48, 120).
+             */
+            fun matchRank(
+                refreshRateRounded: Int,
+                streamRate: Int,
+            ): Int? {
+                if (streamRate <= 0 || refreshRateRounded <= 0) return null
+                val k = Math.round(refreshRateRounded.toDouble() / streamRate).toInt()
+                if (k < 1) return null
+                val diff = kotlin.math.abs(refreshRateRounded - k.toLong() * streamRate)
+                return when {
+                    diff <= 5L * k -> if (k == 1) 0 else k
+                    diff <= 0.0015 * k * streamRate -> 10 + k
+                    else -> null
+                }
             }
         }
     }

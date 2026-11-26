@@ -300,6 +300,7 @@ class PlaybackViewModel
                             isDirectPlay = { state.value.currentPlayback?.playMethod == PlayMethod.DIRECT_PLAY },
                             describe = { describePlayback() },
                             onReport = { serverReportService.sendPlaybackReport(it) },
+                            playback = { state.value.currentPlayback },
                         ).run()
                     },
                 )
@@ -1113,11 +1114,11 @@ class PlaybackViewModel
             val title = currentItem.item.name ?: "?"
             return String.format(
                 java.util.Locale.US,
-                "%s | %s, %.1f GB, %.1f Mbps | video %s %sx%s %s | audio %s | subtitles %s | %s",
+                "%s | %s, %.1f GB, %.1f MB/s | video %s %sx%s %s | audio %s | subtitles %s | %s",
                 title,
                 source?.container ?: "?",
                 sizeGb,
-                mbps,
+                mbps / 8,
                 video?.codec ?: "?",
                 video?.width ?: "?",
                 video?.height ?: "?",
@@ -1868,6 +1869,8 @@ class PlaybackViewModel
                 bitrateEstimate,
             )
             if (totalLoadTimeMs > 0 && totalBytesLoaded > 0) {
+                com.github.damontecres.wholphin.nobars.playback.StreamHealth.lastChunkMbps =
+                    (totalBytesLoaded.toDouble() / (totalLoadTimeMs / 1000.0) * 8 / 1e6).toFloat()
                 _state.update {
                     it.copy(
                         analyticsState =

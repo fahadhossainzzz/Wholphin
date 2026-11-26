@@ -1,9 +1,6 @@
 package com.github.damontecres.wholphin.ui.playback.overlay
 
 import com.github.damontecres.wholphin.nobars.playback.PlaybackFacts
-import android.content.Context
-import android.hardware.display.DisplayManager
-import android.view.Display
 import androidx.annotation.OptIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,7 +31,6 @@ import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.nobars.playback.StreamHealth
 import com.github.damontecres.wholphin.ui.PreviewTvSpec
 import com.github.damontecres.wholphin.ui.formatBitrate
-import com.github.damontecres.wholphin.ui.formatBytes
 import com.github.damontecres.wholphin.ui.letNotEmpty
 import com.github.damontecres.wholphin.ui.playback.AnalyticsState
 import com.github.damontecres.wholphin.ui.playback.CurrentPlayback
@@ -68,27 +64,6 @@ fun PlaybackDebugOverlay(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val display =
-        remember(context) {
-            try {
-                val displayManager =
-                    context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-                displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
-            } catch (ex: Exception) {
-                Timber.e(ex)
-                null
-            }
-        }
-    val displayMode by produceState<String?>(null) {
-        while (isActive) {
-            value =
-                display?.mode?.let {
-                    val rate = String.format(Locale.getDefault(), "%.3f", it.refreshRate)
-                    "${it.physicalWidth}x${it.physicalHeight}@${rate}fps, id=${it.modeId}"
-                }
-            delay(10.seconds)
-        }
-    }
     val textStyle =
         MaterialTheme.typography.bodySmall.copy(
             fontSize = 10.sp,
@@ -102,7 +77,7 @@ fun PlaybackDebugOverlay(
             while (isActive) {
                 val used = StreamHealth.heapUsed()
                 val max = StreamHealth.heapMax()
-                value = "${formatBytes(used)} / ${formatBytes(max)} (${used * 100 / max}%)"
+                value = "${used shr 20} of ${max shr 20} MB (${used * 100 / max}%)"
                 live++
                 delay(1.seconds)
             }
@@ -115,99 +90,106 @@ fun PlaybackDebugOverlay(
     ) {
         ProvideTextStyle(textStyle) {
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                // 1. The file
+                val yellow = Color(0xFFFFD54F)
+                // 1. The file, how it plays, the build and the time
                 DebugSection(
                     "THE FILE",
-                    remember(currentPlayback) {
-                        listOf(
-                            DebugRow("File", PlaybackFacts.file(currentPlayback)),
-                            DebugRow("Overall", PlaybackFacts.overall(currentPlayback)),
-                            DebugRow("Video", PlaybackFacts.video(currentPlayback)),
-                            DebugRow("Audio", PlaybackFacts.audio(currentPlayback)),
-                            DebugRow("Subtitle", PlaybackFacts.subtitle(currentPlayback)),
-                            DebugRow("Play method", currentPlayback?.playMethod?.serialName ?: "?"),
-                        )
-                    },
+                    listOf(
+                        DebugRow("File", PlaybackFacts.file(currentPlayback)),
+                        DebugRow("Overall", PlaybackFacts.overall(currentPlayback)),
+                        DebugRow("Video", PlaybackFacts.videoShort(currentPlayback)),
+                        DebugRow("Audio", PlaybackFacts.audioShort(currentPlayback)),
+                        DebugRow(
+                            "Subtitle",
+                            PlaybackFacts.subtitleWithDelay(currentPlayback),
+                            if ((currentPlayback?.subtitleDelay?.inWholeMilliseconds ?: 0L) != 0L) yellow else Color.Unspecified,
+                        ),
+                        DebugRow("Play", "${currentPlayback?.playMethod?.serialName ?: "?"} · ${com.github.damontecres.wholphin.BuildConfig.NOBARS}"),
+                        DebugRow("Time", "${StreamHealth.now()} · report ${StreamHealth.reportStatus}"),
+                    ).also { live.hashCode() },
                     modifier = Modifier.weight(1.3f),
                 )
-                // 2. Right now: the film's own rate, network, buffer
+                // 2. Right now: the film's own rate, the connection, the read-ahead, Wi-Fi, waits
                 val scene = StreamHealth.sceneMbps
+                val peak = maxOf(scene, StreamHealth.scenePeakMbps)
                 val conn = StreamHealth.readMbps
-                val ratio = if (scene > 0.5f && conn > 0f) conn / maxOf(scene, StreamHealth.scenePeakMbps) else 0f
+                val full = StreamHealth.bufferState.startsWith("full")
+                val ratio = if (scene > 0.5f && conn > 0f) conn / peak else 0f
                 DebugSection(
                     "RIGHT NOW",
                     listOf(
                         DebugRow(
                             "Film rate",
-                            if (scene > 0f) {
-                                String.format(Locale.US, "%.0f Mbps loading now · peak %.0f Mbps (last minute of film)", scene, StreamHealth.scenePeakMbps)
-                            } else {
-                                "measuring…"
-                            },
+                            if (scene > 0f) "${StreamHealth.mbs(scene)} · peak ${StreamHealth.mbs(peak).removeSuffix(" MB/s")}" else "measuring…",
+                        ),
+                        DebugRow(
+                            "Connection",
+                            listOfNotNull(
+                                conn.takeIf { it > 0f }?.let { StreamHealth.mbs(it) },
+                                StreamHealth.lastChunkMbps.takeIf { it > 0f }?.let { "last " + StreamHealth.mbs(it).removeSuffix(" MB/s") },
+                            ).joinToString(" · ").ifEmpty { if (full) "idle – nothing to load" else "measuring…" },
                         ),
                         DebugRow(
                             "Headroom",
-                            if (ratio > 0f) String.format(Locale.US, "connection %.0f Mbps = %.1f× the peak", conn, ratio) else "measuring…",
+                            when {
+                                ratio > 0f -> String.format(Locale.US, "%.0f× the peak", ratio) + if (ratio >= 2f) " ✓" else ""
+                                full -> "idle – read-ahead full"
+                                else -> "measuring…"
+                            },
                             when {
                                 ratio <= 0f -> Color.Unspecified
                                 ratio >= 2f -> Color(0xFF81C784)
-                                ratio >= 1.2f -> Color(0xFFFFD54F)
+                                ratio >= 1.2f -> yellow
                                 else -> Color(0xFFE57373)
                             },
                         ),
                         DebugRow(
                             "Read-ahead",
-                            String.format(
-                                Locale.US,
-                                "%.1f s · %d of %d MB · %s",
-                                StreamHealth.aheadMs / 1000f,
-                                StreamHealth.bufferBytes shr 20,
-                                StreamHealth.bufferBudget shr 20,
-                                StreamHealth.bufferState,
-                            ),
-                            if (StreamHealth.aheadMs in 1..9_999) Color(0xFFFFD54F) else Color.Unspecified,
+                            "${StreamHealth.span(StreamHealth.aheadMs)} · ${StreamHealth.bufferBytes shr 20} of ${StreamHealth.bufferBudget shr 20} MB · " +
+                                if (full) "full" else "filling at ${StreamHealth.mbs(StreamHealth.netMbps)}",
+                            if (StreamHealth.aheadMs in 1..9_999) yellow else Color.Unspecified,
                         ),
-                        DebugRow(
-                            "Into player",
-                            String.format(Locale.US, "%.1f Mbps now · connection %.0f Mbps (%d%% busy)", StreamHealth.netMbps, conn, StreamHealth.readBusy),
-                        ),
-                        DebugRow("Last chunk", "${analyticsState.bitrate} download speed"),
-                        DebugRow("Estimate", "${analyticsState.bitrateEstimate} (player's guess of the connection)"),
                         DebugRow(
                             "Wi-Fi",
                             if (StreamHealth.wifiRssi == 0) {
                                 "no reading (Ethernet?)"
                             } else {
-                                "${StreamHealth.wifiRssi} dBm · link ${StreamHealth.wifiLinkMbps} Mbps · " +
-                                    if (StreamHealth.wifiFreqMhz >= 4900) "5 GHz" else "2.4 GHz"
+                                "${StreamHealth.wifiRssi} dBm · " + (if (StreamHealth.wifiFreqMhz >= 4900) "5 GHz" else "2.4 GHz") +
+                                    " · link ${StreamHealth.mbs(StreamHealth.wifiLinkMbps.toFloat())}" +
+                                    (if (StreamHealth.wifiNode.isNotEmpty()) " · Deco ${StreamHealth.wifiNode}" else "") +
+                                    (if (StreamHealth.wifiSwitches > 0) " (moved ${StreamHealth.wifiSwitches}×)" else "")
                             },
-                            if (StreamHealth.wifiRssi < -70 && StreamHealth.wifiRssi != 0) Color(0xFFFFD54F) else Color.Unspecified,
+                            if ((StreamHealth.wifiRssi < -70 && StreamHealth.wifiRssi != 0) || StreamHealth.wifiSwitches > 0) yellow else Color.Unspecified,
+                        ),
+                        DebugRow(
+                            "Waits",
+                            (if (StreamHealth.startMs > 0) "start ${StreamHealth.span(StreamHealth.startMs)} · " else "") + StreamHealth.recentWaits,
                         ),
                     ).also { live.hashCode() },
                     modifier = Modifier.weight(1.2f),
                 )
-                // 3. The TV and the health of this playback
+                // 3. The TV: decoding, screen, memory, frames, heat, fixes
+                val (displayText, even) = StreamHealth.displayLine()
+                val bufferMb = StreamHealth.bufferBytes shr 20
                 DebugSection(
                     "TV AND HEALTH",
                     listOf(
-                        DebugRow("Video decoder", currentPlayback?.videoDecoder ?: currentPlayback?.backend?.toString() ?: "?"),
+                        DebugRow("Decoder", shortDecoder(currentPlayback?.videoDecoder ?: currentPlayback?.backend?.toString())),
+                        DebugRow("Audio", shortAudioPath(StreamHealth.audioDecoder.ifBlank { currentPlayback?.audioDecoder.orEmpty() }, StreamHealth.audioOut)),
                         DebugRow(
-                            "Audio path",
-                            StreamHealth.audioPath(StreamHealth.audioDecoder.ifBlank { currentPlayback?.audioDecoder.orEmpty() }, StreamHealth.audioOut),
+                            "Display",
+                            displayText + (StreamHealth.pictureOut.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+                            if (!even || StreamHealth.pictureOut.contains("not used")) yellow else Color.Unspecified,
                         ),
-                        DebugRow("Display", displayMode ?: "?"),
-                        DebugRow("App memory", memoryUsed),
-                        DebugRow("TV RAM", "${StreamHealth.systemAvailMb} MB free (${StreamHealth.systemSpareMb} spare)"),
+                        DebugRow("Memory", memoryUsed + if (bufferMb > 0) " · $bufferMb MB read-ahead" else ""),
+                        DebugRow("TV RAM", "${StreamHealth.systemAvailMb} MB free · ${StreamHealth.systemSpareMb} spare"),
                         DebugRow(
                             "Dropped",
-                            "${analyticsState.droppedFrames} this film · ${StreamHealth.recentDrops} in last 10 min",
-                            if (StreamHealth.recentDrops >= 10) Color(0xFFFFD54F) else Color.Unspecified,
+                            "${analyticsState.droppedFrames} film · ${StreamHealth.recentDrops} in 10 min",
+                            if (StreamHealth.recentDrops >= 10) yellow else Color.Unspecified,
                         ),
-                        DebugRow("Waits", StreamHealth.recentWaits),
-                        DebugRow("Fixes", "${StreamHealth.reconnects} reconnect / ${StreamHealth.reloads} reload / ${StreamHealth.rebuilds} rebuild"),
-                        DebugRow("Last event", StreamHealth.lastEvent.ifEmpty { "none" }),
-                        DebugRow("Report", StreamHealth.reportStatus),
-                        DebugRow("Time", StreamHealth.now()),
+                        DebugRow("Heat", StreamHealth.heatText(), if (StreamHealth.thermal >= 2) yellow else Color.Unspecified),
+                        DebugRow("Fixes", "${StreamHealth.reconnects} reconnect · ${StreamHealth.reloads} reload · ${StreamHealth.rebuilds} rebuild"),
                     ).also { live.hashCode() },
                     modifier = Modifier.weight(1.2f),
                 )
@@ -390,5 +372,36 @@ fun PlaybackDebugOverlayPreview() {
             currentPlayback = currentPlayback,
             modifier = Modifier.fillMaxSize(),
         )
+    }
+}
+
+/** "OMX.dolby.vision.dvhe.st.decoder" → "HW · dolby.vision.dvhe" */
+private fun shortDecoder(name: String?): String {
+    if (name.isNullOrBlank()) return "?"
+    val hw = !(name.startsWith("c2.android") || name.startsWith("OMX.google") || name.contains("ffmpeg", true))
+    val core =
+        name
+            .removePrefix("OMX.")
+            .removePrefix("c2.")
+            .removeSuffix(".decoder")
+            .removeSuffix(".secure")
+            .replace(Regex("\\.st$|\\.st\\.decoder$"), "")
+    return (if (hw) "HW · " else "software · ") + core
+}
+
+/** "not decoded → Dolby Digital Plus passthrough" → "DD+ passthrough"; decoded audio keeps who decoded it */
+private fun shortAudioPath(
+    decoder: String,
+    out: String,
+): String {
+    val o =
+        out
+            .replace("Dolby Digital Plus", "DD+")
+            .replace("Dolby Digital", "DD")
+            .ifBlank { "output not reported yet" }
+    return when {
+        decoder.isBlank() -> o
+        decoder.contains("ffmpeg", true) -> "app decodes → $o"
+        else -> "TV chip decodes → $o"
     }
 }

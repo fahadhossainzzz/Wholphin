@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import coil3.imageLoader
 import com.github.damontecres.wholphin.BuildConfig
+import com.github.damontecres.wholphin.ui.playback.CurrentPlayback
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -54,6 +55,7 @@ class StallGuard(
     private val isDirectPlay: () -> Boolean,
     private val describe: () -> String,
     private val onReport: (String) -> Unit,
+    private val playback: () -> CurrentPlayback? = { null },
 ) {
     private var lastReconnect = 0L
     private var reconnectStreak = 0
@@ -65,6 +67,9 @@ class StallGuard(
     private var lastHealthLog = 0L
     private var lastSystemCheck = 0L
     private var lastWifiCheck = 0L
+    private var lastScreenCheck = 0L
+    private val displayManager = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+    private val powerManager = context.getSystemService(android.os.PowerManager::class.java)
     private var starvingSince = 0L
     private var rateAt = 0L
     private var rateBytes = 0L
@@ -119,6 +124,22 @@ class StallGuard(
         var scenePeakAtMs = 0L
         var audioOut = ""
         var audioDecoder = ""
+
+        // v114
+        var heapStart = -1f
+        var screenHz = 0f
+        var screenUneven = 0
+        var screenSamples = 0
+        var offeredHz: List<Float> = emptyList()
+        var picture = ""
+        var heatWorst = 0
+        val nodes = linkedSetOf<String>()
+        var switches = 0
+        var subDelayStart: Long? = null
+        var subDelayEnd = 0L
+        var subDelayChanges = 0
+        var subtitle = ""
+        var startMs = 0L
     }
 
     private data class Wait(
@@ -378,6 +399,10 @@ class StallGuard(
             lastWifiCheck = now
             readWifi()
         }
+        if (now - lastScreenCheck >= 1_000) {
+            lastScreenCheck = now
+            readScreenHeatSubtitle()
+        }
 
         // Rates every 2 s
         if (now - rateAt >= 2_000) {
@@ -556,6 +581,7 @@ class StallGuard(
                     "?"
                 }
             s.bytesAtStart = StreamHealth.bytesDelivered.get()
+            s.heapStart = StreamHealth.heapRatio()
         }
         if (s.bufferingSince != 0L) {
             val waited = now - s.bufferingSince
@@ -568,14 +594,19 @@ class StallGuard(
                     seek != null && now - seek.at < 60_000 -> "skip"
                     else -> "stall"
                 }
+            if (firstOfSession) {
+                s.startMs = waited
+                StreamHealth.startMs = waited
+            }
             if (waited >= 300) {
                 s.waits.add(Wait(player.currentPosition, waited, cause, System.currentTimeMillis()))
                 if (s.waits.size > 300) s.waits.removeAt(0)
             }
             if (waited >= 1_500 || cause == "stall") {
                 StreamHealth.event(
-                    "waited ${waited / 1000.0} s for data ($cause at ${clock(player.currentPosition)}, ${ahead / 1000} s now ahead, " +
-                        "film ${StreamHealth.sceneMbps.toInt()} Mbps here, connection ${StreamHealth.readMbps.toInt()} Mbps)",
+                    "waited ${waited / 1000.0} s for data (${causeName(cause, player.currentPosition)} at ${clock(player.currentPosition)}, " +
+                        "${ahead / 1000} s now ahead, film ${StreamHealth.mbs(StreamHealth.sceneMbps)} here, " +
+                        "connection ${StreamHealth.mbs(StreamHealth.readMbps)})",
                 )
             }
         }
@@ -587,17 +618,16 @@ class StallGuard(
         val recent = session.waits.filter { wall - it.at <= tenMin }
         StreamHealth.recentWaits =
             if (recent.isEmpty()) {
-                "none in last 10 min"
+                "none in 10 min"
             } else {
                 val last = recent.last()
                 String.format(
                     Locale.US,
-                    "%d in last 10 min (%.1f s) · last %.1f s %s at %s",
+                    "%d in 10 min · %.1f s at %s (%s)",
                     recent.size,
-                    recent.sumOf { it.ms } / 1000.0,
                     last.ms / 1000.0,
-                    last.cause,
-                    wall(last.at),
+                    wall(last.at).substring(0, 5),
+                    causeName(last.cause, last.positionMs),
                 )
             }
         while (recentDrops.isNotEmpty() && now - recentDrops.first().first > tenMin) recentDrops.removeFirst()
@@ -622,8 +652,99 @@ class StallGuard(
             s.rssiMin = if (s.rssiMin == 0) rssi else minOf(s.rssiMin, rssi)
             s.linkMbps = info.linkSpeed
             s.freqMhz = info.frequency
+            // The access point (Deco unit): Android shows it only when the app may use location; otherwise it
+            // reads 02:00:00:00:00:00 and the unit is left unknown
+            val node = info.bssid?.uppercase(Locale.US)?.takeIf { it.length == 17 && it != "02:00:00:00:00:00" }
+            if (node != null) {
+                val short = "…" + node.takeLast(5)
+                val before = StreamHealth.wifiNode
+                if (before.isNotEmpty() && before != short) {
+                    StreamHealth.wifiSwitches++
+                    s.switches++
+                    StreamHealth.event("Wi-Fi moved to another Deco unit ($before → $short, ${info.rssi} dBm)")
+                }
+                StreamHealth.wifiNode = short
+                s.nodes += short
+            }
         } catch (e: Exception) {
             // no permission or no Wi-Fi
+        }
+    }
+
+    /** "start" at the beginning of a film is a "resume" when it opens partway in */
+    private fun causeName(
+        cause: String,
+        positionMs: Long,
+    ): String = if (cause == "start" && positionMs > 60_000) "resume" else cause
+
+    /** Screen rate, the picture shown, the TV's heat and the subtitle delay, once a second. */
+    private fun readScreenHeatSubtitle() {
+        val s = session
+        val cp = playback()
+        try {
+            val display = displayManager?.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            val mode = display?.mode
+            if (mode != null) {
+                StreamHealth.screenHz = mode.refreshRate
+                StreamHealth.offeredHz =
+                    display
+                        ?.supportedModes
+                        .orEmpty()
+                        .filter { it.physicalWidth == mode.physicalWidth && it.physicalHeight == mode.physicalHeight }
+                        .map { it.refreshRate }
+                        .distinctBy { (it * 100).toInt() }
+                        .sorted()
+            }
+            val fps = PlaybackFacts.fps(cp)
+            if (fps > 0f) StreamHealth.filmFps = fps
+            // what reaches the screen: Dolby Vision only when a Dolby Vision decoder runs and the TV takes it
+            val types = display?.hdrCapabilities?.supportedHdrTypes?.toSet().orEmpty()
+            val decoder = cp?.videoDecoder.orEmpty().lowercase(Locale.US)
+            val range = PlaybackFacts.range(cp)
+            StreamHealth.pictureOut =
+                when {
+                    cp == null -> ""
+                    PlaybackFacts.isDolbyVision(cp) && (decoder.contains("dolby") || decoder.contains("dvhe") || decoder.contains("dvav")) &&
+                        android.view.Display.HdrCapabilities.HDR_TYPE_DOLBY_VISION in types -> "Dolby Vision ✓"
+                    PlaybackFacts.isDolbyVision(cp) -> "$range (Dolby Vision not used)"
+                    range == "SDR" -> "SDR"
+                    else -> range
+                }
+            if (s.firstReady && mode != null) {
+                s.screenHz = mode.refreshRate
+                s.offeredHz = StreamHealth.offeredHz
+                s.picture = StreamHealth.pictureOut
+                if (StreamHealth.filmFps > 0f) {
+                    s.screenSamples++
+                    if (!StreamHealth.matches(mode.refreshRate, StreamHealth.filmFps)) s.screenUneven++
+                }
+            }
+        } catch (e: Exception) {
+            // display not readable
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= 29 && powerManager != null) {
+                val heat = powerManager.currentThermalStatus
+                if (heat != StreamHealth.thermal) {
+                    if (s.firstReady) StreamHealth.event("TV heat: ${StreamHealth.heatText(heat)}")
+                    StreamHealth.thermal = heat
+                }
+                s.heatWorst = maxOf(s.heatWorst, heat)
+            }
+        } catch (e: Exception) {
+            // no thermal service
+        }
+        if (cp != null) {
+            val delay = if (cp.subtitleIndexEnabled) cp.subtitleDelay.inWholeMilliseconds else 0L
+            s.subtitle = PlaybackFacts.subtitle(cp)
+            if (s.subDelayStart == null) {
+                if (s.firstReady) s.subDelayStart = delay
+            } else if (delay != s.subDelayEnd) {
+                s.subDelayChanges++
+                StreamHealth.event("subtitle delay set to ${PlaybackFacts.signed(delay)}")
+            }
+            if (s.subDelayStart != null) s.subDelayEnd = delay
+            StreamHealth.subtitleDelayMs = delay
         }
     }
 
@@ -632,11 +753,11 @@ class StallGuard(
         ahead: Long,
     ) {
         Timber.e(
-            "NoBars health: pos %s, state %d, ahead %.1f s, scene %.0f Mbps, buffer %d/%d MB (%s), app memory %d/%d MB (%d%%), TV free %d MB (spare %d), in %.1f Mbps, network %.0f Mbps (busy %d%%), opens/min %d, Wi-Fi %d dBm %d Mbps %d MHz, fixes %d/%d/%d, dropped %d",
+            "NoBars health: pos %s, state %d, ahead %.1f s, scene %.2f MB/s, buffer %d/%d MB (%s), app memory %d/%d MB (%d%%), TV free %d MB (spare %d), in %.2f MB/s, network %.1f MB/s (busy %d%%), opens/min %d, Wi-Fi %d dBm %d Mbps %d MHz, fixes %d/%d/%d, dropped %d",
             clock(player.currentPosition),
             player.playbackState,
             ahead / 1000f,
-            StreamHealth.sceneMbps,
+            StreamHealth.sceneMbps / 8f,
             StreamHealth.bufferBytes shr 20,
             StreamHealth.bufferBudget shr 20,
             StreamHealth.bufferState,
@@ -645,8 +766,8 @@ class StallGuard(
             (ratio * 100).toInt(),
             StreamHealth.systemAvailMb,
             StreamHealth.systemSpareMb,
-            StreamHealth.netMbps,
-            StreamHealth.readMbps,
+            StreamHealth.netMbps / 8f,
+            StreamHealth.readMbps / 8f,
             StreamHealth.readBusy,
             StreamHealth.opensPerMin,
             StreamHealth.wifiRssi,
@@ -667,6 +788,8 @@ class StallGuard(
                 "NoBars playback report could not be built: $e"
             }
         session = Session()
+        StreamHealth.timeline.clear()
+        StreamHealth.startMs = 0
         Timber.e("NoBars report ready (%s)", reason)
         try {
             onReport(report)
@@ -690,15 +813,15 @@ class StallGuard(
         return buildString {
             appendLine("=== NoBars playback report ===")
             appendLine("When: ${stamp.format(Date(s.startedAt))} to ${wall(end)} ($minutes min, ${clock(s.playingMs)} playing)")
-            appendLine("App: ${BuildConfig.VERSION_NAME} on ${Build.MODEL}")
+            appendLine("App: ${BuildConfig.NOBARS} (${BuildConfig.VERSION_NAME}) on ${Build.MODEL}")
             appendLine("Film: ${s.description}")
             if (s.sceneSamples > 0) {
                 appendLine(
                     String.format(
                         Locale.US,
-                        "Film bitrate while loading: avg %.0f Mbps, peak %.0f Mbps around %s",
-                        s.sceneSum / s.sceneSamples,
-                        s.scenePeak,
+                        "Film rate while loading: avg %s, peak %s around %s",
+                        StreamHealth.mbs((s.sceneSum / s.sceneSamples).toFloat()),
+                        StreamHealth.mbs(s.scenePeak),
                         clock(s.scenePeakAtMs),
                     ),
                 )
@@ -717,7 +840,7 @@ class StallGuard(
                 ),
             )
             s.waits.sortedByDescending { it.ms }.take(5).forEach {
-                appendLine(String.format(Locale.US, "  %.1f s %s at %s (%s)", it.ms / 1000.0, it.cause, clock(it.positionMs), wall(it.at)))
+                appendLine(String.format(Locale.US, "  %.1f s %s at %s (%s)", it.ms / 1000.0, causeName(it.cause, it.positionMs), clock(it.positionMs), wall(it.at)))
             }
             appendLine("Skips: ${s.seeks.size}")
             s.seeks.takeLast(10).forEach {
@@ -739,8 +862,10 @@ class StallGuard(
             appendLine(
                 String.format(
                     Locale.US,
-                    "Memory: app peak %d%% of %d MB; TV spare RAM lowest %s MB",
+                    "Memory: app start %d%%, peak %d%%, end %d%% of %d MB; TV spare RAM lowest %s MB",
+                    (s.heapStart.coerceAtLeast(0f) * 100).toInt(),
                     (s.heapPeak * 100).toInt(),
+                    (StreamHealth.heapRatio() * 100).toInt(),
                     StreamHealth.heapMax() shr 20,
                     if (s.spareMin == Long.MAX_VALUE) "?" else s.spareMin.toString(),
                 ),
@@ -748,20 +873,56 @@ class StallGuard(
             appendLine(
                 String.format(
                     Locale.US,
-                    "Network: into player avg %.1f Mbps; connection speed while reading avg %.0f Mbps, lowest %.0f Mbps; reconnects %d, reloads %d, rebuilds %d",
-                    avgIn,
-                    if (s.readMbpsSamples > 0) s.readMbpsSum / s.readMbpsSamples else 0.0,
-                    if (s.readMbpsMin == Float.MAX_VALUE) 0f else s.readMbpsMin,
+                    "Network: into player avg %s; connection speed while reading avg %s, lowest %s; reconnects %d, reloads %d, rebuilds %d",
+                    StreamHealth.mbs(avgIn.toFloat()),
+                    StreamHealth.mbs(if (s.readMbpsSamples > 0) (s.readMbpsSum / s.readMbpsSamples).toFloat() else 0f),
+                    StreamHealth.mbs(if (s.readMbpsMin == Float.MAX_VALUE) 0f else s.readMbpsMin),
                     s.reconnects,
                     s.reloads,
                     s.rebuilds,
                 ),
             )
             if (s.rssiSamples > 0) {
-                appendLine("Wi-Fi: signal avg ${s.rssiSum / s.rssiSamples} dBm (worst ${s.rssiMin}), link ${s.linkMbps} Mbps, ${s.freqMhz} MHz")
+                val deco =
+                    if (s.nodes.isEmpty()) {
+                        "Deco unit unknown (the app may not see it without location permission)"
+                    } else {
+                        "Deco ${s.nodes.joinToString(", ")}, moved ${s.switches} time${if (s.switches == 1) "" else "s"}"
+                    }
+                appendLine(
+                    "Wi-Fi: signal avg ${s.rssiSum / s.rssiSamples} dBm (worst ${s.rssiMin}), link ${StreamHealth.mbs(s.linkMbps.toFloat())}, " +
+                        "${s.freqMhz} MHz; $deco",
+                )
             } else {
                 appendLine("Wi-Fi: no reading (Ethernet or no permission)")
             }
+            // the screen against the film
+            if (s.screenHz > 0f) {
+                val fps = StreamHealth.filmFps
+                val even = s.screenSamples == 0 || s.screenUneven * 2 < s.screenSamples
+                val offered = s.offeredHz.joinToString(", ") { StreamHealth.hzText(it) } + " Hz"
+                val canMatch = fps > 0f && s.offeredHz.any { StreamHealth.matches(it, fps) }
+                val verdict =
+                    when {
+                        fps <= 0f -> "film rate unknown"
+                        even -> "even ✓"
+                        canMatch -> "uneven – the TV offers a matching rate, so switching is off or didn't apply"
+                        else -> "uneven – the TV offers no matching rate"
+                    }
+                appendLine(
+                    "Display: screen ${StreamHealth.hzText(s.screenHz)} Hz for a ${StreamHealth.fpsText(fps)} fps film, $verdict; " +
+                        "TV offers $offered; picture ${s.picture.ifBlank { "?" }}",
+                )
+            }
+            if (s.subtitle.isNotBlank() && s.subtitle != "off") {
+                val start = s.subDelayStart ?: 0L
+                appendLine(
+                    "Subtitle: ${s.subtitle}; delay ${if (start == 0L) "none" else PlaybackFacts.signed(start)} at start" +
+                        if (s.subDelayChanges > 0) ", changed ${s.subDelayChanges} time(s), ended at ${PlaybackFacts.signed(s.subDelayEnd)}" else "",
+                )
+            }
+            appendLine("Heat: worst ${StreamHealth.heatText(s.heatWorst)}")
+            appendLine("Start: ${String.format(Locale.US, "%.1f s", s.startMs / 1000.0)}")
             append("Picture: dropped frames ${s.dropped}")
             if (s.dropBursts.isNotEmpty()) {
                 append(" (bursts: ")
@@ -769,6 +930,11 @@ class StallGuard(
                 append(")")
             }
             appendLine()
+            val events = StreamHealth.timeline.toList()
+            if (events.isNotEmpty()) {
+                appendLine("Timeline:")
+                events.takeLast(40).forEach { appendLine("  $it") }
+            }
             appendLine("==============================")
         }
     }

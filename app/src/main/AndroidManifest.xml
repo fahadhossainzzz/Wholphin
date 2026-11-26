@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- NoBars: Wi-Fi signal and link speed for the playback diagnostics -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- NoBars: lets the diagnostics name the Deco unit the TV is joined to. Never asked for in the app (no popup);
+         it's off until switched on in the TV's Settings > Apps > Wholphin NoBars > Permissions > Location -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

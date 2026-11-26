@@ -82,6 +82,9 @@ configure<ApplicationExtension> {
         testInstrumentationRunner = "com.github.damontecres.wholphin.test.WholphinTestRunner"
 
         buildConfigField("long", "BUILD_TIME", System.currentTimeMillis().toString())
+        // NoBars: the build's label ("v114-…"), shown on the playback panel and in its reports
+        val nobars = rootProject.file("NOBARS_VERSION").takeIf { it.exists() }?.readText()?.trim().orEmpty()
+        buildConfigField("String", "NOBARS", "\"" + nobars.substringBefore("-").ifBlank { "dev" } + "\"")
     }
 
     signingConfigs {

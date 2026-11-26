@@ -89,6 +89,9 @@ object StreamHealth {
     /** Speed of the network while a read is in progress (what the connection can do). */
     @Volatile var readMbps: Float = 0f
 
+    /** Speed of the last piece the player downloaded (Mbps) */
+    @Volatile var lastChunkMbps: Float = 0f
+
     /** Share of the time the player waited on the network. */
     @Volatile var readBusy: Int = 0
 
@@ -113,6 +116,85 @@ object StreamHealth {
     @Volatile var lastEvent: String = ""
 
     @Volatile var reportStatus: String = "not sent yet"
+
+    // ---------------------------------------------------------------- v114: screen, heat, Wi-Fi node, subtitles
+
+    /** The screen's refresh rate now (Hz) and the rates the TV offers apps at this resolution */
+    @Volatile var screenHz: Float = 0f
+
+    @Volatile var offeredHz: List<Float> = emptyList()
+
+    /** The film's frame rate (fps), 0 when unknown */
+    @Volatile var filmFps: Float = 0f
+
+    /** "Dolby Vision ✓", "HDR10 (Dolby Vision not used)", "SDR" */
+    @Volatile var pictureOut: String = ""
+
+    /** Android's thermal status: 0 none … 6 shutdown */
+    @Volatile var thermal: Int = 0
+
+    /** The Wi-Fi access point (Deco unit) the TV is joined to, when Android lets the app see it */
+    @Volatile var wifiNode: String = ""
+
+    @Volatile var wifiSwitches: Int = 0
+
+    @Volatile var subtitleDelayMs: Long = 0
+
+    /** How long the current film took to start playing (ms), 0 until it has */
+    @Volatile var startMs: Long = 0
+
+    /** What happened during this film, with times, for its report */
+    val timeline = ConcurrentLinkedDeque<String>()
+
+    /** Screen rate vs film rate: "60 Hz · film 23.976 fps ⚠" and whether it's even. */
+    fun displayLine(): Pair<String, Boolean> {
+        val hz = screenHz
+        val fps = filmFps
+        if (hz <= 0f) return "?" to true
+        val screen = hzText(hz) + " Hz"
+        if (fps <= 0f) return screen to true
+        val even = matches(hz, fps)
+        return "$screen · film ${fpsText(fps)} fps ${if (even) "✓" else "⚠"}" to even
+    }
+
+    /** A screen rate shows every frame for the same time when it is a whole multiple of the film's rate. */
+    fun matches(
+        hz: Float,
+        fps: Float,
+    ): Boolean {
+        if (hz <= 0f || fps <= 0f) return true
+        val r = hz / fps
+        return kotlin.math.abs(r - kotlin.math.round(r)) < 0.02f && r >= 0.98f
+    }
+
+    fun hzText(hz: Float): String = String.format(Locale.US, "%.3f", hz).trimEnd('0').trimEnd('.')
+
+    fun fpsText(fps: Float): String = String.format(Locale.US, "%.3f", fps).trimEnd('0').trimEnd('.')
+
+    fun heatText(status: Int = thermal): String =
+        when (status) {
+            0 -> "normal"
+            1 -> "warm"
+            2 -> "warm (slowing slightly)"
+            3 -> "hot – slowing down"
+            4, 5, 6 -> "very hot – throttling"
+            else -> "?"
+        }
+
+    /** Megabits a second as megabytes a second: "2.0 MB/s", "35 MB/s". */
+    fun mbs(mbps: Float): String {
+        val v = mbps / 8f
+        return when {
+            v <= 0f -> "0 MB/s"
+            v < 0.095f -> String.format(Locale.US, "%.2f MB/s", v)
+            v < 10f -> String.format(Locale.US, "%.1f MB/s", v)
+            else -> String.format(Locale.US, "%.0f MB/s", v)
+        }
+    }
+
+    /** 146800 ms → "2 min 27 s"; 6500 → "6.5 s" */
+    fun span(ms: Long): String =
+        if (ms >= 60_000) "${ms / 60_000} min ${ms / 1000 % 60} s" else String.format(Locale.US, "%.1f s", ms / 1000.0)
 
     /** Bitrate of the film's own data just loaded (Mbps): bytes in ÷ seconds of film they cover, ~10 s windows */
     @Volatile var sceneMbps: Float = 0f
@@ -152,6 +234,9 @@ object StreamHealth {
         recentWaits = "none"
         recentDrops = 0
         lastEvent = ""
+        wifiSwitches = 0
+        startMs = 0
+        timeline.clear()
     }
 
     private val clock = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -161,6 +246,8 @@ object StreamHealth {
     /** Something worth knowing happened: shown on the overlay and written to the log. */
     fun event(message: String) {
         lastEvent = "${now()} $message"
+        timeline.addLast("${now()} $message")
+        while (timeline.size > 60) timeline.pollFirst()
         Timber.e("NoBars event: %s", message)
     }
 

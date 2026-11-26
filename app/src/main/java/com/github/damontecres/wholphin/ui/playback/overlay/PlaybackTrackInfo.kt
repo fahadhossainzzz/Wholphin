@@ -52,7 +52,8 @@ fun PlaybackTrackInfo(
     val selectedWeight = .5f
     val weights = listOf(.25f, .4f, .5f, 1f, 1f)
 
-    var expanded by remember { mutableStateOf(false) }
+    // NoBars v114: the columns above are shorter now, so every track fits without "Show more"
+    var expanded by remember { mutableStateOf(trackSupport.size <= 8) }
     val focusRequesters =
         remember(trackSupport.size) { List(trackSupport.size) { FocusRequester() } }
     val showButtonFocusRequester = remember { FocusRequester() }

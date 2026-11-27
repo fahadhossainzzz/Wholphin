@@ -22,7 +22,7 @@ import timber.log.Timber
  * - Aims for [GOAL_MS] of video ahead, and stops earlier when its own size (counted exactly by the
  *   allocator, not guessed from the app's memory) reaches the budget: at most [MAX_BUDGET_BYTES], half
  *   [HEAP_SHARE] of the app's limit, and always leaving [SYSTEM_KEEP_MB] of the TV's RAM spare.
- * - Once full it tops up again as soon as it drops under [RESUME_SHARE] of the budget, so it stays
+ * - Once full it tops up again after a few MB or seconds are used (v118), so it stays
  *   near full instead of draining down to the floor.
  * - Below [FLOOR_MS] it always loads, so playback can never jam itself.
  * - Emergency brakes: the app above [HEAP_BRAKE] of its limit, or the TV under [SYSTEM_BRAKE_MB] spare.
@@ -87,7 +87,7 @@ class ElasticLoadControl private constructor(
                 }
 
                 // Emergency brakes: the app or the whole TV is short of memory
-                heap >= HEAP_BRAKE || spareMb < SYSTEM_BRAKE_MB -> {
+                heap >= HEAP_BRAKE || spareMb < brakeMb() -> {
                     false to "holding: low memory"
                 }
 
@@ -99,9 +99,10 @@ class ElasticLoadControl private constructor(
                     (bytes < budget).let { it to if (it) "loading" else "full (${budget shr 20} MB budget)" }
                 }
 
-                // Top up early, so the buffer stays near full instead of draining to the floor
+                // v118: top up little and often (a few MB or seconds at a time), so the drive reads steadily and
+                // its head stays on the disk for the whole film, instead of parking between big bursts
                 else -> {
-                    val resume = bytes < budget * RESUME_SHARE && bufferedMs < GOAL_MS - 10_000
+                    val resume = bytes < budget - TOP_UP_BYTES && bufferedMs < GOAL_MS - TOP_UP_MS
                     resume to if (resume) "loading" else StreamHealth.bufferState
                 }
             }
@@ -135,12 +136,30 @@ class ElasticLoadControl private constructor(
         bytes: Long,
         spareMb: Long,
     ): Long {
-        val bySystem = if (spareMb == Long.MAX_VALUE) Long.MAX_VALUE else bytes + ((spareMb - SYSTEM_KEEP_MB) shl 20)
+        val bySystem = if (spareMb == Long.MAX_VALUE) Long.MAX_VALUE else bytes + ((spareMb - keepMb()) shl 20)
         return minOf(MAX_BUDGET_BYTES, (StreamHealth.heapMax() * HEAP_SHARE).toLong(), bySystem).coerceAtLeast(MIN_BUDGET_BYTES)
     }
 
+    /**
+     * v118: how much of the TV's RAM to leave free. Apps left in the background (Netflix, YouTube, anything) count as
+     * used, yet Android closes them by itself the moment the app on screen needs room; so while Android is calm the
+     * buffer leaves only [CALM_KEEP_MB], and after Android warns that memory is low (in the last 2 minutes) it goes
+     * back to the careful [SYSTEM_KEEP_MB].
+     */
+    private fun warned(): Boolean = android.os.SystemClock.elapsedRealtime() - StreamHealth.memoryWarnAt < 120_000
+
+    private fun keepMb(): Long = if (warned()) SYSTEM_KEEP_MB else CALM_KEEP_MB
+
+    private fun brakeMb(): Long = if (warned()) SYSTEM_BRAKE_MB else CALM_BRAKE_MB
+
     companion object {
         const val GOAL_MS = 180_000L
+
+        /** Top up once this much has been used (v118: small steady reads instead of 15 % bursts) */
+        const val TOP_UP_BYTES = 4L * 1024 * 1024
+        const val TOP_UP_MS = 4_000L
+        const val CALM_KEEP_MB = 100L
+        const val CALM_BRAKE_MB = 80L
         const val FLOOR_MS = 15_000L
         /**
          * Only a safety ceiling: the real limit is [HEAP_SHARE] of the app's memory and the TV's spare RAM. On today's

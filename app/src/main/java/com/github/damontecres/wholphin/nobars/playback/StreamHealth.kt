@@ -124,6 +124,9 @@ object StreamHealth {
 
     @Volatile var offeredHz: List<Float> = emptyList()
 
+    /** elapsedRealtime of Android's last "memory is low" warning to the app (0 = none); the buffer is careful for 2 min after */
+    @Volatile var memoryWarnAt: Long = -1_000_000L
+
     /** What refresh-rate switching did for this film: "switching off in Settings", "switched to 24 Hz", … */
     @Volatile var rateSwitch: String = ""
 

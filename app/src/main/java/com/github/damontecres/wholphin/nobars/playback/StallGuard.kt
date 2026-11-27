@@ -140,6 +140,7 @@ class StallGuard(
         var subDelayChanges = 0
         var subtitle = ""
         var startMs = 0L
+        var memoryWarnings = 0
     }
 
     private data class Wait(
@@ -159,6 +160,14 @@ class StallGuard(
     private val trimCallbacks =
         object : ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
+                // v118: the read-ahead goes careful for 2 minutes after any warning (see ElasticLoadControl)
+                if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE && level < ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+                    StreamHealth.memoryWarnAt = SystemClock.elapsedRealtime()
+                    session.memoryWarnings++
+                    if (level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+                        StreamHealth.event("Android: memory getting tight (level $level), read-ahead careful for 2 min")
+                    }
+                }
                 if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
                     StreamHealth.event("Android asked to free memory (level $level), dropped cached images")
                     trimImages()
@@ -504,9 +513,17 @@ class StallGuard(
 
         // Step 1: data stopped arriving while the player wants it: reconnect, waiting longer each time
         val afterSeek = s.pendingSeek?.let { now - it.at < 10_000 } == true
+        // v118: quick only when the read-ahead is getting low; with a minute or more loaded a short silence is harmless
+        val byAhead =
+            when {
+                ahead >= 60_000 -> 15_000L
+                ahead >= 20_000 -> 5_000L
+                else -> 0L
+            }
         val patience =
             RECONNECT_AFTER_MS[minOf(reconnectStreak, RECONNECT_AFTER_MS.size - 1)]
                 .let { if (afterSeek) maxOf(it, 5_000L) else it }
+                .let { maxOf(it, byAhead) }
         if (loading && idle >= patience && now - lastReconnect >= patience) {
             val cut = StreamHealth.cancelPlayerCalls()
             StreamHealth.reconnects++
@@ -924,6 +941,7 @@ class StallGuard(
                 )
             }
             appendLine("Heat: worst ${StreamHealth.heatText(s.heatWorst)}")
+            appendLine("Android memory warnings: ${s.memoryWarnings}")
             appendLine("Start: ${String.format(Locale.US, "%.1f s", s.startMs / 1000.0)}")
             append("Picture: dropped frames ${s.dropped}")
             if (s.dropBursts.isNotEmpty()) {

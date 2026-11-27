@@ -22,7 +22,7 @@ import timber.log.Timber
  * - Aims for [GOAL_MS] of video ahead, and stops earlier when its own size (counted exactly by the
  *   allocator, not guessed from the app's memory) reaches the budget: at most [MAX_BUDGET_BYTES], half
  *   [HEAP_SHARE] of the app's limit, and always leaving [SYSTEM_KEEP_MB] of the TV's RAM spare.
- * - Once full it tops up again after a few MB or seconds are used (v118), so it stays
+ * - Once full it tops up again as soon as it drops under [RESUME_SHARE] of the budget, so it stays
  *   near full instead of draining down to the floor.
  * - Below [FLOOR_MS] it always loads, so playback can never jam itself.
  * - Emergency brakes: the app above [HEAP_BRAKE] of its limit, or the TV under [SYSTEM_BRAKE_MB] spare.
@@ -99,10 +99,10 @@ class ElasticLoadControl private constructor(
                     (bytes < budget).let { it to if (it) "loading" else "full (${budget shr 20} MB budget)" }
                 }
 
-                // v118: top up little and often (a few MB or seconds at a time), so the drive reads steadily and
-                // its head stays on the disk for the whole film, instead of parking between big bursts
+                // Top up once 15 % of the budget (about 46 MB of 307) and 10 s of film have been used (v119: back from
+                // v118's small top-ups, which made no difference to the drive: the Mac reads ahead in its own bursts)
                 else -> {
-                    val resume = bytes < budget - TOP_UP_BYTES && bufferedMs < GOAL_MS - TOP_UP_MS
+                    val resume = bytes < budget * RESUME_SHARE && bufferedMs < GOAL_MS - 10_000
                     resume to if (resume) "loading" else StreamHealth.bufferState
                 }
             }
@@ -155,9 +155,6 @@ class ElasticLoadControl private constructor(
     companion object {
         const val GOAL_MS = 180_000L
 
-        /** Top up once this much has been used (v118: small steady reads instead of 15 % bursts) */
-        const val TOP_UP_BYTES = 4L * 1024 * 1024
-        const val TOP_UP_MS = 4_000L
         const val CALM_KEEP_MB = 100L
         const val CALM_BRAKE_MB = 80L
         const val FLOOR_MS = 15_000L

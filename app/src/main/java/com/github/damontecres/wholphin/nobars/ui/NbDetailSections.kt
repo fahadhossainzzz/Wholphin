@@ -162,7 +162,7 @@ fun NbJourneyAcross(steps: List<StreamingStore.JourneyStep>) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             steps.forEach { step ->
                 val color = nbStepColor(step.kind)
-                val future = step.date != null && step.date > today
+                val future = step.date.let { it != null && it > today }
                 // a few steps sit side by side from the left; many share the width
                 Column(
                     verticalArrangement = Arrangement.spacedBy(2.dp),

@@ -434,8 +434,8 @@ internal fun StreamingPanel(
                     ) { Text("▶  " + (o?.playLabel ?: if (entry.series) "Episodes" else "Play")) }
                     Button(onClick = { onNavigate(Destination.MediaItem(libraryId, kind)) }) { Text("Details") }
                 }
-                if (entry.trailer != null) {
-                    Button(onClick = { openTrailer(context, entry.trailer) }, modifier = Modifier.firstOne()) {
+                entry.trailer?.let { trailer ->
+                    Button(onClick = { openTrailer(context, trailer) }, modifier = Modifier.firstOne()) {
                         Text("▶  Trailer")
                     }
                 }
@@ -639,7 +639,7 @@ private fun JourneyTimeline(steps: List<StreamingStore.JourneyStep>) {
     val today = remember { java.time.LocalDate.now().toString() }
     Column {
         steps.forEachIndexed { i, step ->
-            val future = step.date != null && step.date > today
+            val future = step.date.let { it != null && it > today }
             val color = stepColor(step.kind)
             Row(modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min)) {
                 Box(modifier = Modifier.width(22.dp).fillMaxHeight()) {

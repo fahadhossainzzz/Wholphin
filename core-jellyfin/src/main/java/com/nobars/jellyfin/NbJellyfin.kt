@@ -55,7 +55,7 @@ class NbJellyfin private constructor(
             clientInfo = ClientInfo(name = clientName, version = clientVersion)
             deviceInfo = androidDevice(app)
             // the SDK's HTTP and websocket client (OkHttp, as in the TV app)
-            val http = OkHttpFactory(OkHttpClient())
+            val http = CoroutineContextApiClientFactory(OkHttpFactory(OkHttpClient()))
             apiClientFactory = http
             socketConnectionFactory = http
         }

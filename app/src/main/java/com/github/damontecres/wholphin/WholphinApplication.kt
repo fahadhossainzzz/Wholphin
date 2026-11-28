@@ -62,7 +62,7 @@ class WholphinApplication :
                 .tree(this),
         )
         StallGuard
-            .logPreviousExits(this)
+            .logPreviousExits(this, BuildConfig.VERSION_NAME)
         if (BuildConfig.DEBUG) {
             StrictMode.setThreadPolicy(
                 StrictMode.ThreadPolicy

@@ -89,6 +89,17 @@ jobs:
           [ -n "$m" ] && gzip -c "$m" > out/mapping.txt.gz
           ls -la out
 
+      - name: Keep the test build (branches other than nobars)
+        # a branch being tested (e.g. the module split) keeps its APK for 14 days, to install on one TV before merging
+        if: github.ref != 'refs/heads/nobars'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nobars-test-apk
+          path: |
+            out/*.apk
+            out/version.txt
+          retention-days: 14
+
       - name: Publish release nobars-latest
         # only the nobars branch publishes (other branches are compile checks)
         if: github.ref == 'refs/heads/nobars'

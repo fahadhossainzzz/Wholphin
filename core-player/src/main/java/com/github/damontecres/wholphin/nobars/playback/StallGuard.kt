@@ -17,8 +17,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import coil3.imageLoader
-import com.github.damontecres.wholphin.BuildConfig
-import com.github.damontecres.wholphin.ui.playback.CurrentPlayback
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -55,7 +53,9 @@ class StallGuard(
     private val isDirectPlay: () -> Boolean,
     private val describe: () -> String,
     private val onReport: (String) -> Unit,
-    private val playback: () -> CurrentPlayback? = { null },
+    private val playback: () -> PlaybackInfo? = { null },
+    /** The app's version for the report, e.g. "v119 (1.0.9-187-g4e262f8)" */
+    private val appVersion: String = "?",
 ) {
     private var lastReconnect = 0L
     private var reconnectStreak = 0
@@ -259,7 +259,10 @@ class StallGuard(
 
     companion object {
         /** Writes why the app's previous runs ended (killed for memory, crashed, ...) to the log. */
-        fun logPreviousExits(context: Context) {
+        fun logPreviousExits(
+            context: Context,
+            appVersion: String,
+        ) {
             try {
                 val am = context.getSystemService(ActivityManager::class.java) ?: return
                 val info = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
@@ -271,7 +274,7 @@ class StallGuard(
                     info.threshold shr 20,
                     Runtime.getRuntime().maxMemory() shr 20,
                     am.isLowRamDevice,
-                    BuildConfig.VERSION_NAME,
+                    appVersion,
                 )
                 if (Build.VERSION.SDK_INT >= 30) {
                     am.getHistoricalProcessExitReasons(null, 0, 3).forEach {
@@ -831,7 +834,7 @@ class StallGuard(
         return buildString {
             appendLine("=== NoBars playback report ===")
             appendLine("When: ${stamp.format(Date(s.startedAt))} to ${wall(end)} ($minutes min, ${clock(s.playingMs)} playing)")
-            appendLine("App: ${BuildConfig.NOBARS} (${BuildConfig.VERSION_NAME}) on ${Build.MODEL}")
+            appendLine("App: $appVersion on ${Build.MODEL}")
             appendLine("Film: ${s.description}")
             if (s.sceneSamples > 0) {
                 appendLine(

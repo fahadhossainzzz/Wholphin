@@ -2,6 +2,7 @@ package com.github.damontecres.wholphin.ui.playback
 
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.data.model.TrackIndex
+import com.github.damontecres.wholphin.nobars.playback.PlaybackInfo
 import com.github.damontecres.wholphin.preferences.PlayerBackend
 import com.github.damontecres.wholphin.util.TrackSupport
 import org.jellyfin.sdk.model.api.MediaSourceInfo
@@ -23,16 +24,16 @@ data class CurrentPlayback(
     val playMethod: PlayMethod,
     val playSessionId: String?,
     val liveStreamId: String?,
-    val mediaSourceInfo: MediaSourceInfo,
-    val videoDecoder: String? = null,
+    override val mediaSourceInfo: MediaSourceInfo,
+    override val videoDecoder: String? = null,
     val audioDecoder: String? = null,
     val transcodeInfo: TranscodingInfo? = null,
-    val subtitleDelay: Duration = Duration.ZERO,
-    val audioIndex: Int = TrackIndex.UNSPECIFIED,
-    val subtitleIndex: Int = TrackIndex.UNSPECIFIED,
-) {
+    override val subtitleDelay: Duration = Duration.ZERO,
+    override val audioIndex: Int = TrackIndex.UNSPECIFIED,
+    override val subtitleIndex: Int = TrackIndex.UNSPECIFIED,
+) : PlaybackInfo {
     val audioIndexEnabled = audioIndex >= 0
-    val subtitleIndexEnabled = subtitleIndex >= 0
+    override val subtitleIndexEnabled = subtitleIndex >= 0
 
     val itemId: UUID get() = item.id
     val sourceId: UUID? = mediaSourceInfo.id?.toUUIDOrNull()

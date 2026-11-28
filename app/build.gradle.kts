@@ -316,6 +316,8 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.profileinstaller)
 
+    // NoBars: the shared playback engine (module core-player)
+    implementation(project(":core-player"))
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)

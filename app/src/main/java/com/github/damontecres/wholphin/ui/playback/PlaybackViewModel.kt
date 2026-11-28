@@ -301,6 +301,7 @@ class PlaybackViewModel
                             describe = { describePlayback() },
                             onReport = { serverReportService.sendPlaybackReport(it) },
                             playback = { state.value.currentPlayback },
+                            appVersion = "${com.github.damontecres.wholphin.BuildConfig.NOBARS} (${com.github.damontecres.wholphin.BuildConfig.VERSION_NAME})",
                         ).run()
                     },
                 )

@@ -1,6 +1,5 @@
 package com.github.damontecres.wholphin.nobars.playback
 
-import com.github.damontecres.wholphin.ui.playback.CurrentPlayback
 import org.jellyfin.sdk.model.api.MediaStream
 import org.jellyfin.sdk.model.api.MediaStreamType
 import java.util.Locale
@@ -10,7 +9,7 @@ import java.util.Locale
  * "MKV · 41.1 GB · 1:48:06 · HDD3", "HEVC Main 10 · Level 5.1 · 3840×2160 · 23.976 fps · Dolby Vision 8.1 (HDR10 base) · 45.0 Mbps".
  */
 object PlaybackFacts {
-    fun file(cp: CurrentPlayback?): String {
+    fun file(cp: PlaybackInfo?): String {
         val src = cp?.mediaSourceInfo ?: return "?"
         val parts = mutableListOf<String>()
         src.container?.let { parts += it.uppercase(Locale.US) }
@@ -20,22 +19,22 @@ object PlaybackFacts {
         return parts.joinToString(" · ")
     }
 
-    fun overall(cp: CurrentPlayback?): String =
+    fun overall(cp: PlaybackInfo?): String =
         cp?.mediaSourceInfo?.bitrate?.let { "${rate(it)} average" } ?: "?"
 
     /** Bits a second as MB/s: 16_300_000 → "2.0 MB/s", 576_000 → "0.07 MB/s". */
     fun rate(bitsPerSecond: Int): String = StreamHealth.mbs(bitsPerSecond / 1e6f)
 
     /** The film's frame rate, 0 when unknown */
-    fun fps(cp: CurrentPlayback?): Float =
+    fun fps(cp: PlaybackInfo?): Float =
         cp?.mediaSourceInfo?.mediaStreams?.firstOrNull { it.type == MediaStreamType.VIDEO }?.let { it.realFrameRate ?: it.averageFrameRate } ?: 0f
 
     /** True when the file carries Dolby Vision */
-    fun isDolbyVision(cp: CurrentPlayback?): Boolean =
+    fun isDolbyVision(cp: PlaybackInfo?): Boolean =
         (cp?.mediaSourceInfo?.mediaStreams?.firstOrNull { it.type == MediaStreamType.VIDEO }?.dvProfile ?: 0) > 0
 
     /** "HDR10", "HDR10+", "HLG", "SDR" for the file's base picture */
-    fun range(cp: CurrentPlayback?): String {
+    fun range(cp: PlaybackInfo?): String {
         val v = cp?.mediaSourceInfo?.mediaStreams?.firstOrNull { it.type == MediaStreamType.VIDEO } ?: return "?"
         val r = v.videoRangeType?.serialName ?: v.videoRange?.serialName ?: ""
         return when {
@@ -47,7 +46,7 @@ object PlaybackFacts {
     }
 
     /** The panel's shorter video line: "HEVC 10-bit · 2880×2160 · 23.976 fps · DV 8.1 · 1.8 MB/s" */
-    fun videoShort(cp: CurrentPlayback?): String {
+    fun videoShort(cp: PlaybackInfo?): String {
         val v = cp?.mediaSourceInfo?.mediaStreams?.firstOrNull { it.type == MediaStreamType.VIDEO } ?: return "?"
         val parts = mutableListOf<String>()
         parts += (v.codec?.uppercase(Locale.US) ?: "?") + if ((v.bitDepth ?: 8) >= 10 || v.profile?.contains("10") == true) " 10-bit" else ""
@@ -59,10 +58,10 @@ object PlaybackFacts {
     }
 
     /** The panel's shorter audio line: "eng · DD+ Atmos 5.1 · 0.07 MB/s" */
-    fun audioShort(cp: CurrentPlayback?): String = audio(cp).replace(Regex(" · \\d+ tracks in the file$"), "")
+    fun audioShort(cp: PlaybackInfo?): String = audio(cp).replace(Regex(" · \\d+ tracks in the file$"), "")
 
     /** "eng · SRT · separate file · delay −5.0 s" (the delay only when one is set) */
-    fun subtitleWithDelay(cp: CurrentPlayback?): String {
+    fun subtitleWithDelay(cp: PlaybackInfo?): String {
         val base = subtitle(cp)
         if (base == "off") return base
         val ms = cp?.subtitleDelay?.inWholeMilliseconds ?: 0
@@ -72,7 +71,7 @@ object PlaybackFacts {
     /** −5000 → "−5.0 s", 1500 → "+1.5 s" */
     fun signed(ms: Long): String = (if (ms < 0) "−" else "+") + String.format(Locale.US, "%.1f s", kotlin.math.abs(ms) / 1000.0)
 
-    fun video(cp: CurrentPlayback?): String {
+    fun video(cp: PlaybackInfo?): String {
         val v = cp?.mediaSourceInfo?.mediaStreams?.firstOrNull { it.type == MediaStreamType.VIDEO } ?: return "?"
         val parts = mutableListOf<String>()
         parts += listOfNotNull(v.codec?.uppercase(Locale.US), v.profile).joinToString(" ")
@@ -84,7 +83,7 @@ object PlaybackFacts {
         return parts.filter { it.isNotBlank() }.joinToString(" · ")
     }
 
-    fun audio(cp: CurrentPlayback?): String {
+    fun audio(cp: PlaybackInfo?): String {
         val streams = cp?.mediaSourceInfo?.mediaStreams.orEmpty()
         val all = streams.filter { it.type == MediaStreamType.AUDIO }
         val a = all.firstOrNull { it.index == cp?.audioIndex } ?: all.firstOrNull { it.isDefault } ?: all.firstOrNull() ?: return "none"
@@ -96,7 +95,7 @@ object PlaybackFacts {
         return parts.filter { it.isNotBlank() }.joinToString(" · ")
     }
 
-    fun subtitle(cp: CurrentPlayback?): String {
+    fun subtitle(cp: PlaybackInfo?): String {
         val s =
             cp?.mediaSourceInfo?.mediaStreams?.firstOrNull { it.type == MediaStreamType.SUBTITLE && it.index == cp.subtitleIndex }
                 ?: return "off"
@@ -114,7 +113,7 @@ object PlaybackFacts {
     }
 
     /** One line for the playback report. */
-    fun reportLines(cp: CurrentPlayback?): List<String> =
+    fun reportLines(cp: PlaybackInfo?): List<String> =
         listOf(
             "File: ${file(cp)} · ${overall(cp)}",
             "Video: ${video(cp)}",

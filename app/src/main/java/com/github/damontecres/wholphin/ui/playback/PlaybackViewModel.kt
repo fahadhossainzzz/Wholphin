@@ -302,6 +302,7 @@ class PlaybackViewModel
                             onReport = { serverReportService.sendPlaybackReport(it) },
                             playback = { state.value.currentPlayback },
                             appVersion = "${com.github.damontecres.wholphin.BuildConfig.NOBARS} (${com.github.damontecres.wholphin.BuildConfig.VERSION_NAME})",
+                            clearImages = { coil3.SingletonImageLoader.get(context).memoryCache?.clear() },
                         ).run()
                     },
                 )

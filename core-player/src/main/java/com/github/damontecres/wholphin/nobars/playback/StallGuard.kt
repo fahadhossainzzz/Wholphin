@@ -16,7 +16,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
-import coil3.imageLoader
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -56,6 +55,8 @@ class StallGuard(
     private val playback: () -> PlaybackInfo? = { null },
     /** The app's version for the report, e.g. "v119 (1.0.9-187-g4e262f8)" */
     private val appVersion: String = "?",
+    /** Drops the app's cached images (posters, backdrops) when memory runs short */
+    private val clearImages: () -> Unit = {},
 ) {
     private var lastReconnect = 0L
     private var reconnectStreak = 0
@@ -385,7 +386,7 @@ class StallGuard(
 
     private fun trimImages() {
         try {
-            context.imageLoader.memoryCache?.clear()
+            clearImages()
         } catch (e: Exception) {
             Timber.w(e, "Could not clear image cache")
         }

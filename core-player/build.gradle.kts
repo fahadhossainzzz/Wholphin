@@ -38,8 +38,8 @@ dependencies {
     api(libs.androidx.media3.exoplayer)
     implementation(platform(libs.okhttp.bom))
     implementation(libs.okhttp)
-    implementation(libs.coil.core)
     implementation(libs.jellyfin.core)
     implementation(libs.timber)
+    implementation(libs.kotlinx.coroutines.android)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }

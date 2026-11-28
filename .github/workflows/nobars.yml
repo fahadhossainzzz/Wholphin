@@ -70,6 +70,20 @@ jobs:
             echo "EXTENSIONS=NOT included (ExoPlayer only, no MPV / ffmpeg audio / AV1)" >> "$GITHUB_ENV"
           fi
 
+      - name: Build the phone app (NoBars Phone)
+        env:
+          SIGNING_KEY: "${{ secrets.NOBARS_SIGNING_KEY }}"
+          KEY_ALIAS: "nobars"
+          KEY_PASSWORD: "3EoZozJAGSJZmDvGuLiKLlPKtRF2jCaw"
+          KEY_STORE_PASSWORD: "3EoZozJAGSJZmDvGuLiKLlPKtRF2jCaw"
+          EXT_USER: "${{ github.actor }}"
+          EXT_PASS: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          if [ ! -d app-phone ]; then echo "no phone app on this branch"; exit 0; fi
+          ./gradlew :app-phone:assembleRelease \
+              -PWholphinExtensionsUsername="$EXT_USER" -PWholphinExtensionsPassword="$EXT_PASS" \
+            || ./gradlew :app-phone:assembleRelease
+
       - name: Verify signatures and collect APKs
         run: |
           mkdir -p out
@@ -81,6 +95,15 @@ jobs:
               *armeabi-v7a*) cp "$apk" out/Wholphin-NoBars-armeabi-v7a.apk ;;
             esac
           done
+          if [ -d app-phone/build/outputs/apk ]; then
+            find app-phone/build/outputs/apk -name '*.apk' -print0 | while IFS= read -r -d '' apk; do
+              "$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/apksigner" verify --print-certs "$apk" | grep -i "SHA-256" | head -1
+              case "$apk" in
+                *arm64-v8a*) cp "$apk" out/NoBars-Phone-arm64-v8a.apk ;;
+                *armeabi-v7a*) cp "$apk" out/NoBars-Phone-armeabi-v7a.apk ;;
+              esac
+            done
+          fi
           sha256sum out/*.apk | tee out/SHA256SUMS.txt
           # the name the M2 server gives the APK on HDD2 (it fetches each new build by itself), and this build's commit
           { cat NOBARS_VERSION 2>/dev/null || echo "build"; echo "$GITHUB_SHA"; } > out/version.txt

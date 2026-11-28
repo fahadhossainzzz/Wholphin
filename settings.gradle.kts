@@ -31,4 +31,6 @@ rootProject.name = "Wholphin"
 include(":app")
 include(":core-player")
 include(":core-data")
+include(":core-jellyfin")
+include(":app-phone")
 include(":wholphin-mpv-stub")

@@ -22,6 +22,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -45,6 +47,22 @@ sealed interface Screen {
     data class Title(
         val id: UUID,
     ) : Screen
+
+    /** A Netflix / Prime / Theatre / Watchlist / History title, by its TMDB number */
+    data class Catalog(
+        val tmdb: Int,
+        val series: Boolean,
+    ) : Screen
+
+    /** "See all" of a row */
+    data class Grid(
+        val title: String,
+        val items: List<com.github.damontecres.wholphin.nobars.data.StreamingStore.Entry>,
+    ) : Screen
+
+    data object Search : Screen
+
+    data object Settings : Screen
 }
 
 enum class Tab(
@@ -52,9 +70,10 @@ enum class Tab(
     val glyph: String,
 ) {
     HOME("Home", "⌂"),
+    DISCOVER("Discover", "✦"),
     LIBRARY("Library", "▦"),
-    SEARCH("Search", "⌕"),
-    SETTINGS("Settings", "⚙"),
+    LISTS("My lists", "☰"),
+    CALENDAR("Calendar", "▤"),
 }
 
 const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
@@ -150,7 +169,17 @@ fun PhoneRoot() {
         return
     }
 
-    val top = stack.lastOrNull { it is Screen.Title }
+    // NoBars data the TV uses too: library facts, IMDb votes, Watchlist, history (in the background)
+    LaunchedEffect(session?.token) {
+        val s = session ?: return@LaunchedEffect
+        stack.removeAll { it is Screen.SignIn || it is Screen.ServerPick }
+        launch { com.github.damontecres.wholphin.nobars.data.StreamingStore.loadLibrary() }
+        launch { com.github.damontecres.wholphin.nobars.data.ImdbVotesStore.load(s.serverUrl, s.token) }
+        launch { com.github.damontecres.wholphin.nobars.data.WantedStore.loadIfStale() }
+        launch { com.github.damontecres.wholphin.nobars.data.HistoryStore.loadIfOld() }
+    }
+
+    val top = stack.lastOrNull()
     BackHandler(enabled = stack.isNotEmpty() || tab != Tab.HOME) {
         if (stack.isNotEmpty()) nav.back() else tab = Tab.HOME
     }
@@ -163,7 +192,7 @@ fun PhoneRoot() {
                             selected = t == tab,
                             onClick = { tab = t },
                             icon = { Text(t.glyph, fontSize = 20.sp) },
-                            label = { Text(t.label) },
+                            label = { Text(t.label, fontSize = 11.sp, maxLines = 1) },
                         )
                     }
                 }
@@ -171,15 +200,20 @@ fun PhoneRoot() {
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
-            if (top is Screen.Title) {
-                TitleScreen(top.id, nav)
-            } else {
-                when (tab) {
-                    Tab.HOME -> HomeScreen(nav)
-                    Tab.LIBRARY -> LibraryScreen(nav)
-                    Tab.SEARCH -> SearchScreen(nav)
-                    Tab.SETTINGS -> SettingsScreen(nav)
-                }
+            when (top) {
+                is Screen.Title -> TitleScreen(top.id, nav)
+                is Screen.Catalog -> CatalogScreen(top.tmdb, top.series, nav)
+                is Screen.Grid -> EntryGridScreen(top.title, top.items, nav)
+                Screen.Search -> SearchScreen(nav)
+                Screen.Settings -> SettingsScreen(nav)
+                else ->
+                    when (tab) {
+                        Tab.HOME -> HomeScreen(nav)
+                        Tab.DISCOVER -> DiscoverScreen(nav)
+                        Tab.LIBRARY -> LibraryScreen(nav)
+                        Tab.LISTS -> ListsScreen(nav)
+                        Tab.CALENDAR -> CalendarScreen(nav)
+                    }
             }
         }
     }

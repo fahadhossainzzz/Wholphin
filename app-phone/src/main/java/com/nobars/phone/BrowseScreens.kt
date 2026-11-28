@@ -122,7 +122,13 @@ fun HomeScreen(nav: Nav) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
-                item { Text("NoBars", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = NbRed, modifier = Modifier.padding(horizontal = 16.dp)) }
+                item {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("NoBars", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = NbRed, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { nav.open(Screen.Search) }) { Text("⌕", fontSize = 24.sp) }
+                        TextButton(onClick = { nav.open(Screen.Settings) }) { Text("⚙", fontSize = 22.sp) }
+                    }
+                }
                 if (list.isEmpty()) {
                     item { Text("Nothing to show. Pull down to try again.", modifier = Modifier.padding(16.dp)) }
                 }
@@ -246,6 +252,7 @@ fun SearchScreen(nav: Nav) {
         searching = false
     }
     Column(Modifier.fillMaxSize()) {
+        TextButton(onClick = { nav.back() }) { Text("‹ Back") }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -277,6 +284,7 @@ fun SettingsScreen(nav: Nav) {
     val scope = rememberCoroutineScope()
     var sending by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        TextButton(onClick = { nav.back() }) { Text("‹ Back") }
         Text("Settings", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Line("Server", "${s?.serverName.orEmpty()}  ·  ${s?.serverUrl.orEmpty()}")
         Line("User", s?.userName.orEmpty())

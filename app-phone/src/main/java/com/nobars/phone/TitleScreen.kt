@@ -45,6 +45,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.github.damontecres.wholphin.nobars.data.BoxOffice
+import com.github.damontecres.wholphin.nobars.data.CriticFallback
+import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore
+import com.github.damontecres.wholphin.nobars.data.StreamingStore
+import com.github.damontecres.wholphin.nobars.data.WantedStore
+import kotlinx.coroutines.launch
 import com.nobars.jellyfin.NbJellyfin
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -72,6 +81,9 @@ fun TitleScreen(
     var episodes by remember(id) { mutableStateOf<List<BaseItemDto>?>(null) }
     var round by remember(id) { mutableIntStateOf(0) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    // NoBars: the same card and page the TV shows (ratings, votes, where to watch, cast, crew, trailers, like this)
+    var nbEntry by remember(id) { mutableStateOf<StreamingStore.Entry?>(null) }
+    var nbPage by remember(id) { mutableStateOf<StreamingStore.TitlePage?>(null) }
 
     // reload when coming back from the player, so Resume and ticks are current
     LaunchedEffect(id) {
@@ -85,6 +97,10 @@ fun TitleScreen(
                     season = seasons.indexOfFirst { s -> s.userData?.played != true }.coerceAtLeast(0)
                 }
                 round++
+                it.tmdb()?.let { (t, series) ->
+                    if (nbEntry == null) nbEntry = StreamingStore.title(t, series)
+                    if (nbPage == null) nbPage = StreamingStore.titlePage(t, series)
+                }
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: title load failed")
                 failed = true
@@ -135,7 +151,6 @@ fun TitleScreen(
                         listOfNotNull(
                             it.cardSubtitle()?.takeIf { _ -> it.type == BaseItemKind.EPISODE }?.substringBefore(" ·"),
                             it.productionYear?.toString(),
-                            it.communityRating?.let { r -> "★ " + String.format(Locale.US, "%.1f", r) },
                             it.officialRating,
                             runtime(it.runTimeTicks),
                         )
@@ -158,6 +173,7 @@ fun TitleScreen(
                 it.progress()?.let { f -> Bar(f, Modifier.padding(horizontal = 16.dp)) }
             }
         }
+        item { LibraryFacts(it, nbEntry) }
         it.overview?.let { text ->
             item { Text(text, modifier = Modifier.padding(16.dp), lineHeight = 20.sp) }
         }
@@ -176,7 +192,36 @@ fun TitleScreen(
                 items(eps, key = { e -> e.id }) { e -> EpisodeRow(e) { nav.open(Screen.Title(e.id)) } }
             }
         }
+        nbSections(nbEntry, nbPage, nav, showStory = false)
         item { Box(Modifier.height(24.dp)) }
+    }
+}
+
+/** Ratings with votes, 🍅, box office, where else it streams, and the Watchlist button. */
+@Composable
+private fun LibraryFacts(
+    item: BaseItemDto,
+    e: StreamingStore.Entry?,
+) {
+    val scope = rememberCoroutineScope()
+    val v = ImdbVotesStore.get(item.id)
+    val wanted by WantedStore.items.collectAsState()
+    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val r = v?.rating ?: e?.imdbRating ?: item.communityRating
+            r?.let { NbChip("IMDb " + rating(it) + votes(v?.votes ?: e?.imdbVotes), ImdbYellow, Color.Black) }
+            (CriticFallback.label(item.id) ?: e?.rt?.let { "🍅 $it%" })?.let { NbChip(it, Tomato.copy(alpha = 0.85f), Color.White) }
+            if ((r ?: 0f) >= 8f) NbChip("Rating 8+", Color(0xFF7E57C2).copy(alpha = 0.75f), Color.White)
+        }
+        BoxOffice.forItem(item.id)?.let { m -> BoxOffice.line(m)?.let { Text(it, fontSize = 14.sp) } }
+        val f = StreamingStore.libraryFacts[item.id.toString().replace("-", "")]
+        (f?.streamOn ?: e?.streamOn)?.let { Text("Also streaming  $it", fontSize = 13.sp, color = StreamGold) }
+        (f?.freeOn ?: e?.freeOn)?.let { Text("Free  $it", fontSize = 13.sp, color = FreeOrange) }
+        f?.collection?.let { Text("Collection  $it", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (e != null) {
+            val onList = wanted.any { w -> w.tmdb == e.tmdb && w.series == e.series }
+            OutlinedButton(onClick = { scope.launch { WantedStore.toggle(e, "phone") } }) { Text(if (onList) "✓ On Watchlist" else "+ Watchlist") }
+        }
     }
 }
 

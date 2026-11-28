@@ -35,7 +35,12 @@ fun BaseItemDto.cardTitle(): String =
 
 fun BaseItemDto.cardSubtitle(): String? =
     when (type) {
-        BaseItemKind.EPISODE -> listOfNotNull(parentIndexNumber?.let { "S$it" }, indexNumber?.let { "E$it" }).joinToString(" ") + (name?.let { " · $it" } ?: "")
+        BaseItemKind.EPISODE -> {
+            val code = listOfNotNull(parentIndexNumber?.let { "S$it" }, indexNumber?.let { "E$it" }).joinToString(" ")
+            // leave out names that only repeat the show and number ("Bigg Boss - S20E83")
+            val n = name?.takeUnless { it.isBlank() || Regex("S\\d+\\s*E\\d+", RegexOption.IGNORE_CASE).containsMatchIn(it) || seriesName?.let { s -> it.contains(s, true) } == true }
+            code + (n?.let { " · $it" } ?: "")
+        }
         else -> productionYear?.toString()
     }
 

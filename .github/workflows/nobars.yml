@@ -89,16 +89,17 @@ jobs:
           [ -n "$m" ] && gzip -c "$m" > out/mapping.txt.gz
           ls -la out
 
-      - name: Keep the test build (branches other than nobars)
-        # a branch being tested (e.g. the module split) keeps its APK for 14 days, to install on one TV before merging
+      - name: Publish test release nobars-test (branches other than nobars)
+        # a branch being tested (e.g. the module split) publishes as the separate prerelease "nobars-test", to install
+        # on one TV before merging; nobars-latest (what the Mac delivers to HDD2) is never touched by it
         if: github.ref != 'refs/heads/nobars'
-        uses: actions/upload-artifact@v4
-        with:
-          name: nobars-test-apk
-          path: |
-            out/*.apk
-            out/version.txt
-          retention-days: 14
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete nobars-test --cleanup-tag -y || true
+          gh release create nobars-test --prerelease --title "Wholphin NoBars TEST build (${GITHUB_REF_NAME})" \
+            --notes "Test build of branch ${GITHUB_REF_NAME} at ${GITHUB_SHA::8}. Not for everyday use." \
+            --target "$GITHUB_SHA" out/*.apk out/version.txt
 
       - name: Publish release nobars-latest
         # only the nobars branch publishes (other branches are compile checks)

@@ -1,6 +1,5 @@
 package com.github.damontecres.wholphin.nobars.data
 
-import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.util.WholphinDispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -884,14 +883,14 @@ object StreamingStore {
      * A poster card for a catalogue title: a made-up item that the normal row cards can show. The id
      * includes the row, so the same title in two rows keeps each row's own rank and note.
      */
-    fun toBaseItem(
+    fun cardDto(
         e: Entry,
         row: String = "",
-    ): BaseItem {
+    ): BaseItemDto {
         val id = UUID.nameUUIDFromBytes("tmdb-${if (e.series) "tv" else "movie"}-${e.tmdb}-$row".toByteArray())
         entries[id] = e
         if (row.startsWith("my-list")) watchlistCards.add(id)
-        return BaseItem(
+        return (
             BaseItemDto(
                 id = id,
                 type = if (e.series) BaseItemKind.SERIES else BaseItemKind.MOVIE,
@@ -904,8 +903,7 @@ object StreamingStore {
                 overview = e.overview,
                 genres = e.genres,
                 runTimeTicks = e.runtime?.let { it * 600_000_000L },
-            ),
-            imageUrlOverride = e.poster,
+            )
         )
     }
 

@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.catalog
 
+import com.github.damontecres.wholphin.nobars.data.toBaseItem
 import com.github.damontecres.wholphin.ui.AspectRatios
 import com.github.damontecres.wholphin.nobars.data.HistoryStore
 import com.github.damontecres.wholphin.nobars.data.PosterFacts

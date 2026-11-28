@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.catalog
 
+import com.github.damontecres.wholphin.nobars.data.toBaseItem
 import com.github.damontecres.wholphin.services.BackdropService
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.nobars.data.BoxOffice

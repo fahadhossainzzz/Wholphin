@@ -1,9 +1,7 @@
 package com.github.damontecres.wholphin.nobars.data
 
-import com.github.damontecres.wholphin.data.model.BaseItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import org.jellyfin.sdk.model.api.BaseItemKind
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -193,20 +191,6 @@ object BoxOffice {
             }
         }
         return "💰 $amount" + (verdict(m)?.let { " · $it" } ?: "")
-    }
-
-    /** Person panel: "💰 Films in your library earned $12.4B (9 films) · biggest: Skyfall $1.1B" */
-    fun totals(items: List<BaseItem>): String? {
-        val earned =
-            items
-                .filter { it.type == BaseItemKind.MOVIE }
-                .mapNotNull { item -> forItem(item.id)?.let { m -> m.gross?.let { Triple(item, m, it) } } }
-        if (earned.isEmpty()) return null
-        val total = earned.sumOf { it.third }
-        val best = earned.maxBy { it.third }
-        val films = if (earned.size == 1) "1 film" else "${earned.size} films"
-        val biggest = if (earned.size > 1) " · biggest: ${best.first.name} ${posterLabel(best.second)}" else ""
-        return "💰 Films in your library earned ${short(total)} ($films)$biggest"
     }
 
     /** Sort value for the money orders of the Movies list (null = no figure, always listed last). */

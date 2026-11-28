@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.history
 
+import com.github.damontecres.wholphin.nobars.data.toBaseItem
 import com.github.damontecres.wholphin.nobars.ui.CatalogGrid
 import com.github.damontecres.wholphin.nobars.data.PosterFacts
 import com.github.damontecres.wholphin.nobars.catalog.openTitle

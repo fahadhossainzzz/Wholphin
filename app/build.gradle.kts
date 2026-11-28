@@ -318,6 +318,8 @@ dependencies {
 
     // NoBars: the shared playback engine (module core-player)
     implementation(project(":core-player"))
+    // NoBars: the shared data layer (module core-data)
+    implementation(project(":core-data"))
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)

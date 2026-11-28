@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.person
 
+import com.github.damontecres.wholphin.nobars.data.totals
 import com.github.damontecres.wholphin.nobars.data.BoxOffice
 import com.github.damontecres.wholphin.nobars.data.CriticFallback
 import com.github.damontecres.wholphin.nobars.data.ImdbVotesStore

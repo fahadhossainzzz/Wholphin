@@ -30,4 +30,5 @@ dependencyResolutionManagement {
 rootProject.name = "Wholphin"
 include(":app")
 include(":core-player")
+include(":core-data")
 include(":wholphin-mpv-stub")

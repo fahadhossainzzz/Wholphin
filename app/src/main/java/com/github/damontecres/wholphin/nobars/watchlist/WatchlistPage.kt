@@ -1,5 +1,6 @@
 package com.github.damontecres.wholphin.nobars.watchlist
 
+import com.github.damontecres.wholphin.nobars.data.toBaseItem
 import com.github.damontecres.wholphin.data.model.BaseItem
 import com.github.damontecres.wholphin.nobars.ui.CatalogGrid
 import com.github.damontecres.wholphin.data.filter.CommunityRatingFilter

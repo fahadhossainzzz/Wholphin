@@ -25,7 +25,7 @@ android {
         applicationId = "com.github.damontecres.wholphin.nobars.phone"
         minSdk = libs.versions.minSdk.getInt()
         targetSdk = libs.versions.compileSdk.getInt()
-        versionCode = 2
+        versionCode = 3
         versionName = phoneVersion
     }
 

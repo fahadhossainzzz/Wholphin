@@ -1,6 +1,16 @@
 package com.nobars.phone
 
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -47,10 +57,58 @@ enum class Tab(
     SETTINGS("Settings", "⚙"),
 }
 
+const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
+
 class MainActivity : ComponentActivity() {
+    /** Android 17+ blocks the home network (the server) until the user allows it; older Android always allows it. */
+    private var localOk by mutableStateOf(true)
+    private var asked by mutableStateOf(false)
+
+    private val ask =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            localOk = granted
+            asked = true
+        }
+
+    private fun hasLocal() =
+        Build.VERSION.SDK_INT < 37 || ContextCompat.checkSelfPermission(this, LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { NbTheme { PhoneRoot() } }
+        localOk = hasLocal()
+        if (!localOk) ask.launch(LOCAL_NETWORK)
+        setContent {
+            NbTheme {
+                if (localOk) {
+                    PhoneRoot()
+                } else {
+                    NeedLocalNetwork(asked) { ask.launch(LOCAL_NETWORK) }
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!localOk && hasLocal()) localOk = true
+    }
+}
+
+@Composable
+private fun NeedLocalNetwork(
+    asked: Boolean,
+    onAsk: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+        Text("NoBars", fontSize = 34.sp, color = NbRed)
+        Text("NoBars needs permission to reach your Jellyfin server on the home network.", fontSize = 18.sp)
+        if (asked) {
+            Text(
+                "If no prompt appears, open Settings → Apps → NoBars → Permissions → Nearby devices and allow it.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Button(onClick = onAsk) { Text("Allow") }
     }
 }
 

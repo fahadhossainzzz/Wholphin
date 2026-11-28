@@ -6,7 +6,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin
+import org.jellyfin.sdk.android.androidDevice
+import org.jellyfin.sdk.api.okhttp.OkHttpFactory
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.clientLogApi
 import org.jellyfin.sdk.api.client.extensions.quickConnectApi
@@ -50,6 +53,11 @@ class NbJellyfin private constructor(
         createJellyfin {
             this.context = app
             clientInfo = ClientInfo(name = clientName, version = clientVersion)
+            deviceInfo = androidDevice(app)
+            // the SDK's HTTP and websocket client (OkHttp, as in the TV app)
+            val http = OkHttpFactory(OkHttpClient())
+            apiClientFactory = http
+            socketConnectionFactory = http
         }
     val api: ApiClient = jellyfin.createApi()
     private val store = SecureStore(app)
@@ -74,6 +82,11 @@ class NbJellyfin private constructor(
         _session.value = s
     }
 
+    /** Why the last [checkServer] found nothing (shown on the server screen). */
+    @Volatile
+    var lastError: String? = null
+        private set
+
     fun lastServer(): String? = store.lastServer()
 
     /** Jellyfin servers answering on this Wi-Fi (a few seconds). */
@@ -81,14 +94,24 @@ class NbJellyfin private constructor(
 
     /** Checks an address typed in (or found): the best working form of it, with the server's name. */
     suspend fun checkServer(input: String): Server? {
+        lastError = null
         val found =
             try {
                 jellyfin.discovery.getRecommendedServers(input).sortedBy { it.score }
             } catch (e: Exception) {
                 Timber.w(e, "NoBars: server check failed for %s", input)
+                lastError = "${e.javaClass.simpleName}: ${e.message}"
                 emptyList()
             }
-        val best = found.firstOrNull { it.score != RecommendedServerInfoScore.BAD } ?: return null
+        found.forEach { Timber.i("NoBars: %s -> %s %s", it.address, it.score, it.systemInfo.exceptionOrNull()?.toString().orEmpty()) }
+        val best = found.firstOrNull { it.score != RecommendedServerInfoScore.BAD }
+        if (best == null) {
+            if (lastError == null) {
+                lastError = found.firstNotNullOfOrNull { it.systemInfo.exceptionOrNull() }?.let { "${it.javaClass.simpleName}: ${it.message}" }
+                    ?: if (found.isEmpty()) "no address to try" else "the server's version isn't supported"
+            }
+            return null
+        }
         val info = best.systemInfo.getOrNull()
         return Server(best.address, info?.serverName ?: "Jellyfin", info?.version)
     }

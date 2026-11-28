@@ -52,13 +52,20 @@ fun ServerScreen(nav: Nav) {
     val found = remember { mutableStateListOf<NbJellyfin.Server>() }
     var searching by remember { mutableStateOf(true) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) {
+        // Android drops the server's broadcast replies unless the app holds a multicast lock
+        val wifi = context.applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+        val lock = wifi?.createMulticastLock("nobars-discovery")?.apply { setReferenceCounted(false) }
         try {
+            lock?.acquire()
             withTimeoutOrNull(8_000) {
                 nb.localServers().collect { s -> if (found.none { it.address == s.address }) found.add(s) }
             }
         } catch (e: Exception) {
             Timber.w(e, "NoBars: server discovery failed")
+        } finally {
+            lock?.release()
         }
         searching = false
     }
@@ -76,7 +83,7 @@ fun ServerScreen(nav: Nav) {
                 }
             busy = false
             if (server == null) {
-                error = "No Jellyfin server answered at $input. Check the address and that the phone is on the home Wi-Fi."
+                error = "No Jellyfin server answered at $input. Check the address and that the phone is on the home Wi-Fi.\n\nDetails: ${nb.lastError ?: "-"}"
             } else {
                 nav.open(Screen.SignIn(server))
             }

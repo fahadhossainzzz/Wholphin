@@ -39,6 +39,8 @@ dependencies {
     api(libs.jellyfin.core)
     api(libs.jellyfin.api)
     implementation(libs.jellyfin.api.okhttp)
+    implementation(platform(libs.okhttp.bom))
+    implementation(libs.okhttp)
     implementation(project(":core-data"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
